@@ -151,6 +151,20 @@ openspec view
 
 El cambio original está en `openspec/changes/archive/2026-11-09-mvp-catalogo-video/`. Para la siguiente meta, crea un cambio nuevo con `openspec new change <nombre>` y consulta el roadmap.
 
+## Licencia
+
+Este proyecto se distribuye bajo la **PolyForm Noncommercial License 1.0.0**. Puedes usar, copiar, modificar y distribuir el software **para fines no comerciales**, siempre que mantengas el aviso de copyright, el texto de la licencia y des crédito al proyecto original. Consulta [`LICENSE`](LICENSE).
+
+No está permitido vender el código, usarlo con fines comerciales ni sublicenciarlo comercialmente. Cualquier distribución debe ser gratuita y acompañarse de esta misma licencia. La licencia no cubre los metadatos del catálogo ni contenidos de terceros.
+
+**Nota:** por esta restricción comercial, esta licencia es *source-available* y no cumple la definición de open source de la OSI.
+
+### Créditos
+
+- Proyecto original: [Mediateca Madrid](https://github.com/Jesuslconde/mediateca-madrid), creado por [Jesuslconde](https://github.com/Jesuslconde).
+- Los metadatos del catálogo proceden de las Bibliotecas de la Comunidad de Madrid y no están cubiertos por esta licencia.
+- Las portadas, sinopsis, enlaces externos y demás contenidos de terceros pertenecen a sus respectivos titulares.
+
 ## Roadmap
 
 Consulta [`ROADMAP.md`](ROADMAP.md).
