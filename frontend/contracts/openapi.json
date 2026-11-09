@@ -1,0 +1,1161 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mediateca Madrid",
+    "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/search": {
+      "get": {
+        "tags": [
+          "busqueda"
+        ],
+        "summary": "Search",
+        "operationId": "search_api_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 250,
+              "description": "Texto de busqueda",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Texto de busqueda"
+          },
+          {
+            "name": "soporte",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Puede repetirse: DVD, Blu-ray, 4K UHD, VHS",
+              "title": "Soporte"
+            },
+            "description": "Puede repetirse: DVD, Blu-ray, 4K UHD, VHS"
+          },
+          {
+            "name": "genero",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Genero"
+            }
+          },
+          {
+            "name": "anio_desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 2100,
+                  "minimum": 1900
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Anio Desde"
+            }
+          },
+          {
+            "name": "anio_hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 2100,
+                  "minimum": 1900
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Anio Hasta"
+            }
+          },
+          {
+            "name": "idioma",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idioma"
+            }
+          },
+          {
+            "name": "biblioteca",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Biblioteca"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "relevancia",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/records/{titn}": {
+      "get": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Get Record",
+        "operationId": "get_record_api_records__titn__get",
+        "parameters": [
+          {
+            "name": "titn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Titn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/libraries": {
+      "get": {
+        "tags": [
+          "bibliotecas"
+        ],
+        "summary": "List Libraries",
+        "operationId": "list_libraries_api_libraries_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LibraryOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Libraries Api Libraries Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "tags": [
+          "bibliotecas"
+        ],
+        "summary": "Stats",
+        "operationId": "stats_api_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "salud"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "raiz"
+        ],
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EjemplarOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "biblioteca": {
+            "type": "string",
+            "title": "Biblioteca"
+          },
+          "biblioteca_codigo": {
+            "type": "string",
+            "title": "Biblioteca Codigo"
+          },
+          "sucursal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucursal"
+          },
+          "sucursal_codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sucursal Codigo"
+          },
+          "localizacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Localizacion"
+          },
+          "signatura": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signatura"
+          },
+          "tipo_ejemplar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Ejemplar"
+          },
+          "soporte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soporte"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "biblioteca",
+          "biblioteca_codigo"
+        ],
+        "title": "EjemplarOut"
+      },
+      "EnlaceOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etiqueta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "EnlaceOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "database": {
+            "type": "string",
+            "title": "Database"
+          },
+          "meilisearch": {
+            "type": "string",
+            "title": "Meilisearch"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "meilisearch",
+          "version"
+        ],
+        "title": "HealthResponse"
+      },
+      "LibraryOut": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "municipio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipio"
+          },
+          "ejemplares": {
+            "type": "integer",
+            "title": "Ejemplares"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "nombre",
+          "ejemplares"
+        ],
+        "title": "LibraryOut"
+      },
+      "ObraOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "titulo_uniforme": {
+            "type": "string",
+            "title": "Titulo Uniforme"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "director_principal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Director Principal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "titulo_uniforme"
+        ],
+        "title": "ObraOut"
+      },
+      "PersonaOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "rol"
+        ],
+        "title": "PersonaOut"
+      },
+      "RecordDetail": {
+        "properties": {
+          "titn": {
+            "type": "string",
+            "title": "Titn"
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "titulo_uniforme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo Uniforme"
+          },
+          "publicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publicacion"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "idioma": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idioma"
+          },
+          "pais": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pais"
+          },
+          "duracion_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracion Min"
+          },
+          "edad_recomendada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edad Recomendada"
+          },
+          "sinopsis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sinopsis"
+          },
+          "generos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Generos",
+            "default": []
+          },
+          "materias": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materias",
+            "default": []
+          },
+          "soportes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Soportes",
+            "default": []
+          },
+          "soporte_principal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soporte Principal"
+          },
+          "ean": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ean"
+          },
+          "tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Documento"
+          },
+          "personas": {
+            "items": {
+              "$ref": "#/components/schemas/PersonaOut"
+            },
+            "type": "array",
+            "title": "Personas",
+            "default": []
+          },
+          "enlaces": {
+            "items": {
+              "$ref": "#/components/schemas/EnlaceOut"
+            },
+            "type": "array",
+            "title": "Enlaces",
+            "default": []
+          },
+          "ejemplares": {
+            "items": {
+              "$ref": "#/components/schemas/EjemplarOut"
+            },
+            "type": "array",
+            "title": "Ejemplares",
+            "default": []
+          },
+          "obra": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObraOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notas": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Notas",
+            "default": {}
+          },
+          "marc": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Marc",
+            "default": {}
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "titn",
+          "titulo"
+        ],
+        "title": "RecordDetail"
+      },
+      "SearchHit": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "titn": {
+            "type": "string",
+            "title": "Titn"
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "titulo_uniforme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo Uniforme"
+          },
+          "publicacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publicacion"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "idioma": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idioma"
+          },
+          "pais": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pais"
+          },
+          "duracion_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracion Min"
+          },
+          "edad_recomendada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edad Recomendada"
+          },
+          "sinopsis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sinopsis"
+          },
+          "generos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Generos",
+            "default": []
+          },
+          "materias": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Materias",
+            "default": []
+          },
+          "soportes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Soportes",
+            "default": []
+          },
+          "soporte_principal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soporte Principal"
+          },
+          "bibliotecas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bibliotecas",
+            "default": []
+          },
+          "ejemplares": {
+            "type": "integer",
+            "title": "Ejemplares",
+            "default": 0
+          },
+          "directores": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Directores",
+            "default": []
+          },
+          "actores": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Actores",
+            "default": []
+          },
+          "guionistas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Guionistas",
+            "default": []
+          },
+          "_formatted": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchHitFormatted"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "titn",
+          "titulo"
+        ],
+        "title": "SearchHit"
+      },
+      "SearchHitFormatted": {
+        "properties": {
+          "titulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          },
+          "sinopsis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sinopsis"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SearchHitFormatted"
+      },
+      "SearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages"
+          },
+          "took_ms": {
+            "type": "integer",
+            "title": "Took Ms"
+          },
+          "facets": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Facets"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "page",
+          "limit",
+          "total",
+          "total_pages",
+          "took_ms",
+          "facets",
+          "hits"
+        ],
+        "title": "SearchResponse"
+      },
+      "StatsResponse": {
+        "properties": {
+          "ediciones": {
+            "type": "integer",
+            "title": "Ediciones"
+          },
+          "ejemplares": {
+            "type": "integer",
+            "title": "Ejemplares"
+          },
+          "bibliotecas": {
+            "type": "integer",
+            "title": "Bibliotecas"
+          },
+          "por_soporte": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Por Soporte"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ediciones",
+          "ejemplares",
+          "bibliotecas",
+          "por_soporte"
+        ],
+        "title": "StatsResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

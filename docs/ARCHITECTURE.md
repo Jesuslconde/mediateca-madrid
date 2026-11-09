@@ -1,124 +1,63 @@
 # Arquitectura
 
+## Repositorios
+
+```text
+mediateca-madrid-shared
+  modelos SQLAlchemy + esquemas Pydantic + openapi.json + SCHEMA_VERSION
+            │
+            ├──────────────┬─────────────────────────────┐
+            ▼              ▼                             ▼
+mediateca-madrid-enrich   mediateca-madrid (API)   frontend
+  crawler/parser            FastAPI solo lectura      Next.js
+  repositorio de escritura  /api/search               tipos generados
+  worker/scheduler          /api/records
+  migraciones               /api/libraries
+  escritura de índice       /health
+            │
+            ▼
+   PostgreSQL compartido  ◄──── API solo lectura
+   Meilisearch compartido ◄──── API solo lectura
+```
+
 ## Flujo de datos
 
-```text
-                    ┌──────────────────────────┐
-                    │   OPAC AbsysNet          │
-                    │  ACC=131 / 161 / 165     │
-                    └────────────┬─────────────┘
-                                 │ HTTPS + sesión
-                                 ▼
-               ┌────────────────────────────────┐
-               │  Crawler / Harvester           │
-               │  - sesión y cookies            │
-               │  - paginación                  │
-               │  - reintentos/backoff          │
-               └──────────────┬─────────────────┘
-                              │ HTML / MARC
-                              ▼
-               ┌────────────────────────────────┐
-               │  Snapshots en disco            │
-               │  data/raw/<titn>-<fecha>.html  │
-               └──────────────┬─────────────────┘
-                              │
-                              ▼
-               ┌────────────────────────────────┐
-               │  Parser + normalización        │
-               │  - MARC 300$a, 245, 260...     │
-               │  - personas y roles            │
-               │  - DVD / Blu-ray               │
-               │  - ejemplares por biblioteca   │
-               └──────────────┬─────────────────┘
-                              ▼
-               ┌────────────────────────────────┐
-               │  PostgreSQL                    │
-               │  obras / ediciones / ejemplares│
-               │  personas / materias / historial│
-               └───────┬──────────────┬─────────┘
-                       │              │
-            indexación │              │ API REST
-                       ▼              ▼
-             ┌──────────────────┐  ┌──────────────────┐
-             │ Meilisearch      │  │ FastAPI          │
-             │ facetas y ranking│  │ búsqueda/fichas  │
-             └──────────────────┘  └────────┬─────────┘
-                                            ▼
-                                     ┌──────────────────┐
-                                     │ Next.js          │
-                                     │ portal web       │
-                                     └──────────────────┘
-```
+1. **Descubrimiento**: enrich consulta el OPAC y crea stubs con cursor y marcas de progreso.
+2. **Enriquecimiento**: enrich descarga cada ficha, normaliza metadatos y ejemplares y actualiza PostgreSQL.
+3. **Indexación**: enrich actualiza Meilisearch al terminar cada lote.
+4. **Lectura**: la API consulta PostgreSQL para fichas y bibliotecas, y Meilisearch para búsqueda y facetas.
+5. **Portal**: Next.js consume la API; no accede directamente a la base ni al índice.
 
-## Almacenamiento
+## Propiedad de escritura
 
-| Componente | Guarda | ¿Fuente de verdad? |
+| Componente | PostgreSQL | Meilisearch |
 |---|---|---|
-| PostgreSQL | Obras, ediciones, ejemplares, personas, materias, bibliotecas | Sí |
-| Meilisearch | Documentos denormalizados para búsqueda y facetas | No (reconstruible) |
-| `data/raw` | HTML original de cada ficha | No, pero permite reprocesar |
-| Memoria del proceso | Sesión del crawler | No |
+| `mediateca-madrid-enrich` | Escritura, migraciones y `schema_meta` | Escritura del índice |
+| `mediateca-madrid` | Solo lectura | Solo lectura |
+| `mediateca-madrid-shared` | Modelos y contratos | Contrato de documentos |
 
-## Modelo de datos
+## Modelo de datos compartido
 
-```text
-obra
-  id, titulo_uniforme, anio, director_principal
+El modelo obra → edición → ejemplar, las marcas de progreso (`is_stub`, `discovery_seen_at`, `detail_fetched_at`, `missing_at`), la cola `harvest_jobs` y `schema_meta` viven en `mediateca_shared.models`.
 
-edicion
-  id, titn, obra_id, titulo, titulo_uniforme, publicacion,
-  anio, idioma, pais, duracion_min, edad_recomendada,
-  sinopsis, generos, soportes, soporte_principal, ean,
-  tipo_documento, notas, marc, source_url
+## Despliegue
 
-ejemplar
-  id, edicion_id, biblioteca_id, sucursal_codigo,
-  sucursal_nombre, localizacion, signatura,
-  tipo_ejemplar, soporte, external_key
+- `mediateca-madrid-enrich` despliega PostgreSQL, Meilisearch, worker y scheduler, y crea la red Docker `mediateca`.
+- `mediateca-madrid` despliega API y portal y se une a esa red externa.
+- Orden de despliegue: shared → enrich (migraciones) → app.
+- La API comprueba `schema_meta.schema_version` al arrancar y falla si no coincide con `SCHEMA_VERSION`.
 
-persona
-  id, nombre, nombre_normalizado
+## Búsqueda de solo lectura
 
-edicion_persona
-  edicion_id, persona_id, rol, orden
+La app usa un adaptador `CatalogSearch` sobre Meilisearch. No escribe documentos, no crea el índice y no reconstruye facetas por su cuenta.
 
-materia
-  id, termino
+## Contratos
 
-edicion_materia
-  edicion_id, materia_id
-
-biblioteca
-  id, codigo, nombre, municipio, latitud, longitud
-
-snapshot
-  id, edicion_id, titn, url, path, sha256, fetched_at
-```
-
-## Detección de soporte
-
-El OPAC etiqueta DVD y Blu-ray como «Videograbaciones (DVD)». El proyecto los distingue con dos señales:
-
-1. `MARC 300$a` / «Descripción física»: `DVD-Video`, `Blu-ray`, `4K UHD`, `VHS`.
-2. Campo `Soporte` de cada ejemplar: `Vídeo (DVD)`, `Vídeo (Blu-Ray)`, etc.
-
-Las variantes `Blu-ray`, `Blu-Ray`, `BluRay`, `Blu ray` y `BD` se normalizan a `Blu-ray`. Una edición puede tener varios soportes (por ejemplo, un pack DVD + Blu-ray).
-
-## Flujo de actualización
-
-1. **Ingesta inicial**: consultas configuradas + paginación.
-2. **Parseo y persistencia**: `UPSERT` por `TITN`.
-3. **Indexación**: reconstrucción de documentos en Meilisearch.
-4. **Incremental**: consultas de novedades o conjunto de consultas.
-5. **Bibliotecas tenedoras**: cada recolección actualiza la lista de bibliotecas, sucursales, signaturas y soportes, sin comprobar préstamos.
-6. **Reindexación**: tras cambios de esquema o reproceso de snapshots.
-
-El estado de préstamo no se almacena ni se refresca: la ficha del portal enlaza a `source_url`, la ficha original del OPAC, donde se consulta el estado actual.
+`mediateca-madrid-shared` publica los esquemas Pydantic y el `openapi.json`. El portal genera sus tipos TypeScript desde ese contrato; la CI falla si el contrato y los tipos no coinciden.
 
 ## Decisiones
 
-- **Monorepo**: un solo repositorio con `backend/` y `frontend/` simplifica Docker Compose y OpenSpec.
-- **PostgreSQL como fuente de verdad**: el índice se puede reconstruir y se conserva el historial.
-- **Meilisearch**: ligero, con facetas y typo-tolerance; migrable a OpenSearch si crece el volumen.
-- **Snapshots en disco**: permiten reprocesar sin volver a golpear el OPAC.
-- **Sin cola distribuida en el MVP**: APScheduler en un único proceso; suficiente para el volumen inicial.
+- **Tres repositorios**: separan el ciclo de vida de ingesta y portal y evitan que la API escriba el catálogo.
+- **PostgreSQL como fuente de verdad**: el índice es reconstruible por enrich.
+- **Sin Alembic**: migraciones SQL idempotentes en enrich y `schema_meta` para compatibilidad.
+- **Sin base propia para la app**: ambos servicios comparten PostgreSQL y Meilisearch.

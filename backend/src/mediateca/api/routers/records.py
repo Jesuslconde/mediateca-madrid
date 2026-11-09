@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from mediateca_shared.models import (
+    Edicion,
+    EdicionMateria,
+    EdicionPersona,
+    Ejemplar,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from mediateca.api.deps import get_db
 from mediateca.api.schemas import RecordDetail
 from mediateca.api.serializers import serialize_record
-from mediateca.catalog.models import (
-    Edicion,
-    EdicionMateria,
-    EdicionPersona,
-    Ejemplar,
-)
 
 router = APIRouter(tags=["registros"])
 

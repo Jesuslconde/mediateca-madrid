@@ -2,50 +2,29 @@
 
 Portal alternativo de búsqueda de vídeos, DVD y Blu-ray de las bibliotecas públicas de la Comunidad de Madrid.
 
-El OPAC oficial (AbsysNet) no ofrece una API pública ni facetas que distingan DVD de Blu-ray, dirección, reparto, duración o bibliotecas tenedoras. Este proyecto recolecta los metadatos públicos, los normaliza, los indexa y los expone con una API y un portal propio.
+Este repositorio contiene la **API de solo lectura y el portal**. La ingesta, el descubrimiento, el enriquecimiento y la escritura del índice viven en `mediateca-madrid-enrich`; los modelos y contratos compartidos, en `mediateca-madrid-shared`.
 
-## Qué incluye
+## Repositorios
 
-- Recolector del OPAC con gestión de sesión, paginación, rate limit y snapshots HTML.
-- Parser de fichas HTML/MARC 21.
-- Detección normalizada de soportes: `DVD`, `Blu-ray`, `4K UHD`, `VHS` y `Varios`.
-- Modelo de datos obra → edición → ejemplar.
-- Índice de búsqueda con facetas en Meilisearch.
-- API REST con búsqueda, facetas, fichas y bibliotecas.
-- Portal Next.js con filtros de soporte, género, año, idioma y biblioteca.
-- Docker Compose con PostgreSQL, Meilisearch, API, scheduler y frontend.
-- Especificaciones y tareas gestionadas con **OpenSpec**.
-
-## Arquitectura
-
-```text
-OPAC AbsysNet
-     │ HTTPS + sesión
-     ▼
- Crawler ──► snapshots HTML ──► Parser ──► normalización
-                                               │
-                                               ▼
-                                         PostgreSQL
-                                         (fuente de verdad)
-                                               │
-                              ┌────────────────┴────────────────┐
-                              ▼                                 ▼
-                        Meilisearch                       API FastAPI
-                        (índice/facetas)                        │
-                                                                ▼
-                                                          Portal Next.js
-```
-
-Más detalle en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+| Repositorio | Responsabilidad |
+|---|---|
+| `mediateca-madrid` | API FastAPI, portal Next.js y lectura de PostgreSQL/Meilisearch |
+| `mediateca-madrid-enrich` | Ingesta, worker, scheduler, migraciones y escritura del catálogo |
+| `mediateca-madrid-shared` | Modelos SQLAlchemy, esquemas Pydantic y contratos OpenAPI/JSON |
 
 ## Inicio rápido
 
-Requisitos: Docker y Docker Compose.
+Los servicios de PostgreSQL y Meilisearch los despliega `mediateca-madrid-enrich`. Arranca primero ese proyecto y después este:
 
 ```bash
+# En mediateca-madrid-enrich
+make up
+make migrate
+make init
+
+# En mediateca-madrid
 cp .env.example .env
 make up
-make init
 ```
 
 Abre:
@@ -54,53 +33,7 @@ Abre:
 - API: <http://localhost:8000/docs>
 - Meilisearch: <http://localhost:7700>
 
-La base de datos arranca vacía. Ejecuta `make harvest` para recolectar fichas reales del OPAC.
-
-### Actualizar una instalación existente
-
-Si vienes de una versión que guardaba disponibilidad de préstamo, elimina esas columnas y reindexa:
-
-```bash
-make migrate-disponibilidad
-docker compose exec api mediateca index --reset
-```
-
-### Ingesta real
-
-```bash
-make harvest q=cine pages=2 limit=20
-make index
-```
-
-O directamente en el contenedor:
-
-```bash
-docker compose exec api mediateca harvest --query cine --max-pages 2 --limit 20
-docker compose exec api mediateca index
-```
-
-El recolector aplica un retardo configurable (`MEDIATECA_CRAWL_DELAY`) y no intenta eludir reCAPTCHAs. Si el OPAC los solicita, detiene la recolección.
-
-### Scheduler
-
-```bash
-docker compose --profile jobs up -d scheduler
-```
-
-Ejecuta una recolección periódica de fichas para actualizar metadatos y la lista de bibliotecas. Configurable con `MEDIATECA_SCHEDULER_HARVEST_HOURS`.
-
-## Comandos útiles
-
-```bash
-make help
-make logs
-make ps
-make test
-make migrate-disponibilidad
-make shell
-make psql
-make clean
-```
+La app no ejecuta ingesta ni crea el esquema. Al arrancar comprueba que la versión del esquema compartido (`schema_meta`) coincide con la esperada.
 
 ## API
 
@@ -111,8 +44,6 @@ make clean
 | GET | `/api/records/{titn}` | Ficha completa con ejemplares |
 | GET | `/api/libraries` | Bibliotecas con número de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
-
-Ejemplos:
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
@@ -125,40 +56,39 @@ curl "http://localhost:8000/api/records/2101557"
 ```text
 backend/
   src/mediateca/
-    api/          FastAPI, routers y schemas
-    catalog/      modelos, parser, soportes, repositorio, crawler, indexer
+    api/          FastAPI, routers, schemas y serializers
+    catalog/      adaptador de búsqueda de solo lectura
     core/         configuración, base de datos, logging y cliente Meilisearch
-  fixtures/       fichas HTML de ejemplo (DVD y Blu-ray)
   tests/          pytest
 frontend/
   app/            páginas Next.js (inicio, búsqueda, ficha)
   components/     buscador, tarjetas, facetas, bibliotecas
-  lib/            cliente de la API y utilidades
+  lib/            cliente de la API y tipos generados
 openspec/         especificaciones y cambios
 docs/             arquitectura
 ```
 
+## Contratos compartidos
+
+La app fija una versión de `mediateca-shared` y consume sus modelos y esquemas. El contrato OpenAPI se publica desde `mediateca-madrid-shared` y el portal genera sus tipos TypeScript desde ese artefacto.
+
 ## Datos y limitaciones
 
-- La fuente es el catálogo público de AbsysNet. No hay Z39.50/SRU/OAI público en el catálogo de Madrid; la ingesta se hace por HTTP.
-- El HTML puede cambiar. Los selectores están centralizados en `backend/src/mediateca/catalog/parser.py` y cubiertos por tests con fixtures.
-- La ficha muestra las bibliotecas que poseen cada título y enlaza al OPAC para consultar el estado de préstamo, que no se refresca de forma continua.
+- La fuente es el catálogo público de AbsysNet. La recolección se ejecuta en `mediateca-madrid-enrich`.
+- La ficha muestra las bibliotecas que poseen cada título y enlaza al OPAC para consultar el estado de préstamo.
 - No se almacenan datos personales, solo metadatos bibliográficos y de ejemplares.
 - Antes de publicar un portal en producción, revisa las condiciones de reutilización de los metadatos y atribuye la fuente.
 
 ## OpenSpec
 
-El proyecto usa OpenSpec para gestionar especificaciones y metas. El MVP está archivado y sus capacidades viven en `openspec/specs/`:
+Las especificaciones de lectura viven aquí; la planificación de ingesta se migró a `mediateca-madrid-enrich`.
 
 ```bash
 openspec list --specs
-openspec show ingesta-catalogo
-openspec show filtro-soporte
 openspec show portal-web
+openspec show api-portal
 openspec view
 ```
-
-El cambio original está en `openspec/changes/archive/2026-11-09-mvp-catalogo-video/`. Para la siguiente meta, crea un cambio nuevo con `openspec new change <nombre>` y consulta el roadmap.
 
 ## Licencia
 

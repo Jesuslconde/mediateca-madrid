@@ -34,16 +34,6 @@ El parser MUST normalizar espacios, puntuación final, años, duración en minut
 - **WHEN** la descripción física contiene `1 DVD-Video (ca. 129 min)`
 - **THEN** la edición guarda `duracion_min = 129`
 
-### Requirement: Ejemplares y disponibilidad
-
-Cada ejemplar MUST registrar biblioteca, sucursal, signatura, tipo de ejemplar, soporte y estado; los cambios de disponibilidad SHALL conservarse en un historial.
-
-#### Scenario: Cambio de disponibilidad
-
-- **WHEN** un ejemplar pasa de `Disponible` a `Prestado`
-- **THEN** se actualiza su estado actual
-- **AND** se añade una entrada al historial de disponibilidad
-
 ### Requirement: Personas y materias
 
 Las personas MUST almacenarse una sola vez y relacionarse con la edición mediante un rol; las materias y géneros SHALL normalizarse para permitir facetas.
@@ -53,3 +43,25 @@ Las personas MUST almacenarse una sola vez y relacionarse con la edición median
 - **WHEN** una edición tiene una persona como directora y otra como actor
 - **THEN** ambas relaciones se guardan con roles distintos
 - **AND** no se duplica la persona si ya existía
+
+### Requirement: Tenencia por biblioteca
+
+Cada ejemplar MUST registrar biblioteca, sucursal, signatura, tipo de ejemplar y soporte. El sistema SHALL NOT almacenar estado de préstamo ni historial de disponibilidad, y SHALL deducir la lista de bibliotecas tenedoras a partir de los ejemplares.
+
+#### Scenario: Ficha creada con ejemplares
+
+- **WHEN** se crea la ficha de una edición con ejemplares en varias bibliotecas
+- **THEN** cada ejemplar conserva su biblioteca, sucursal, signatura, tipo y soporte
+- **AND** la edición expone la lista de bibliotecas que poseen el título
+
+#### Scenario: Edición sin ejemplares
+
+- **WHEN** una edición no tiene ejemplares registrados
+- **THEN** su lista de bibliotecas tenedoras queda vacía
+- **AND** no se inventa ninguna biblioteca
+
+#### Scenario: Sin estado de préstamo
+
+- **WHEN** se guarda o actualiza un ejemplar
+- **THEN** no se persiste ningún campo de disponibilidad de préstamo
+- **AND** no se añade ninguna entrada de historial de disponibilidad

@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
-from mediateca.catalog.indexer import MeiliIndexer
+from mediateca.catalog.search import CatalogSearch
 from mediateca.core.db import get_session
 
 
@@ -14,5 +14,5 @@ def get_db() -> Generator[Session, None, None]:
 
 
 @lru_cache(maxsize=1)
-def get_indexer() -> MeiliIndexer:
-    return MeiliIndexer()
+def get_indexer() -> CatalogSearch:
+    return CatalogSearch()

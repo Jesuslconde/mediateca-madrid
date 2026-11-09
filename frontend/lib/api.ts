@@ -1,112 +1,18 @@
+import type { components } from "./api-types";
+
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
-export type SearchHit = {
-  id: string;
-  titn: string;
-  titulo: string;
-  titulo_uniforme?: string | null;
-  publicacion?: string | null;
-  anio?: number | null;
-  idioma?: string | null;
-  pais?: string | null;
-  duracion_min?: number | null;
-  edad_recomendada?: string | null;
-  sinopsis?: string | null;
-  generos?: string[];
-  materias?: string[];
-  soportes?: string[];
-  soporte_principal?: string | null;
-  bibliotecas?: string[];
-  ejemplares?: number;
-  directores?: string[];
-  actores?: string[];
-  guionistas?: string[];
-  _formatted?: {
-    titulo?: string;
-    sinopsis?: string;
-  };
-};
+type Schemas = components["schemas"];
 
-export type SearchResponse = {
-  query: string;
-  page: number;
-  limit: number;
-  total: number;
-  total_pages: number;
-  took_ms: number;
-  facets: Record<string, Record<string, number>>;
-  hits: SearchHit[];
-};
-
-export type Library = {
-  codigo: string;
-  nombre: string;
-  municipio: string | null;
-  ejemplares: number;
-};
-
-export type Stats = {
-  ediciones: number;
-  ejemplares: number;
-  bibliotecas: number;
-  por_soporte: Record<string, number>;
-};
-
-export type Persona = {
-  nombre: string;
-  rol: string;
-};
-
-export type Enlace = {
-  url: string;
-  etiqueta: string | null;
-};
-
-export type Ejemplar = {
-  id: number;
-  biblioteca: string;
-  biblioteca_codigo: string;
-  sucursal: string | null;
-  sucursal_codigo: string | null;
-  localizacion: string | null;
-  signatura: string | null;
-  tipo_ejemplar: string | null;
-  soporte: string | null;
-};
-
-export type Obra = {
-  id: number;
-  titulo_uniforme: string;
-  anio: number | null;
-  director_principal: string | null;
-};
-
-export type RecordDetail = {
-  titn: string;
-  titulo: string;
-  titulo_uniforme: string | null;
-  publicacion: string | null;
-  anio: number | null;
-  idioma: string | null;
-  pais: string | null;
-  duracion_min: number | null;
-  edad_recomendada: string | null;
-  sinopsis: string | null;
-  generos: string[];
-  materias: string[];
-  soportes: string[];
-  soporte_principal: string | null;
-  ean: string | null;
-  tipo_documento: string | null;
-  personas: Persona[];
-  enlaces: Enlace[];
-  ejemplares: Ejemplar[];
-  obra: Obra | null;
-  notas: Record<string, string>;
-  marc: Record<string, unknown>;
-  source_url: string | null;
-  updated_at: string | null;
-};
+export type SearchHit = Schemas["SearchHit"];
+export type SearchResponse = Schemas["SearchResponse"];
+export type Library = Schemas["LibraryOut"];
+export type Stats = Schemas["StatsResponse"];
+export type Persona = Schemas["PersonaOut"];
+export type Enlace = Schemas["EnlaceOut"];
+export type Ejemplar = Schemas["EjemplarOut"];
+export type Obra = Schemas["ObraOut"];
+export type RecordDetail = Schemas["RecordDetail"];
 
 export type SearchParamsInput = {
   q?: string;

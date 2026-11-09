@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections import Counter
 
 from fastapi import APIRouter, Depends
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mediateca.api.deps import get_db
 from mediateca.api.schemas import LibraryOut, StatsResponse
-from mediateca.catalog.models import Biblioteca, Edicion, Ejemplar
 
 router = APIRouter(tags=["bibliotecas"])
 

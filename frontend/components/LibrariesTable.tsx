@@ -20,7 +20,7 @@ export function LibrariesTable({
   opacUrl,
 }: {
   ejemplares: Ejemplar[];
-  opacUrl: string | null;
+  opacUrl?: string | null;
 }) {
   if (!ejemplares.length) {
     return (

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mediateca.catalog.models import Edicion
+from mediateca_shared.models import Edicion
+
 from mediateca.core.config import settings
 
 

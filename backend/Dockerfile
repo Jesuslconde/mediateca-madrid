@@ -8,16 +8,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libxml2 libxslt1.1 \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
+
+COPY vendor ./vendor
+RUN pip install --upgrade pip && pip install ./vendor/*.whl
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-COPY fixtures ./fixtures
+COPY scripts ./scripts
 COPY tests ./tests
 
-RUN pip install --upgrade pip \
-    && pip install -e ".[dev]"
+RUN pip install -e ".[dev]"
 
 EXPOSE 8000
 

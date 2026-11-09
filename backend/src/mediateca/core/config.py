@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,29 +21,13 @@ class Settings(BaseSettings):
 
     opac_base_url: str = "https://gestiona.comunidad.madrid"
     opac_path: str = "/biblio_publicas/cgi-bin/abnetopac"
-    raw_dir: Path = Path("./data/raw")
-    crawl_delay: float = 1.0
-    crawl_timeout: float = 30.0
-    crawl_max_retries: int = 3
-    user_agent: str = (
-        "MediatecaMadrid/0.1 (portal alternativo de consulta; "
-        "contacto: mediateca@example.org)"
-    )
 
     api_cors_origins: str = "http://localhost:3000"
     log_level: str = "INFO"
 
-    harvest_queries: str = "cine,documental,animacion,musica"
-    scheduler_enabled: bool = False
-    scheduler_harvest_hours: int = 24
-
     @property
     def cors_origins(self) -> list[str]:
         return [item.strip() for item in self.api_cors_origins.split(",") if item.strip()]
-
-    @property
-    def queries(self) -> list[str]:
-        return [item.strip() for item in self.harvest_queries.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

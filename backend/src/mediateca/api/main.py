@@ -6,10 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from mediateca import __version__
-from mediateca.api.deps import get_indexer
 from mediateca.api.routers import health, libraries, records, search
 from mediateca.core.config import settings
-from mediateca.core.db import init_db
+from mediateca.core.db import check_schema
 from mediateca.core.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -19,13 +18,10 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     configure_logging()
     try:
-        init_db()
+        check_schema()
     except Exception:  # noqa: BLE001
-        logger.exception("No se pudo inicializar PostgreSQL")
-    try:
-        get_indexer().ensure_index()
-    except Exception:  # noqa: BLE001
-        logger.exception("No se pudo inicializar el indice de Meilisearch")
+        logger.exception("Esquema compartido no disponible o incompatible")
+        raise
     yield
 
 

@@ -1,15 +1,11 @@
 SHELL := /bin/bash
 
-q ?= cine
-pages ?= 1
-limit ?= 20
+.PHONY: help up down build logs ps check-schema test lint fmt shell
 
-.PHONY: help up down build logs ps init harvest index migrate-disponibilidad test lint fmt shell psql clean
-
-help: ## Mostrar esta ayuda
+help: ## Mostrar la ayuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-up: ## Levantar PostgreSQL, Meilisearch, API y portal
+up: ## Levantar API y portal (requiere la red mediateca de enrich)
 	docker compose up -d --build
 
 down: ## Detener los servicios
@@ -24,32 +20,20 @@ logs: ## Ver logs en vivo
 ps: ## Estado de los servicios
 	docker compose ps
 
-init: ## Crear tablas e indice de busqueda
-	docker compose exec api mediateca init-db
+openapi: ## Exportar openapi.json al repositorio compartido
+	docker compose run --rm --no-deps -T api python scripts/export_openapi.py - > ../mediateca-madrid-shared/contracts/openapi.json
 
-harvest: ## Recolectar del OPAC: make harvest q=cine pages=2 limit=20
-	docker compose exec api mediateca harvest --query "$(q)" --max-pages $(pages) $(if $(limit),--limit $(limit),)
+check-schema: ## Verificar la version del esquema compartido
+	docker compose run --rm --no-deps api python -c "from mediateca.core.db import check_schema; check_schema(); print('schema ok')"
 
-index: ## Indexar todas las ediciones en Meilisearch
-	docker compose exec api mediateca index
-
-migrate-disponibilidad: ## Eliminar columnas y tablas de disponibilidad de esquemas anteriores
-	docker compose exec -T db psql -U $${POSTGRES_USER:-mediateca} -d $${POSTGRES_DB:-mediateca} < scripts/migrate_disponibilidad.sql
-
-test: ## Ejecutar pytest dentro del contenedor
-	docker compose exec api pytest -q
+test: ## Ejecutar pytest
+	docker compose run --rm --no-deps api pytest -q
 
 lint: ## Ejecutar ruff
-	docker compose exec api ruff check src tests
+	docker compose run --rm --no-deps api ruff check src tests
 
 fmt: ## Formatear con ruff
-	docker compose exec api ruff format src tests
+	docker compose run --rm --no-deps api ruff format src tests
 
-shell: ## Abrir shell en el backend
+shell: ## Abrir shell en la API
 	docker compose exec api bash
-
-psql: ## Abrir psql en PostgreSQL
-	docker compose exec db psql -U $${POSTGRES_USER:-mediateca} -d $${POSTGRES_DB:-mediateca}
-
-clean: ## Detener y borrar volumenes (destructivo)
-	docker compose down -v

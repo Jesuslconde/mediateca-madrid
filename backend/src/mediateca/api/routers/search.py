@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from mediateca.api.deps import get_indexer
 from mediateca.api.schemas import SearchResponse
-from mediateca.catalog.indexer import MeiliIndexer
+from mediateca.catalog.search import CatalogSearch
 
 router = APIRouter(tags=["busqueda"])
 
@@ -33,7 +33,7 @@ def search(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     sort: str = Query(default="relevancia"),
-    indexer: MeiliIndexer = Depends(get_indexer),
+    indexer: CatalogSearch = Depends(get_indexer),
 ) -> SearchResponse:
     if "disponible" in request.query_params:
         raise HTTPException(
