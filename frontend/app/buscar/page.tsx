@@ -30,7 +30,6 @@ export default async function SearchPage({
   const genero = first(sp.genero);
   const idioma = first(sp.idioma);
   const biblioteca = first(sp.biblioteca);
-  const disponible = first(sp.disponible) === "true" ? true : undefined;
   const anioDesde = parseYear(first(sp.anio_desde));
   const anioHasta = parseYear(first(sp.anio_hasta));
   const page = Math.max(1, Number(first(sp.page) ?? "1") || 1);
@@ -43,7 +42,6 @@ export default async function SearchPage({
       genero,
       idioma,
       biblioteca,
-      disponible,
       anio_desde: anioDesde,
       anio_hasta: anioHasta,
       page,
@@ -59,7 +57,6 @@ export default async function SearchPage({
     biblioteca ? `Biblioteca: ${biblioteca}` : null,
     idioma ? `Idioma: ${idioma}` : null,
     anioDesde || anioHasta ? `Año: ${anioDesde ?? "..."}–${anioHasta ?? "..."}` : null,
-    disponible ? "Solo disponible" : null,
   ].filter(Boolean) as string[];
 
   return (

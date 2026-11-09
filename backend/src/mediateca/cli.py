@@ -108,24 +108,6 @@ def index_command(
     console.print(f"[green]{total} ediciones indexadas[/green]")
 
 
-@app.command("refresh-availability")
-def refresh_availability_command(
-    limit: int = typer.Option(200, "--limit", min=1, help="Maximo de TITN a revisar"),
-    delay: float = typer.Option(1.0, "--delay", min=0.1),
-) -> None:
-    """Refresca la disponibilidad de los ejemplares de las ediciones guardadas."""
-    configure_logging()
-    init_db()
-    with session_scope() as session:
-        titns = list(
-            session.scalars(select(Edicion.titn).order_by(Edicion.updated_at.desc()).limit(limit))
-        )
-    with session_scope() as session, OpacClient(delay=delay) as client:
-        harvester = Harvester(session, client=client)
-        updated = harvester.refresh_availability(titns, delay=delay)
-    console.print(f"[green]{updated} fichas actualizadas[/green]")
-
-
 @app.command("stats")
 def stats_command() -> None:
     """Muestra un resumen del catalogo local."""
@@ -173,26 +155,9 @@ def _run_harvest_job() -> None:
         logger.exception("Fallo la recoleccion programada")
 
 
-def _run_availability_job() -> None:
-    logger.info("Iniciando refresco de disponibilidad")
-    try:
-        with session_scope() as session:
-            titns = list(
-                session.scalars(
-                    select(Edicion.titn).order_by(Edicion.updated_at.desc()).limit(500)
-                )
-            )
-        with session_scope() as session, OpacClient() as client:
-            harvester = Harvester(session, client=client)
-            updated = harvester.refresh_availability(titns)
-        logger.info("Actualizadas %s fichas", updated)
-    except Exception:  # noqa: BLE001
-        logger.exception("Fallo el refresco de disponibilidad")
-
-
 @app.command("scheduler")
 def scheduler_command() -> None:
-    """Ejecuta la recoleccion y el refresco de disponibilidad periodicamente."""
+    """Ejecuta la recoleccion de fichas periodicamente."""
     from apscheduler.schedulers.blocking import BlockingScheduler
 
     configure_logging()
@@ -210,13 +175,6 @@ def scheduler_command() -> None:
         hours=settings.scheduler_harvest_hours,
         next_run_time=now,
         id="harvest",
-    )
-    scheduler.add_job(
-        _run_availability_job,
-        "interval",
-        hours=settings.scheduler_availability_hours,
-        next_run_time=now + timedelta(minutes=5),
-        id="availability",
     )
     console.print("[green]Scheduler iniciado[/green]")
     try:

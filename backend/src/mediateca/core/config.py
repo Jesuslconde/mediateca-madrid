@@ -37,7 +37,6 @@ class Settings(BaseSettings):
     harvest_queries: str = "cine,documental,animacion,musica"
     scheduler_enabled: bool = False
     scheduler_harvest_hours: int = 24
-    scheduler_availability_hours: int = 6
 
     @property
     def cors_origins(self) -> list[str]:

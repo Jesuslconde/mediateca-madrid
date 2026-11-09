@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup, Tag
 from mediateca.catalog.soportes import (
     canonical_soporte,
     detect_soportes,
-    normalize_text,
 )
 
 try:  # lxml es opcional en pruebas; html.parser siempre esta disponible
@@ -41,8 +40,6 @@ class ParsedEjemplar:
     signatura: str | None
     tipo_ejemplar: str | None
     soporte: str | None
-    estado: str | None
-    disponible: bool
     codigo_barras: str | None = None
 
 
@@ -75,10 +72,6 @@ class ParsedEdicion:
     ejemplares: list[ParsedEjemplar] = field(default_factory=list)
     enlaces: list[ParsedEnlace] = field(default_factory=list)
     source_url: str | None = None
-
-    @property
-    def disponible(self) -> bool:
-        return any(ejemplar.disponible for ejemplar in self.ejemplares)
 
     @property
     def soporte_principal(self) -> str | None:
@@ -259,12 +252,7 @@ def _parse_ejemplares(soup: BeautifulSoup) -> list[ParsedEjemplar]:
 
                 tipo_ejemplar = _cell_text(tds[1])
                 soporte_raw = _cell_text(tds[2])
-                estado = _cell_text(tds[3])
                 soporte = canonical_soporte(soporte_raw)
-
-                disp_raw = clean(tr.get("data-disp")) or estado or ""
-                disp_norm = normalize_text(disp_raw)
-                disponible = disp_norm.startswith("disponible") and "no disponible" not in disp_norm
 
                 ejemplares.append(
                     ParsedEjemplar(
@@ -276,8 +264,6 @@ def _parse_ejemplares(soup: BeautifulSoup) -> list[ParsedEjemplar]:
                         signatura=signatura,
                         tipo_ejemplar=tipo_ejemplar,
                         soporte=soporte,
-                        estado=estado,
-                        disponible=disponible,
                         codigo_barras=codigo_barras,
                     )
                 )

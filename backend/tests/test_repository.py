@@ -10,7 +10,6 @@ from mediateca.catalog.models import (
     Biblioteca,
     Edicion,
     Ejemplar,
-    HistorialDisponibilidad,
     Materia,
     Obra,
 )
@@ -42,7 +41,16 @@ def test_upsert_es_idempotente_y_agrupa_obras(dvd_fixture, bluray_fixture) -> No
     assert session.scalar(select(func.count(Ejemplar.id))) == 2
     assert session.scalar(select(func.count(Biblioteca.id))) == 2
     assert session.scalar(select(func.count(Materia.id))) == 2
-    assert session.scalar(select(func.count(HistorialDisponibilidad.id))) == 2
+
+    edicion = session.scalars(select(Edicion)).one()
+    bibliotecas = sorted({ejemplar.biblioteca.nombre for ejemplar in edicion.ejemplares})
+    assert len(bibliotecas) == 2
+
+    tables = Base.metadata.tables
+    assert "historial_disponibilidad" not in tables
+    assert "disponible" not in tables["ediciones"].columns
+    assert "disponible" not in tables["ejemplares"].columns
+    assert "estado" not in tables["ejemplares"].columns
 
     upsert_edicion(session, bluray)
     session.commit()
@@ -81,22 +89,4 @@ def test_deduplica_ejemplares_identicos(dvd_fixture) -> None:
     assert session.scalar(select(func.count(Ejemplar.id))) == 2
 
 
-def test_historial_solo_cambia_si_cambia_estado(dvd_fixture) -> None:
-    session = _session()
-    dvd = parse_file(str(dvd_fixture))
 
-    upsert_edicion(session, dvd)
-    session.commit()
-    assert session.scalar(select(func.count(HistorialDisponibilidad.id))) == 2
-
-    # El mismo estado no debe añadir historial nuevo.
-    upsert_edicion(session, dvd)
-    session.commit()
-    assert session.scalar(select(func.count(HistorialDisponibilidad.id))) == 2
-
-    # Un cambio de disponibilidad sí debe añadir una entrada.
-    dvd.ejemplares[0].disponible = False
-    dvd.ejemplares[0].estado = "Prestado"
-    upsert_edicion(session, dvd)
-    session.commit()
-    assert session.scalar(select(func.count(HistorialDisponibilidad.id))) == 3

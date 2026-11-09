@@ -10,7 +10,6 @@ mediateca demo
 mediateca index
 mediateca harvest --query cine --max-pages 2
 mediateca scheduler
-mediateca refresh-availability
 mediateca stats
 ```
 

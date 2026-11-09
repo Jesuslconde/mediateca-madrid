@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mediateca.api.deps import get_db
@@ -21,9 +21,6 @@ def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
             Biblioteca.nombre,
             Biblioteca.municipio,
             func.count(Ejemplar.id).label("ejemplares"),
-            func.coalesce(
-                func.sum(case((Ejemplar.disponible.is_(True), 1), else_=0)), 0
-            ).label("disponibles"),
         )
         .outerjoin(Ejemplar, Ejemplar.biblioteca_id == Biblioteca.id)
         .group_by(Biblioteca.id)
@@ -35,7 +32,6 @@ def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
             nombre=row.nombre,
             municipio=row.municipio,
             ejemplares=row.ejemplares,
-            disponibles=int(row.disponibles or 0),
         )
         for row in session.execute(stmt)
     ]
@@ -50,18 +46,11 @@ def stats(session: Session = Depends(get_db)) -> StatsResponse:
             por_soporte[soporte] += 1
 
     ejemplares = session.scalar(select(func.count(Ejemplar.id))) or 0
-    disponibles = (
-        session.scalar(
-            select(func.count(Ejemplar.id)).where(Ejemplar.disponible.is_(True))
-        )
-        or 0
-    )
     bibliotecas = session.scalar(select(func.count(Biblioteca.id))) or 0
 
     return StatsResponse(
         ediciones=len(ediciones),
         ejemplares=ejemplares,
-        disponibles=disponibles,
         bibliotecas=bibliotecas,
         por_soporte=dict(por_soporte.most_common()),
     )

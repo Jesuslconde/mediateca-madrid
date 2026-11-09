@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,7 +14,6 @@ from mediateca.catalog.models import (
     EdicionPersona,
     Ejemplar,
     Enlace,
-    HistorialDisponibilidad,
     Materia,
     Obra,
     Persona,
@@ -156,30 +154,6 @@ def _sync_enlaces(edicion: Edicion, parsed: ParsedEdicion) -> None:
         )
 
 
-def _register_history(
-    session: Session,
-    ejemplar: Ejemplar,
-    *,
-    previous_disponible: bool | None = None,
-    previous_estado: str | None = None,
-) -> None:
-    changed = (
-        previous_disponible is None
-        or previous_disponible != ejemplar.disponible
-        or previous_estado != ejemplar.estado
-    )
-    if not changed:
-        return
-    session.add(
-        HistorialDisponibilidad(
-            ejemplar=ejemplar,
-            fecha=datetime.now(UTC),
-            disponible=ejemplar.disponible,
-            estado=ejemplar.estado,
-        )
-    )
-
-
 def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) -> None:
     existing = {ejemplar.external_key: ejemplar for ejemplar in edicion.ejemplares}
     seen_keys: set[str] = set()
@@ -205,14 +179,9 @@ def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) 
                 signatura=parsed_ejemplar.signatura,
                 tipo_ejemplar=parsed_ejemplar.tipo_ejemplar,
                 soporte=parsed_ejemplar.soporte,
-                estado=parsed_ejemplar.estado,
-                disponible=parsed_ejemplar.disponible,
             )
             edicion.ejemplares.append(ejemplar)
-            _register_history(session, ejemplar)
         else:
-            previous_disponible = ejemplar.disponible
-            previous_estado = ejemplar.estado
             ejemplar.biblioteca = biblioteca
             ejemplar.sucursal_codigo = parsed_ejemplar.sucursal_codigo
             ejemplar.sucursal_nombre = parsed_ejemplar.sucursal_nombre
@@ -220,14 +189,6 @@ def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) 
             ejemplar.signatura = parsed_ejemplar.signatura
             ejemplar.tipo_ejemplar = parsed_ejemplar.tipo_ejemplar
             ejemplar.soporte = parsed_ejemplar.soporte
-            ejemplar.estado = parsed_ejemplar.estado
-            ejemplar.disponible = parsed_ejemplar.disponible
-            _register_history(
-                session,
-                ejemplar,
-                previous_disponible=previous_disponible,
-                previous_estado=previous_estado,
-            )
 
 
 def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
@@ -257,7 +218,6 @@ def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
     edicion.tipo_documento = parsed.tipo_documento
     edicion.notas = parsed.notas
     edicion.marc = parsed.marc
-    edicion.disponible = parsed.disponible
     edicion.source_url = parsed.source_url
 
     edicion.personas.clear()

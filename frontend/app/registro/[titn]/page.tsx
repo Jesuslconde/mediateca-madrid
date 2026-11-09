@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AvailabilityTable } from "@/components/AvailabilityTable";
+import { LibrariesTable } from "@/components/LibrariesTable";
 import { SupportBadge } from "@/components/SupportBadge";
 import { getRecord, type Persona } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
@@ -62,6 +62,7 @@ export default async function RecordPage({
   if (!record) notFound();
 
   const people = groupPeople(record.personas);
+  const bibliotecas = new Set(record.ejemplares.map((ejemplar) => ejemplar.biblioteca)).size;
   const relevantNotes = Object.entries(record.notas).filter(
     ([key]) => key.startsWith("Nota") || key.startsWith("Depósito"),
   );
@@ -84,15 +85,6 @@ export default async function RecordPage({
               {record.soportes.map((support) => (
                 <SupportBadge key={support} support={support} />
               ))}
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  record.disponible
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {record.disponible ? "Disponible" : "No disponible"}
-              </span>
             </div>
             <h1 className="mt-4 text-3xl font-black leading-tight text-ink sm:text-4xl">
               {record.titulo.replace(/\s*\/\s*$/, "")}
@@ -148,12 +140,13 @@ export default async function RecordPage({
           ) : null}
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-            <h2 className="text-lg font-bold text-ink">Disponibilidad por biblioteca</h2>
+            <h2 className="text-lg font-bold text-ink">Bibliotecas con ejemplares</h2>
             <p className="mb-4 mt-1 text-xs text-slate-400">
-              {record.ejemplares.filter((ejemplar) => ejemplar.disponible).length} de{" "}
-              {record.ejemplares.length} ejemplares disponibles
+              {record.ejemplares.length} ejemplar{record.ejemplares.length === 1 ? "" : "es"} en{" "}
+              {bibliotecas} biblioteca{bibliotecas === 1 ? "" : "s"}. Consulta el estado de
+              préstamo en la ficha del OPAC.
             </p>
-            <AvailabilityTable ejemplares={record.ejemplares} />
+            <LibrariesTable ejemplares={record.ejemplares} opacUrl={record.source_url} />
           </section>
 
           {relevantNotes.length ? (

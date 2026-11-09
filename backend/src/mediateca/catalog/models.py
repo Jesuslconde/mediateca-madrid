@@ -5,7 +5,6 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -58,7 +57,6 @@ class Edicion(Base):
     tipo_documento: Mapped[str | None] = mapped_column(String(120))
     notas: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     marc: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    disponible: Mapped[bool | None] = mapped_column(Boolean, index=True)
     source_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -114,17 +112,12 @@ class Ejemplar(Base):
     signatura: Mapped[str | None] = mapped_column(String(250), index=True)
     tipo_ejemplar: Mapped[str | None] = mapped_column(String(250))
     soporte: Mapped[str | None] = mapped_column(String(64), index=True)
-    estado: Mapped[str | None] = mapped_column(String(120))
-    disponible: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     edicion: Mapped[Edicion] = relationship(back_populates="ejemplares")
     biblioteca: Mapped[Biblioteca] = relationship(back_populates="ejemplares")
-    historial: Mapped[list[HistorialDisponibilidad]] = relationship(
-        back_populates="ejemplar", cascade="all, delete-orphan"
-    )
 
 
 class Persona(Base):
@@ -213,22 +206,6 @@ class Snapshot(Base):
     )
 
     edicion: Mapped[Edicion | None] = relationship(back_populates="snapshots")
-
-
-class HistorialDisponibilidad(Base):
-    __tablename__ = "historial_disponibilidad"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ejemplar_id: Mapped[int] = mapped_column(
-        ForeignKey("ejemplares.id", ondelete="CASCADE"), index=True
-    )
-    fecha: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
-    )
-    disponible: Mapped[bool] = mapped_column(Boolean)
-    estado: Mapped[str | None] = mapped_column(String(120))
-
-    ejemplar: Mapped[Ejemplar] = relationship(back_populates="historial")
 
 
 class HarvestRun(Base):

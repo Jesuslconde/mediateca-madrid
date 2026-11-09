@@ -31,7 +31,6 @@ export function FacetFilters({
   const selectedIdioma = first(params.idioma);
   const selectedBiblioteca = first(params.biblioteca);
   const selectedSort = first(params.sort) ?? "relevancia";
-  const disponible = first(params.disponible) === "true";
   const query = first(params.q) ?? "";
 
   const supportEntries = DEFAULT_SUPPORTS.map((support) => [
@@ -56,7 +55,6 @@ export function FacetFilters({
             nombre: selectedBiblioteca,
             municipio: null,
             ejemplares: 0,
-            disponibles: 0,
           },
         ]
     : libraries;
@@ -167,19 +165,6 @@ export function FacetFilters({
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           />
         </div>
-      </section>
-
-      <section className="space-y-2">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="disponible"
-            value="true"
-            defaultChecked={disponible}
-            className="h-4 w-4 rounded border-slate-300 text-ink focus:ring-ink"
-          />
-          Solo disponible
-        </label>
       </section>
 
       <section>

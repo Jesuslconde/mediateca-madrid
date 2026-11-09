@@ -323,17 +323,3 @@ class Harvester:
         finally:
             run.finished_at = datetime.now(UTC)
             self.session.commit()
-
-    def refresh_availability(self, titns: list[str], *, delay: float | None = None) -> int:
-        delay = self.client.delay if delay is None else delay
-        updated = 0
-        for titn in titns:
-            try:
-                html, final_url = self.client.fetch_by_titn(titn)
-                parsed = parse_detail(html, final_url)
-                self._save(parsed, html, final_url)
-                updated += 1
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Error actualizando disponibilidad de %s: %s", titn, exc)
-            time.sleep(delay)
-        return updated

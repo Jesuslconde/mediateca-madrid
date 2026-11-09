@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from mediateca.api.deps import get_indexer
 from mediateca.api.schemas import SearchResponse
@@ -19,6 +19,7 @@ SORT_MAP: dict[str, str | None] = {
 
 @router.get("/search", response_model=SearchResponse)
 def search(
+    request: Request,
     q: str = Query(default="", max_length=250, description="Texto de busqueda"),
     soporte: list[str] | None = Query(
         default=None,
@@ -29,12 +30,19 @@ def search(
     anio_hasta: int | None = Query(default=None, ge=1900, le=2100),
     idioma: str | None = Query(default=None),
     biblioteca: str | None = Query(default=None),
-    disponible: bool | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     sort: str = Query(default="relevancia"),
     indexer: MeiliIndexer = Depends(get_indexer),
 ) -> SearchResponse:
+    if "disponible" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "El filtro de disponibilidad ya no esta disponible; "
+                "consulta la ficha del OPAC para el estado de prestamo"
+            ),
+        )
     if sort not in SORT_MAP:
         raise HTTPException(
             status_code=400,
@@ -55,7 +63,6 @@ def search(
             anio_hasta=anio_hasta,
             idioma=idioma,
             biblioteca=biblioteca,
-            disponible=disponible,
             sort=SORT_MAP[sort],
             page=page,
             limit=limit,

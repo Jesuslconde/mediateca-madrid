@@ -2,7 +2,7 @@
 
 Portal alternativo de búsqueda de vídeos, DVD y Blu-ray de las bibliotecas públicas de la Comunidad de Madrid.
 
-El OPAC oficial (AbsysNet) no ofrece una API pública ni facetas que distingan DVD de Blu-ray, dirección, reparto, duración o disponibilidad por biblioteca. Este proyecto recolecta los metadatos públicos, los normaliza, los indexa y los expone con una API y un portal propio.
+El OPAC oficial (AbsysNet) no ofrece una API pública ni facetas que distingan DVD de Blu-ray, dirección, reparto, duración o bibliotecas tenedoras. Este proyecto recolecta los metadatos públicos, los normaliza, los indexa y los expone con una API y un portal propio.
 
 ## Qué incluye
 
@@ -12,7 +12,7 @@ El OPAC oficial (AbsysNet) no ofrece una API pública ni facetas que distingan D
 - Modelo de datos obra → edición → ejemplar.
 - Índice de búsqueda con facetas en Meilisearch.
 - API REST con búsqueda, facetas, fichas y bibliotecas.
-- Portal Next.js con filtros de soporte, género, año, idioma, biblioteca y disponibilidad.
+- Portal Next.js con filtros de soporte, género, año, idioma y biblioteca.
 - Docker Compose con PostgreSQL, Meilisearch, API, scheduler y frontend.
 - Especificaciones y tareas gestionadas con **OpenSpec**.
 
@@ -57,6 +57,15 @@ Abre:
 
 `make demo` carga dos fichas de ejemplo (la misma película en DVD y en Blu-ray) e indexa el resultado. No toca el OPAC.
 
+### Actualizar una instalación existente
+
+Si vienes de una versión que guardaba disponibilidad de préstamo, elimina esas columnas y reindexa:
+
+```bash
+make migrate-disponibilidad
+docker compose exec api mediateca index --reset
+```
+
 ### Ingesta real
 
 ```bash
@@ -79,7 +88,7 @@ El recolector aplica un retardo configurable (`MEDIATECA_CRAWL_DELAY`) y no inte
 docker compose --profile jobs up -d scheduler
 ```
 
-Ejecuta una recolección periódica y un refresco de disponibilidad. Configurable con `MEDIATECA_SCHEDULER_HARVEST_HOURS` y `MEDIATECA_SCHEDULER_AVAILABILITY_HOURS`.
+Ejecuta una recolección periódica de fichas para actualizar metadatos y la lista de bibliotecas. Configurable con `MEDIATECA_SCHEDULER_HARVEST_HOURS`.
 
 ## Comandos útiles
 
@@ -88,6 +97,7 @@ make help
 make logs
 make ps
 make test
+make migrate-disponibilidad
 make shell
 make psql
 make clean
@@ -98,7 +108,7 @@ make clean
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/health` | Estado de PostgreSQL y Meilisearch |
-| GET | `/api/search` | Búsqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `biblioteca`, `disponible`, `page`, `limit`, `sort` |
+| GET | `/api/search` | Búsqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `biblioteca`, `page`, `limit`, `sort` |
 | GET | `/api/records/{titn}` | Ficha completa con ejemplares |
 | GET | `/api/libraries` | Bibliotecas con número de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
@@ -107,7 +117,7 @@ Ejemplos:
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
-curl "http://localhost:8000/api/search?soporte=Blu-ray&disponible=true&limit=5"
+curl "http://localhost:8000/api/search?soporte=Blu-ray&limit=5"
 curl "http://localhost:8000/api/records/2101557"
 ```
 
@@ -123,7 +133,7 @@ backend/
   tests/          pytest
 frontend/
   app/            páginas Next.js (inicio, búsqueda, ficha)
-  components/     buscador, tarjetas, facetas, disponibilidad
+  components/     buscador, tarjetas, facetas, bibliotecas
   lib/            cliente de la API y utilidades
 openspec/         especificaciones y cambios
 docs/             arquitectura
@@ -133,7 +143,7 @@ docs/             arquitectura
 
 - La fuente es el catálogo público de AbsysNet. No hay Z39.50/SRU/OAI público en el catálogo de Madrid; la ingesta se hace por HTTP.
 - El HTML puede cambiar. Los selectores están centralizados en `backend/src/mediateca/catalog/parser.py` y cubiertos por tests con fixtures.
-- La disponibilidad cambia a diario: el portal muestra el último estado recolectado.
+- La ficha muestra las bibliotecas que poseen cada título y enlaza al OPAC para consultar el estado de préstamo, que no se refresca de forma continua.
 - No se almacenan datos personales, solo metadatos bibliográficos y de ejemplares.
 - Antes de publicar un portal en producción, revisa las condiciones de reutilización de los metadatos y atribuye la fuente.
 

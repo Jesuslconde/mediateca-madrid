@@ -23,7 +23,6 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
         "soporte_principal": edicion.soporte_principal,
         "ean": edicion.ean,
         "tipo_documento": edicion.tipo_documento,
-        "disponible": edicion.disponible,
         "personas": [
             {"nombre": relacion.persona.nombre, "rol": relacion.rol}
             for relacion in edicion.personas
@@ -43,8 +42,6 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
                 "signatura": ejemplar.signatura,
                 "tipo_ejemplar": ejemplar.tipo_ejemplar,
                 "soporte": ejemplar.soporte,
-                "estado": ejemplar.estado,
-                "disponible": ejemplar.disponible,
             }
             for ejemplar in edicion.ejemplares
         ],

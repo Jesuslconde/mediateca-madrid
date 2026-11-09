@@ -66,11 +66,8 @@ export function RecordCard({ hit }: { hit: SearchHit }) {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
-        <span className={hit.disponible ? "font-semibold text-emerald-700" : "text-slate-500"}>
-          {hit.disponible ? "Disponible" : "No disponible"}
-          <span className="ml-1 font-normal text-slate-500">
-            · {hit.ejemplares ?? 0} ejemplares
-          </span>
+        <span className="text-slate-600">
+          {hit.ejemplares ?? 0} ejemplar{hit.ejemplares === 1 ? "" : "es"}
         </span>
         {hit.bibliotecas?.length ? (
           <span className="text-xs text-slate-500">

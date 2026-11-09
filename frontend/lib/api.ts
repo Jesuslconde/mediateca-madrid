@@ -17,7 +17,6 @@ export type SearchHit = {
   soportes?: string[];
   soporte_principal?: string | null;
   bibliotecas?: string[];
-  disponible?: boolean;
   ejemplares?: number;
   directores?: string[];
   actores?: string[];
@@ -44,13 +43,11 @@ export type Library = {
   nombre: string;
   municipio: string | null;
   ejemplares: number;
-  disponibles: number;
 };
 
 export type Stats = {
   ediciones: number;
   ejemplares: number;
-  disponibles: number;
   bibliotecas: number;
   por_soporte: Record<string, number>;
 };
@@ -75,8 +72,6 @@ export type Ejemplar = {
   signatura: string | null;
   tipo_ejemplar: string | null;
   soporte: string | null;
-  estado: string | null;
-  disponible: boolean;
 };
 
 export type Obra = {
@@ -103,7 +98,6 @@ export type RecordDetail = {
   soporte_principal: string | null;
   ean: string | null;
   tipo_documento: string | null;
-  disponible: boolean | null;
   personas: Persona[];
   enlaces: Enlace[];
   ejemplares: Ejemplar[];
@@ -122,7 +116,6 @@ export type SearchParamsInput = {
   anio_hasta?: number;
   idioma?: string;
   biblioteca?: string;
-  disponible?: boolean;
   page?: number;
   limit?: number;
   sort?: string;

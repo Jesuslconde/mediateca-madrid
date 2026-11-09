@@ -54,7 +54,7 @@
 
 | Componente | Guarda | ¿Fuente de verdad? |
 |---|---|---|
-| PostgreSQL | Obras, ediciones, ejemplares, personas, materias, bibliotecas, historial | Sí |
+| PostgreSQL | Obras, ediciones, ejemplares, personas, materias, bibliotecas | Sí |
 | Meilisearch | Documentos denormalizados para búsqueda y facetas | No (reconstruible) |
 | `data/raw` | HTML original de cada ficha | No, pero permite reprocesar |
 | Memoria del proceso | Sesión del crawler | No |
@@ -69,12 +69,12 @@ edicion
   id, titn, obra_id, titulo, titulo_uniforme, publicacion,
   anio, idioma, pais, duracion_min, edad_recomendada,
   sinopsis, generos, soportes, soporte_principal, ean,
-  tipo_documento, notas, marc, disponible, source_url
+  tipo_documento, notas, marc, source_url
 
 ejemplar
   id, edicion_id, biblioteca_id, sucursal_codigo,
   sucursal_nombre, localizacion, signatura,
-  tipo_ejemplar, soporte, estado, disponible, external_key
+  tipo_ejemplar, soporte, external_key
 
 persona
   id, nombre, nombre_normalizado
@@ -90,9 +90,6 @@ edicion_materia
 
 biblioteca
   id, codigo, nombre, municipio, latitud, longitud
-
-historial_disponibilidad
-  id, ejemplar_id, fecha, disponible, estado
 
 snapshot
   id, edicion_id, titn, url, path, sha256, fetched_at
@@ -113,8 +110,10 @@ Las variantes `Blu-ray`, `Blu-Ray`, `BluRay`, `Blu ray` y `BD` se normalizan a `
 2. **Parseo y persistencia**: `UPSERT` por `TITN`.
 3. **Indexación**: reconstrucción de documentos en Meilisearch.
 4. **Incremental**: consultas de novedades o conjunto de consultas.
-5. **Disponibilidad**: refresco periódico de ejemplares.
+5. **Bibliotecas tenedoras**: cada recolección actualiza la lista de bibliotecas, sucursales, signaturas y soportes, sin comprobar préstamos.
 6. **Reindexación**: tras cambios de esquema o reproceso de snapshots.
+
+El estado de préstamo no se almacena ni se refresca: la ficha del portal enlaza a `source_url`, la ficha original del OPAC, donde se consulta el estado actual.
 
 ## Decisiones
 

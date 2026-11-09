@@ -16,7 +16,7 @@ from mediateca.catalog.models import (
 from mediateca.core.config import settings
 from mediateca.core.search import get_index, get_meili_client
 
-FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "bibliotecas", "disponible"]
+FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "bibliotecas"]
 
 FILTERABLE_ATTRIBUTES = [
     "soportes",
@@ -26,7 +26,6 @@ FILTERABLE_ATTRIBUTES = [
     "idioma",
     "pais",
     "bibliotecas",
-    "disponible",
     "edad_recomendada",
     "duracion_min",
 ]
@@ -83,7 +82,6 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
     bibliotecas = sorted(
         {ejemplar.biblioteca.nombre for ejemplar in edicion.ejemplares}
     )
-    disponible = any(ejemplar.disponible for ejemplar in edicion.ejemplares)
     materias = [relacion.materia.termino for relacion in edicion.materias]
 
     return {
@@ -110,7 +108,6 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
         "actores": actores,
         "guionistas": guionistas,
         "bibliotecas": bibliotecas,
-        "disponible": disponible,
         "ejemplares": len(edicion.ejemplares),
         "updated_at": edicion.updated_at.isoformat() if edicion.updated_at else None,
     }
@@ -129,7 +126,6 @@ def build_filters(
     anio_hasta: int | None = None,
     idioma: str | None = None,
     biblioteca: str | None = None,
-    disponible: bool | None = None,
 ) -> str | None:
     filters: list[str] = []
 
@@ -143,8 +139,6 @@ def build_filters(
         filters.append(f"idioma = {_quote(idioma)}")
     if biblioteca:
         filters.append(f"bibliotecas = {_quote(biblioteca)}")
-    if disponible is not None:
-        filters.append(f"disponible = {str(disponible).lower()}")
     if anio_desde is not None:
         filters.append(f"anio >= {int(anio_desde)}")
     if anio_hasta is not None:
@@ -232,7 +226,6 @@ class MeiliIndexer:
         anio_hasta: int | None = None,
         idioma: str | None = None,
         biblioteca: str | None = None,
-        disponible: bool | None = None,
         sort: str | None = None,
         page: int = 1,
         limit: int = 20,
@@ -244,7 +237,6 @@ class MeiliIndexer:
             anio_hasta=anio_hasta,
             idioma=idioma,
             biblioteca=biblioteca,
-            disponible=disponible,
         )
         options: dict[str, Any] = {
             "page": max(1, page),

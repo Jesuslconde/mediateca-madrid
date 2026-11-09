@@ -34,8 +34,8 @@ export default async function HomePage() {
             <span className="text-rose-300"> Y filtra por DVD o Blu-ray.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300">
-            Busca por título, dirección, reparto o género y consulta en qué biblioteca está
-            disponible cada ejemplar. Sin las limitaciones del OPAC.
+            Busca por título, dirección, reparto o género y consulta qué bibliotecas tienen
+            cada ejemplar. Sin las limitaciones del OPAC.
           </p>
           <div className="mx-auto mt-8 max-w-2xl">
             <SearchBar />
@@ -53,21 +53,14 @@ export default async function HomePage() {
             >
               Solo Blu-ray
             </Link>
-            <Link
-              href="/buscar?soporte=DVD&soporte=Blu-ray&disponible=true"
-              className="rounded-full bg-rose-500 px-4 py-2 font-semibold text-white transition hover:bg-rose-400"
-            >
-              Disponibles ahora
-            </Link>
           </div>
         </div>
       </section>
 
       {stats ? (
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section className="grid grid-cols-3 gap-3">
           <StatCard label="Ediciones" value={stats.ediciones.toLocaleString("es-ES")} />
           <StatCard label="Ejemplares" value={stats.ejemplares.toLocaleString("es-ES")} />
-          <StatCard label="Disponibles" value={stats.disponibles.toLocaleString("es-ES")} />
           <StatCard label="Bibliotecas" value={stats.bibliotecas.toLocaleString("es-ES")} />
         </section>
       ) : null}
@@ -88,10 +81,10 @@ export default async function HomePage() {
           </p>
         </article>
         <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-          <h2 className="text-lg font-bold text-ink">Disponibilidad real</h2>
+          <h2 className="text-lg font-bold text-ink">Bibliotecas y signaturas</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Cada ficha muestra biblioteca, sucursal, signatura, tipo de ejemplar, soporte y
-            estado de disponibilidad.
+            Cada ficha muestra las bibliotecas y sucursales con ejemplares, su signatura, tipo
+            y soporte, con enlace a la ficha del OPAC para consultar el préstamo.
           </p>
         </article>
       </section>

@@ -45,8 +45,6 @@ class EjemplarOut(BaseModel):
     signatura: str | None = None
     tipo_ejemplar: str | None = None
     soporte: str | None = None
-    estado: str | None = None
-    disponible: bool
 
 
 class ObraOut(BaseModel):
@@ -74,7 +72,6 @@ class RecordDetail(BaseModel):
     soporte_principal: str | None = None
     ean: str | None = None
     tipo_documento: str | None = None
-    disponible: bool | None = None
     personas: list[PersonaOut] = []
     enlaces: list[EnlaceOut] = []
     ejemplares: list[EjemplarOut] = []
@@ -90,12 +87,10 @@ class LibraryOut(BaseModel):
     nombre: str
     municipio: str | None = None
     ejemplares: int
-    disponibles: int
 
 
 class StatsResponse(BaseModel):
     ediciones: int
     ejemplares: int
-    disponibles: int
     bibliotecas: int
     por_soporte: dict[str, int]

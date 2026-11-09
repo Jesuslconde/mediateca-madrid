@@ -15,7 +15,6 @@ def test_parsea_dvd(dvd_fixture) -> None:
     assert "Dramas cinematográficos" in parsed.generos
     assert "Cine español" in parsed.materias
     assert len(parsed.enlaces) == 2
-    assert parsed.disponible is True
 
 
 def test_parser_extrae_personas_y_roles(dvd_fixture) -> None:
@@ -39,12 +38,13 @@ def test_parser_extrae_ejemplares(dvd_fixture) -> None:
     assert primero.sucursal_nombre == "B.P.M. Cardenal Cisneros"
     assert primero.signatura == "DVD-V 10879"
     assert primero.soporte == "DVD"
-    assert primero.disponible is True
+    assert not hasattr(primero, "disponible")
+    assert not hasattr(primero, "estado")
 
     segundo = parsed.ejemplares[1]
     assert segundo.biblioteca_nombre.startswith("ALCORCÓN")
-    assert segundo.estado == "Prestado"
-    assert segundo.disponible is False
+    assert segundo.signatura == "DVD-V 4421"
+    assert segundo.soporte == "DVD"
 
 
 def test_parsea_bluray(bluray_fixture) -> None:
@@ -57,4 +57,3 @@ def test_parsea_bluray(bluray_fixture) -> None:
     assert len(parsed.ejemplares) == 1
     assert parsed.ejemplares[0].soporte == "Blu-ray"
     assert parsed.ejemplares[0].signatura == "BRD-00219"
-    assert parsed.ejemplares[0].disponible is True

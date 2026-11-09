@@ -4,7 +4,7 @@ q ?= cine
 pages ?= 1
 limit ?= 20
 
-.PHONY: help up down build logs ps init demo harvest index refresh test lint fmt shell psql clean
+.PHONY: help up down build logs ps init demo harvest index migrate-disponibilidad test lint fmt shell psql clean
 
 help: ## Mostrar esta ayuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -36,8 +36,8 @@ harvest: ## Recolectar del OPAC: make harvest q=cine pages=2 limit=20
 index: ## Indexar todas las ediciones en Meilisearch
 	docker compose exec api mediateca index
 
-refresh: ## Refrescar disponibilidad
-	docker compose exec api mediateca refresh-availability --limit $(limit)
+migrate-disponibilidad: ## Eliminar columnas y tablas de disponibilidad de esquemas anteriores
+	docker compose exec -T db psql -U $${POSTGRES_USER:-mediateca} -d $${POSTGRES_DB:-mediateca} < scripts/migrate_disponibilidad.sql
 
 test: ## Ejecutar pytest dentro del contenedor
 	docker compose exec api pytest -q
