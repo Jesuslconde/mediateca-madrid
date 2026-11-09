@@ -14,7 +14,6 @@ from mediateca.catalog.harvester import Harvester, OpacClient
 from mediateca.catalog.indexer import MeiliIndexer
 from mediateca.catalog.models import Biblioteca, Edicion, Ejemplar
 from mediateca.catalog.parser import parse_file
-from mediateca.catalog.repository import upsert_edicion
 from mediateca.core.config import settings
 from mediateca.core.db import init_db, session_scope
 from mediateca.core.logging import configure_logging, get_logger
@@ -28,25 +27,6 @@ console = Console()
 logger = get_logger(__name__)
 
 
-def _fixtures_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "fixtures"
-
-
-def _seed_demo() -> int:
-    count = 0
-    for name in ("detail_dvd.html", "detail_bluray.html"):
-        path = _fixtures_dir() / name
-        if not path.exists():
-            console.print(f"[yellow]Aviso: no existe {path}[/yellow]")
-            continue
-        parsed = parse_file(str(path), url=f"demo://{name}")
-        with session_scope() as session:
-            upsert_edicion(session, parsed)
-        count += 1
-        console.print(f"[green]Importado[/green] {parsed.titn} - {parsed.titulo}")
-    return count
-
-
 @app.command("init-db")
 def init_db_command() -> None:
     """Crea las tablas y el indice de Meilisearch."""
@@ -57,20 +37,6 @@ def init_db_command() -> None:
     except Exception as exc:  # noqa: BLE001
         console.print(f"[yellow]No se pudo inicializar Meilisearch: {exc}[/yellow]")
     console.print("[green]Base de datos e indice inicializados[/green]")
-
-
-@app.command("demo")
-def demo_command(
-    index: bool = typer.Option(False, "--index", help="Indexar despues de importar"),
-) -> None:
-    """Carga dos fichas de ejemplo (DVD y Blu-ray) sin tocar el OPAC."""
-    configure_logging()
-    init_db()
-    count = _seed_demo()
-    if index and count:
-        with session_scope() as session:
-            total = MeiliIndexer().index_editions(session, reset=True)
-        console.print(f"[green]{total} ediciones indexadas[/green]")
 
 
 @app.command("harvest")
@@ -115,12 +81,6 @@ def stats_command() -> None:
     with session_scope() as session:
         ediciones = session.scalar(select(func.count(Edicion.id))) or 0
         ejemplares = session.scalar(select(func.count(Ejemplar.id))) or 0
-        disponibles = (
-            session.scalar(
-                select(func.count(Ejemplar.id)).where(Ejemplar.disponible.is_(True))
-            )
-            or 0
-        )
         bibliotecas = session.scalar(select(func.count(Biblioteca.id))) or 0
 
         table = Table(title="Mediateca Madrid")
@@ -128,7 +88,6 @@ def stats_command() -> None:
         table.add_column("Valor", justify="right")
         table.add_row("Ediciones", str(ediciones))
         table.add_row("Ejemplares", str(ejemplares))
-        table.add_row("Disponibles", str(disponibles))
         table.add_row("Bibliotecas", str(bibliotecas))
         console.print(table)
 

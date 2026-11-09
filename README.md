@@ -46,7 +46,6 @@ Requisitos: Docker y Docker Compose.
 cp .env.example .env
 make up
 make init
-make demo
 ```
 
 Abre:
@@ -55,7 +54,7 @@ Abre:
 - API: <http://localhost:8000/docs>
 - Meilisearch: <http://localhost:7700>
 
-`make demo` carga dos fichas de ejemplo (la misma película en DVD y en Blu-ray) e indexa el resultado. No toca el OPAC.
+La base de datos arranca vacía. Ejecuta `make harvest` para recolectar fichas reales del OPAC.
 
 ### Actualizar una instalación existente
 

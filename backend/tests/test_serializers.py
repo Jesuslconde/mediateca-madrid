@@ -28,7 +28,7 @@ def test_serialize_record_sin_disponibilidad(dvd_fixture) -> None:
     data = serialize_record(edicion)
 
     assert "disponible" not in data
-    assert data["source_url"]
+    assert data["source_url"].endswith("?TITN=2101557")
     assert len(data["ejemplares"]) == 2
     for ejemplar in data["ejemplares"]:
         assert "disponible" not in ejemplar

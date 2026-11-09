@@ -383,6 +383,8 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
         if label not in {"Título uniforme", "Título", "Publicación", "Descripción física"}
     }
 
+    enlace_permanente = _text(soup.select_one("#xslike"))
+
     return ParsedEdicion(
         titn=str(titn),
         titulo=titulo,
@@ -412,7 +414,7 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
         personas=_parse_personas(soup),
         ejemplares=ejemplares,
         enlaces=_parse_enlaces(soup),
-        source_url=url,
+        source_url=enlace_permanente or url,
     )
 
 

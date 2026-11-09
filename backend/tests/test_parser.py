@@ -1,4 +1,4 @@
-from mediateca.catalog.parser import parse_file
+from mediateca.catalog.parser import parse_detail, parse_file
 
 
 def test_parsea_dvd(dvd_fixture) -> None:
@@ -45,6 +45,22 @@ def test_parser_extrae_ejemplares(dvd_fixture) -> None:
     assert segundo.biblioteca_nombre.startswith("ALCORCÓN")
     assert segundo.signatura == "DVD-V 4421"
     assert segundo.soporte == "DVD"
+
+
+def test_usa_enlace_permanente_del_opac() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">2101557</span>
+      <span class="js-ntitl">Titulo de prueba</span>
+      <span id="xslike">http://gestiona.comunidad.madrid/biblio_publicas/cgi-bin/abnetopac?TITN=2101557</span>
+    </body></html>
+    """
+
+    parsed = parse_detail(html, url="https://opac/sesion?ACC=165&DOC=1")
+
+    assert parsed.source_url == (
+        "http://gestiona.comunidad.madrid/biblio_publicas/cgi-bin/abnetopac?TITN=2101557"
+    )
 
 
 def test_parsea_bluray(bluray_fixture) -> None:

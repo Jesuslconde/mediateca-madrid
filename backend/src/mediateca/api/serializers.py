@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from mediateca.catalog.models import Edicion
+from mediateca.core.config import settings
+
+
+def _opac_permalink(titn: str) -> str:
+    return f"{settings.opac_base_url.rstrip('/')}{settings.opac_path}?TITN={titn}"
 
 
 def serialize_record(edicion: Edicion) -> dict[str, Any]:
@@ -57,6 +62,6 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
         ),
         "notas": edicion.notas or {},
         "marc": edicion.marc or {},
-        "source_url": edicion.source_url,
+        "source_url": _opac_permalink(edicion.titn),
         "updated_at": edicion.updated_at.isoformat() if edicion.updated_at else None,
     }

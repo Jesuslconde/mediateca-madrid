@@ -116,7 +116,7 @@ export default async function SearchPage({
               <p className="font-semibold">No se pudo conectar con la API.</p>
               <p className="mt-1">
                 Comprueba que el servicio <code>api</code> está levantado y que el índice tiene
-                datos. Puedes ejecutar <code>make demo</code> para cargar una muestra.
+                datos. Puedes ejecutar <code>make harvest</code> para recolectar del OPAC.
               </p>
             </div>
           ) : result.hits.length === 0 ? (

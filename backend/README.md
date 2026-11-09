@@ -6,7 +6,6 @@ API, ingesta, normalizacion e indexacion del portal alternativo de videos y DVD/
 
 ```bash
 mediateca init-db
-mediateca demo
 mediateca index
 mediateca harvest --query cine --max-pages 2
 mediateca scheduler
