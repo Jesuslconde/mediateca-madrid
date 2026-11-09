@@ -1,0 +1,106 @@
+name: mediateca-madrid
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mediateca}
+      POSTGRES_USER: ${POSTGRES_USER:-mediateca}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mediateca}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mediateca} -d ${POSTGRES_DB:-mediateca}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    image: mediateca-backend:local
+    restart: unless-stopped
+    environment:
+      MEDIATECA_ENVIRONMENT: ${MEDIATECA_ENVIRONMENT:-development}
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_MEILISEARCH_URL: http://meilisearch:7700
+      MEDIATECA_MEILISEARCH_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEDIATECA_MEILISEARCH_INDEX: ${MEDIATECA_MEILISEARCH_INDEX:-ediciones}
+      MEDIATECA_RAW_DIR: /data/raw
+      MEDIATECA_API_CORS_ORIGINS: ${MEDIATECA_API_CORS_ORIGINS:-http://localhost:3000}
+      MEDIATECA_CRAWL_DELAY: ${MEDIATECA_CRAWL_DELAY:-1.0}
+      MEDIATECA_OPAC_BASE_URL: ${MEDIATECA_OPAC_BASE_URL:-https://gestiona.comunidad.madrid}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    volumes:
+      - raw_data:/data/raw
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+
+  scheduler:
+    build:
+      context: ./backend
+    image: mediateca-backend:local
+    restart: unless-stopped
+    profiles: ["jobs"]
+    environment:
+      MEDIATECA_ENVIRONMENT: ${MEDIATECA_ENVIRONMENT:-development}
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_MEILISEARCH_URL: http://meilisearch:7700
+      MEDIATECA_MEILISEARCH_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEDIATECA_MEILISEARCH_INDEX: ${MEDIATECA_MEILISEARCH_INDEX:-ediciones}
+      MEDIATECA_RAW_DIR: /data/raw
+      MEDIATECA_CRAWL_DELAY: ${MEDIATECA_CRAWL_DELAY:-1.0}
+      MEDIATECA_HARVEST_QUERIES: ${MEDIATECA_HARVEST_QUERIES:-cine,documental,animacion,musica}
+      MEDIATECA_SCHEDULER_HARVEST_HOURS: ${MEDIATECA_SCHEDULER_HARVEST_HOURS:-24}
+      MEDIATECA_SCHEDULER_AVAILABILITY_HOURS: ${MEDIATECA_SCHEDULER_AVAILABILITY_HOURS:-6}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    volumes:
+      - raw_data:/data/raw
+    depends_on:
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    command: ["python", "-m", "mediateca", "scheduler"]
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  meili_data:
+  raw_data:
