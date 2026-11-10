@@ -7,6 +7,7 @@ from mediateca.core.config import settings
 from mediateca.core.search import get_index, get_meili_client
 
 FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "bibliotecas"]
+ENRICHED_FILTER = "detail_complete = true"
 
 
 def _quote(value: str) -> str:
@@ -80,8 +81,10 @@ class CatalogSearch:
             "highlightPreTag": "<mark>",
             "highlightPostTag": "</mark>",
         }
+        active_filters = [ENRICHED_FILTER]
         if filters:
-            options["filter"] = filters
+            active_filters.append(filters)
+        options["filter"] = " AND ".join(active_filters)
         if sort:
             options["sort"] = [sort]
 
