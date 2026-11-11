@@ -16,6 +16,7 @@ RUN pip install --upgrade pip && pip install ./vendor/*.whl
 
 COPY pyproject.toml README.md .env.example ./
 COPY src ./src
+COPY scripts ./scripts
 COPY fixtures ./fixtures
 COPY tests ./tests
 

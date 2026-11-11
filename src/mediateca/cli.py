@@ -27,7 +27,7 @@ from mediateca.catalog.parser import parse_file
 from mediateca.catalog.scheduler import enqueue_due_jobs, run_scheduler
 from mediateca.core.config import settings
 from mediateca.core.config_store import effective_flaresolverr_url
-from mediateca.core.db import get_session_factory, init_db, session_scope
+from mediateca.core.db import get_engine, get_session_factory, init_db, session_scope
 from mediateca.core.logging import configure_logging, get_logger
 
 app = typer.Typer(
@@ -49,6 +49,22 @@ def init_db_command() -> None:
     except Exception as exc:  # noqa: BLE001
         console.print(f"[yellow]No se pudo inicializar Meilisearch: {exc}[/yellow]")
     console.print("[green]Base de datos e indice inicializados[/green]")
+
+
+@app.command("migrate")
+def migrate_command() -> None:
+    """Aplica las migraciones SQL idempotentes."""
+    configure_logging()
+    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+    migrations = sorted(scripts_dir.glob("migrate_*.sql"))
+    if not migrations:
+        console.print(f"[red]No se encontraron migraciones en {scripts_dir}[/red]")
+        raise typer.Exit(code=1)
+    with get_engine().begin() as conn:
+        for migration in migrations:
+            conn.exec_driver_sql(migration.read_text(encoding="utf-8"))
+            console.print(f"[green]Migracion aplicada:[/green] {migration.name}")
+    console.print("[green]Migraciones aplicadas[/green]")
 
 
 @app.command("harvest")
