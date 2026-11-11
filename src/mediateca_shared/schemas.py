@@ -30,6 +30,7 @@ class SearchHit(BaseModel):
     anio: int | None = None
     idioma: str | None = None
     pais: str | None = None
+    paises_origen: list[str] = []
     duracion_min: int | None = None
     edad_recomendada: str | None = None
     sinopsis: str | None = None
@@ -96,6 +97,7 @@ class RecordDetail(BaseModel):
     anio: int | None = None
     idioma: str | None = None
     pais: str | None = None
+    paises_origen: list[str] = []
     duracion_min: int | None = None
     edad_recomendada: str | None = None
     sinopsis: str | None = None

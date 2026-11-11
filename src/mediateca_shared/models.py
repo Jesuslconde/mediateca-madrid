@@ -49,6 +49,11 @@ class Edicion(Base):
     anio: Mapped[int | None] = mapped_column(Integer, index=True)
     idioma: Mapped[str | None] = mapped_column(String(16), index=True)
     pais: Mapped[str | None] = mapped_column(String(16), index=True)
+    paises_origen: Mapped[list[str]] = mapped_column(JSON, default=list)
+    tmdb_id: Mapped[int | None] = mapped_column(Integer)
+    tmdb_enriched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
     duracion_min: Mapped[int | None] = mapped_column(Integer)
     edad_recomendada: Mapped[str | None] = mapped_column(String(250))
     sinopsis: Mapped[str | None] = mapped_column(Text)

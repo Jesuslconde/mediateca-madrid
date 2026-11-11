@@ -1,6 +1,6 @@
 [project]
 name = "mediateca-shared"
-version = "0.1.0"
+version = "0.2.0"
 description = "Modelos y contratos compartidos de Mediateca Madrid"
 requires-python = ">=3.11,<3.15"
 license = { text = "PolyForm-Noncommercial-1.0.0" }
