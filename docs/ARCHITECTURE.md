@@ -38,7 +38,7 @@ mediateca-madrid-enrich   mediateca-madrid (API)   frontend
 
 ## Modelo de datos compartido
 
-El modelo obra → edición → ejemplar, las marcas de progreso (`is_stub`, `discovery_seen_at`, `detail_fetched_at`, `missing_at`), la cola `harvest_jobs` y `schema_meta` viven en `mediateca_shared.models`.
+El modelo obra → edición → ejemplar, las marcas de progreso (`is_stub`, `discovery_seen_at`, `detail_fetched_at`, `missing_at`), los países de origen de TMDB (`paises_origen`), la cola `harvest_jobs` y `schema_meta` viven en `mediateca_shared.models`. La API los consume en modo lectura con el wheel `mediateca-shared` `0.2.0` y el esquema `2`.
 
 ## Despliegue
 
@@ -50,6 +50,8 @@ El modelo obra → edición → ejemplar, las marcas de progreso (`is_stub`, `di
 ## Búsqueda de solo lectura
 
 La app usa un adaptador `CatalogSearch` sobre Meilisearch. No escribe documentos, no crea el índice y no reconstruye facetas por su cuenta.
+
+El índice publica `paises_origen` como atributo filtrable y faceta. `GET /api/search` acepta el parámetro repetible `paises_origen` con códigos ISO 3166-1 alfa-2 y lo combina con la consulta y el resto de filtros; `GET /api/records/{titn}` devuelve `paises_origen` junto al `pais` bibliográfico del OPAC. Los países proceden de TMDB y solo están disponibles tras la migración, el backfill y la reindexación de `mediateca-madrid-enrich`.
 
 ## Contratos
 

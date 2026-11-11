@@ -29,6 +29,10 @@ def search(
     anio_desde: int | None = Query(default=None, ge=1900, le=2100),
     anio_hasta: int | None = Query(default=None, ge=1900, le=2100),
     idioma: str | None = Query(default=None),
+    paises_origen: list[str] | None = Query(
+        default=None,
+        description="Puede repetirse: codigos ISO 3166-1 alfa-2 en mayusculas",
+    ),
     biblioteca: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -62,6 +66,7 @@ def search(
             anio_desde=anio_desde,
             anio_hasta=anio_hasta,
             idioma=idioma,
+            paises_origen=paises_origen,
             biblioteca=biblioteca,
             sort=SORT_MAP[sort],
             page=page,

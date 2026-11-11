@@ -199,6 +199,11 @@ export interface components {
             idioma?: string | null;
             /** Pais */
             pais?: string | null;
+            /**
+             * Paises Origen
+             * @default []
+             */
+            paises_origen: string[];
             /** Duracion Min */
             duracion_min?: number | null;
             /** Edad Recomendada */
@@ -279,6 +284,11 @@ export interface components {
             idioma?: string | null;
             /** Pais */
             pais?: string | null;
+            /**
+             * Paises Origen
+             * @default []
+             */
+            paises_origen: string[];
             /** Duracion Min */
             duracion_min?: number | null;
             /** Edad Recomendada */
@@ -407,6 +417,8 @@ export interface operations {
                 anio_desde?: number | null;
                 anio_hasta?: number | null;
                 idioma?: string | null;
+                /** @description Puede repetirse: codigos ISO 3166-1 alfa-2 en mayusculas */
+                paises_origen?: string[] | null;
                 biblioteca?: string | null;
                 page?: number;
                 limit?: number;

@@ -6,7 +6,7 @@ from typing import Any
 from mediateca.core.config import settings
 from mediateca.core.search import get_index, get_meili_client
 
-FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "bibliotecas"]
+FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "paises_origen", "bibliotecas"]
 ENRICHED_FILTER = "detail_complete = true"
 
 
@@ -22,6 +22,7 @@ def build_filters(
     anio_desde: int | None = None,
     anio_hasta: int | None = None,
     idioma: str | None = None,
+    paises_origen: list[str] | None = None,
     biblioteca: str | None = None,
 ) -> str | None:
     filters: list[str] = []
@@ -33,6 +34,14 @@ def build_filters(
     if genero:
         filters.append(f"generos = {_quote(genero)}")
     if idioma:
+        filters.append(f"idioma = {_quote(idioma)}")
+    if paises_origen:
+        filters.append(
+            "("
+            + " OR ".join(f"paises_origen = {_quote(item)}" for item in paises_origen)
+            + ")"
+        )
+    if biblioteca:
         filters.append(f"idioma = {_quote(idioma)}")
     if biblioteca:
         filters.append(f"bibliotecas = {_quote(biblioteca)}")
@@ -60,6 +69,7 @@ class CatalogSearch:
         anio_desde: int | None = None,
         anio_hasta: int | None = None,
         idioma: str | None = None,
+        paises_origen: list[str] | None = None,
         biblioteca: str | None = None,
         sort: str | None = None,
         page: int = 1,
@@ -71,6 +81,7 @@ class CatalogSearch:
             anio_desde=anio_desde,
             anio_hasta=anio_hasta,
             idioma=idioma,
+            paises_origen=paises_origen,
             biblioteca=biblioteca,
         )
         options: dict[str, Any] = {

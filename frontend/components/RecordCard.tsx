@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { SearchHit } from "@/lib/api";
-import { languageLabel } from "@/lib/labels";
+import { countryLabel, languageLabel } from "@/lib/labels";
 
 import { SupportBadge } from "./SupportBadge";
 
@@ -18,6 +18,7 @@ function Meta({ label, value }: { label: string; value: string | number | null |
 export function RecordCard({ hit }: { hit: SearchHit }) {
   const title = hit._formatted?.titulo ?? hit.titulo;
   const synopsis = hit._formatted?.sinopsis ?? hit.sinopsis;
+  const countries = (hit.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-slate-300">
@@ -44,6 +45,7 @@ export function RecordCard({ hit }: { hit: SearchHit }) {
         <Meta label="Año" value={hit.anio} />
         <Meta label="Duración" value={hit.duracion_min ? `${hit.duracion_min} min` : null} />
         <Meta label="Idioma" value={languageLabel(hit.idioma)} />
+        <Meta label="Origen" value={countries.length ? countries.join(", ") : null} />
         <Meta label="Edad" value={hit.edad_recomendada} />
       </div>
 

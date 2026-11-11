@@ -21,6 +21,7 @@ export type SearchParamsInput = {
   anio_desde?: number;
   anio_hasta?: number;
   idioma?: string;
+  paises_origen?: string[];
   biblioteca?: string;
   page?: number;
   limit?: number;

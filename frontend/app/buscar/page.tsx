@@ -4,6 +4,7 @@ import { FacetFilters } from "@/components/FacetFilters";
 import { RecordCard } from "@/components/RecordCard";
 import { SearchBar } from "@/components/SearchBar";
 import { getLibraries, searchRecords } from "@/lib/api";
+import { countryLabel } from "@/lib/labels";
 import {
   buildSearchQuery,
   first,
@@ -29,6 +30,7 @@ export default async function SearchPage({
   const supports = toArray(sp.soporte);
   const genero = first(sp.genero);
   const idioma = first(sp.idioma);
+  const countries = toArray(sp.paises_origen);
   const biblioteca = first(sp.biblioteca);
   const anioDesde = parseYear(first(sp.anio_desde));
   const anioHasta = parseYear(first(sp.anio_hasta));
@@ -41,6 +43,7 @@ export default async function SearchPage({
       soporte: supports.length ? supports : undefined,
       genero,
       idioma,
+      paises_origen: countries.length ? countries : undefined,
       biblioteca,
       anio_desde: anioDesde,
       anio_hasta: anioHasta,
@@ -54,6 +57,7 @@ export default async function SearchPage({
   const activeFilters = [
     ...supports.map((support) => `Soporte: ${support}`),
     genero ? `Género: ${genero}` : null,
+    ...countries.map((country) => `País: ${countryLabel(country) ?? country}`),
     biblioteca ? `Biblioteca: ${biblioteca}` : null,
     idioma ? `Idioma: ${idioma}` : null,
     anioDesde || anioHasta ? `Año: ${anioDesde ?? "..."}–${anioHasta ?? "..."}` : null,

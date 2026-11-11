@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { Library } from "@/lib/api";
-import { languageLabel } from "@/lib/labels";
+import { countryLabel, languageLabel } from "@/lib/labels";
 import { buildSearchQuery, first, toArray, type RawSearchParams } from "@/lib/url";
 
 const DEFAULT_SUPPORTS = ["DVD", "Blu-ray", "4K UHD"];
@@ -29,6 +29,7 @@ export function FacetFilters({
   const selectedSupports = toArray(params.soporte);
   const selectedGenero = first(params.genero);
   const selectedIdioma = first(params.idioma);
+  const selectedCountries = toArray(params.paises_origen);
   const selectedBiblioteca = first(params.biblioteca);
   const selectedSort = first(params.sort) ?? "relevancia";
   const query = first(params.q) ?? "";
@@ -45,6 +46,12 @@ export function FacetFilters({
 
   const genreEntries = sortedEntries(facets.generos, selectedGenero).slice(0, 40);
   const languageEntries = sortedEntries(facets.idioma, selectedIdioma).slice(0, 40);
+  const countryEntries = sortedEntries(facets.paises_origen);
+  for (const country of selectedCountries) {
+    if (!countryEntries.some(([code]) => code === country)) {
+      countryEntries.unshift([country, 0]);
+    }
+  }
   const libraryOptions = selectedBiblioteca
     ? libraries.some((library) => library.nombre === selectedBiblioteca)
       ? libraries
@@ -103,6 +110,29 @@ export function FacetFilters({
             </option>
           ))}
         </select>
+      </section>
+
+      <section>
+        <label htmlFor="paises_origen" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+          País de origen
+        </label>
+        <select
+          id="paises_origen"
+          name="paises_origen"
+          multiple
+          size={Math.min(6, Math.max(3, countryEntries.length))}
+          defaultValue={selectedCountries}
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+        >
+          {countryEntries.map(([country, count]) => (
+            <option key={country} value={country}>
+              {countryLabel(country) ?? country} ({count})
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-slate-400">
+          Mantén pulsada la tecla Ctrl (o Cmd en Mac) para seleccionar varios países.
+        </p>
       </section>
 
       <section>

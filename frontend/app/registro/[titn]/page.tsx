@@ -62,6 +62,7 @@ export default async function RecordPage({
   if (!record) notFound();
 
   const people = groupPeople(record.personas);
+  const countries = (record.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
   const bibliotecas = new Set(record.ejemplares.map((ejemplar) => ejemplar.biblioteca)).size;
   const relevantNotes = Object.entries(record.notas).filter(
     ([key]) => key.startsWith("Nota") || key.startsWith("Depósito"),
@@ -107,6 +108,7 @@ export default async function RecordPage({
           <Meta label="Duración" value={record.duracion_min ? `${record.duracion_min} min` : null} />
           <Meta label="Idioma" value={languageLabel(record.idioma)} />
           <Meta label="País" value={countryLabel(record.pais)} />
+          <Meta label="Países de origen" value={countries.length ? countries.join(", ") : null} />
           <Meta label="Edad" value={record.edad_recomendada} />
           <Meta label="Tipo" value={record.tipo_documento} />
           <Meta label="Soporte principal" value={record.soporte_principal} />

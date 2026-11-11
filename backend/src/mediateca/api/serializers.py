@@ -20,6 +20,7 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
         "anio": edicion.anio,
         "idioma": edicion.idioma,
         "pais": edicion.pais,
+        "paises_origen": edicion.paises_origen or [],
         "duracion_min": edicion.duracion_min,
         "edad_recomendada": edicion.edad_recomendada,
         "sinopsis": edicion.sinopsis,

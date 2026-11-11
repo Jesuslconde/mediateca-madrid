@@ -40,16 +40,34 @@ La app no ejecuta ingesta ni crea el esquema. Al arrancar comprueba que la versi
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/health` | Estado de PostgreSQL y Meilisearch |
-| GET | `/api/search` | Búsqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `biblioteca`, `page`, `limit`, `sort` |
-| GET | `/api/records/{titn}` | Ficha completa con ejemplares |
+| GET | `/api/search` | Búsqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
+| GET | `/api/records/{titn}` | Ficha completa con ejemplares y países de origen |
 | GET | `/api/libraries` | Bibliotecas con número de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
 curl "http://localhost:8000/api/search?soporte=Blu-ray&limit=5"
+curl "http://localhost:8000/api/search?q=cine&paises_origen=ES&paises_origen=FR"
 curl "http://localhost:8000/api/records/2101557"
 ```
+
+### Países de origen y TMDB
+
+`GET /api/search` acepta `paises_origen` repetible con códigos ISO 3166-1 alfa-2 y
+devuelve la faceta `paises_origen`. Los resultados y `GET /api/records/{titn}`
+incluyen el campo `paises_origen`, vacío cuando la edición no tiene países
+conocidos. El filtro del portal usa ese campo de TMDB, distinto del `pais`
+bibliográfico del OPAC.
+
+El dato se publica desde `mediateca-madrid-enrich`: requiere el wheel
+`mediateca-shared` `0.2.0`, la migración y el backfill de TMDB, y un
+`mediateca index --reset` para reindexar los documentos con `paises_origen`.
+Sin ese proceso el filtro y la faceta aparecen vacíos.
+
+La atribución «Este producto usa la API de TMDB, pero no está avalado ni
+certificado por TMDB» se muestra en el pie de página del portal, con enlace a
+<https://www.themoviedb.org/>, conforme a las condiciones de uso de TMDB.
 
 ## Estructura
 

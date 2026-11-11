@@ -51,10 +51,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <footer className="border-t border-slate-200 bg-white">
           <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              Portal alternativo no oficial. Datos obtenidos del catálogo público de las
-              Bibliotecas de la Comunidad de Madrid.
-            </p>
+            <div className="space-y-1">
+              <p>
+                Portal alternativo no oficial. Datos obtenidos del catálogo público de las
+                Bibliotecas de la Comunidad de Madrid.
+              </p>
+              <p className="text-xs text-slate-400">
+                Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.{" "}
+                <a
+                  href="https://www.themoviedb.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-slate-600 underline-offset-4 hover:underline"
+                >
+                  themoviedb.org
+                </a>
+              </p>
+            </div>
             <a
               href="https://gestiona.comunidad.madrid/biblio_publicas"
               target="_blank"
