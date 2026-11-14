@@ -42,8 +42,6 @@ def build_filters(
             + ")"
         )
     if biblioteca:
-        filters.append(f"idioma = {_quote(idioma)}")
-    if biblioteca:
         filters.append(f"bibliotecas = {_quote(biblioteca)}")
     if anio_desde is not None:
         filters.append(f"anio >= {int(anio_desde)}")

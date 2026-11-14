@@ -111,6 +111,52 @@ def test_search_combina_varios_paises_con_or() -> None:
     assert "paises_origen" in index.options["facets"]
 
 
+def test_search_filtra_por_biblioteca_sin_idioma() -> None:
+    search, index = _catalog_search()
+    app.dependency_overrides[get_indexer] = lambda: search
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/api/search",
+            params={
+                "biblioteca": "Biblioteca Regional de Madrid Joaquín Leguina",
+                "idioma": "",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert index.options is not None
+    assert index.options["filter"] == (
+        "detail_complete = true AND "
+        'bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina"'
+    )
+
+
+def test_search_combina_biblioteca_e_idioma() -> None:
+    search, index = _catalog_search()
+    app.dependency_overrides[get_indexer] = lambda: search
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/api/search",
+            params={
+                "biblioteca": "Biblioteca Regional de Madrid Joaquín Leguina",
+                "idioma": "es",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert index.options is not None
+    assert index.options["filter"] == (
+        'detail_complete = true AND idioma = "es" AND '
+        'bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina"'
+    )
+
+
 def test_search_combina_pais_con_genero_y_enriquecidas() -> None:
     search, index = _catalog_search()
     app.dependency_overrides[get_indexer] = lambda: search

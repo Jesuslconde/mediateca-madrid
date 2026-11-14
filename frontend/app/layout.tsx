@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import packageJson from "../package.json";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -68,14 +70,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </a>
               </p>
             </div>
-            <a
-              href="https://gestiona.comunidad.madrid/biblio_publicas"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-slate-700 underline-offset-4 hover:underline"
-            >
-              Ir al OPAC oficial
-            </a>
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <span
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500"
+                title="Versión del portal desplegada"
+              >
+                Versión {packageJson.version}
+              </span>
+              <a
+                href="https://gestiona.comunidad.madrid/biblio_publicas"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-slate-700 underline-offset-4 hover:underline"
+              >
+                Ir al OPAC oficial
+              </a>
+            </div>
           </div>
         </footer>
       </body>
