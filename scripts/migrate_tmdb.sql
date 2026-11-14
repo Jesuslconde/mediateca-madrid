@@ -11,11 +11,15 @@ ALTER TABLE IF EXISTS ediciones
 ALTER TABLE IF EXISTS ediciones
     ADD COLUMN IF NOT EXISTS tmdb_id INTEGER;
 ALTER TABLE IF EXISTS ediciones
+    ADD COLUMN IF NOT EXISTS tmdb_poster_url TEXT;
+ALTER TABLE IF EXISTS ediciones
+    ADD COLUMN IF NOT EXISTS tmdb_url TEXT;
+ALTER TABLE IF EXISTS ediciones
     ADD COLUMN IF NOT EXISTS tmdb_enriched_at TIMESTAMP WITH TIME ZONE;
 
 CREATE INDEX IF NOT EXISTS ix_ediciones_tmdb_enriched_at
     ON ediciones (tmdb_enriched_at);
 
 INSERT INTO schema_meta (key, value)
-VALUES ('schema_version', '2')
+VALUES ('schema_version', '3')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;

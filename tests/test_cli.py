@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import UTC, datetime
 
 from mediateca_shared.models import Edicion
 from sqlalchemy import create_engine, func, select
@@ -187,6 +188,7 @@ class _FakeTmdbClient:
             original_title="Pelicula",
             release_date="2020-01-01",
             production_countries=["ES"],
+            poster_path="/poster.jpg",
         )
 
     def close(self) -> None:
@@ -249,7 +251,51 @@ def test_cli_tmdb_enrich_procesa_por_lotes_y_reanuda(
         edicion.titn: edicion for edicion in session.scalars(select(Edicion))
     }
     assert ediciones["1"].tmdb_enriched_at is not None
+    assert ediciones["1"].tmdb_poster_url == (
+        "https://image.tmdb.org/t/p/w500/poster.jpg"
+    )
+    assert ediciones["1"].tmdb_url is not None
     assert ediciones["2"].tmdb_enriched_at is not None
+
+
+def test_cli_tmdb_enrich_completa_portadas_ya_enriquecidas(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    edicion = _enriched_edition(session, "1", "Pelicula A", 2020)
+    edicion.tmdb_id = 42
+    edicion.tmdb_enriched_at = datetime(2025, 1, 1, tzinfo=UTC)
+    session.commit()
+
+    class FakeOpacClient:
+        delay = 0.0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    tmdb = _FakeTmdbClient()
+    monkeypatch.setattr(cli_module, "OpacClient", FakeOpacClient)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+    monkeypatch.setattr(cli_module, "build_tmdb_client", lambda *args, **kwargs: tmdb)
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["tmdb-enrich", "--limit", "10", "--delay", "0", "--no-index"],
+    )
+
+    assert result.exit_code == 0, result.output
+    session.refresh(edicion)
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert edicion.tmdb_url == f"https://www.themoviedb.org/movie/{edicion.tmdb_id}"
+    assert tmdb.calls
 
 
 def test_cli_tmdb_enrich_sin_token_falla_sin_modificar(monkeypatch, tmp_path) -> None:

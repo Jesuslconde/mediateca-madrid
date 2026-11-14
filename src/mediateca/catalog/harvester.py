@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup
 from mediateca_shared.models import Edicion, HarvestJob, HarvestRun
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from mediateca.catalog.flaresolverr import (
@@ -27,7 +27,14 @@ from mediateca.catalog.repository import (
     upsert_edicion,
     upsert_stub,
 )
-from mediateca.catalog.tmdb import TmdbClient, TmdbError, find_movie, resolve_countries
+from mediateca.catalog.tmdb import (
+    TmdbClient,
+    TmdbError,
+    build_movie_url,
+    build_poster_url,
+    find_movie,
+    resolve_countries,
+)
 from mediateca.core.config import settings
 from mediateca.core.logging import get_logger
 
@@ -510,6 +517,8 @@ class Harvester:
                 edicion,
                 paises_origen=resolve_countries(detail),
                 tmdb_id=match.id,
+                poster_url=build_poster_url(detail.poster_path),
+                tmdb_url=build_movie_url(detail.id or match.id),
             )
             self.session.commit()
             self.tmdb_matched += 1
@@ -765,7 +774,13 @@ class Harvester:
             select(Edicion)
             .where(
                 Edicion.detail_fetched_at.is_not(None),
-                Edicion.tmdb_enriched_at.is_(None),
+                or_(
+                    Edicion.tmdb_enriched_at.is_(None),
+                    and_(
+                        Edicion.tmdb_id.is_not(None),
+                        Edicion.tmdb_url.is_(None),
+                    ),
+                ),
             )
             .order_by(Edicion.titn)
             .limit(limit)

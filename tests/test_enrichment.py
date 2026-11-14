@@ -175,6 +175,7 @@ def _tmdb_detail(countries: tuple[str, ...] = ("ES", "FR")) -> TmdbMovieDetail:
         original_title="20.000 especies de abejas",
         release_date="2023-01-01",
         production_countries=list(countries),
+        poster_path="/poster.jpg",
     )
 
 
@@ -192,6 +193,8 @@ def test_enriquecimiento_tmdb_empareja_y_guarda_paises(dvd_fixture) -> None:
     edicion = session.scalars(select(Edicion).where(Edicion.titn == DVD_TITN)).one()
     assert edicion.paises_origen == ["ES", "FR"]
     assert edicion.tmdb_id == 10
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert edicion.tmdb_url == "https://www.themoviedb.org/movie/10"
     assert edicion.tmdb_enriched_at is not None
     assert edicion.pais is not None
     assert stats["tmdb_matched"] == 1

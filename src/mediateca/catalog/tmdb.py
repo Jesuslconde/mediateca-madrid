@@ -15,6 +15,8 @@ import httpx
 from mediateca.core.config import settings
 
 TMDB_BASE_URL = "https://api.themoviedb.org"
+TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+TMDB_MOVIE_BASE_URL = "https://www.themoviedb.org/movie"
 SIMILARITY_THRESHOLD = 0.90
 YEAR_TOLERANCE = 1
 
@@ -49,6 +51,7 @@ class TmdbMovieDetail:
     release_date: str | None
     production_countries: list[str] = field(default_factory=list)
     origin_country: list[str] = field(default_factory=list)
+    poster_path: str | None = None
 
 
 def is_jwt_token(token: str) -> bool:
@@ -134,6 +137,18 @@ def select_best_match(
             if best is None or ranked[:2] > best[:2]:
                 best = ranked
     return best[2] if best else None
+
+
+def build_poster_url(poster_path: str | None) -> str | None:
+    if not poster_path:
+        return None
+    return f"{TMDB_IMAGE_BASE_URL}/{poster_path.lstrip('/')}"
+
+
+def build_movie_url(movie_id: int | None) -> str | None:
+    if movie_id is None:
+        return None
+    return f"{TMDB_MOVIE_BASE_URL}/{movie_id}"
 
 
 def resolve_countries(detail: TmdbMovieDetail) -> list[str]:
@@ -294,6 +309,7 @@ class TmdbClient:
             if isinstance(production, list)
             else [],
             origin_country=[str(code) for code in origin] if isinstance(origin, list) else [],
+            poster_path=payload.get("poster_path") or None,
         )
 
 

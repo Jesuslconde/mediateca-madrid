@@ -136,6 +136,21 @@ def test_build_document_incluye_lista_vacia_para_sin_tmdb() -> None:
     session.commit()
 
     assert build_document(stub)["paises_origen"] == []
+    assert build_document(stub)["tmdb_poster_url"] is None
+    assert build_document(stub)["tmdb_url"] is None
+
+
+def test_build_document_incluye_portada_y_enlace_de_tmdb(dvd_fixture) -> None:
+    session = _session()
+    edicion = upsert_edicion(session, parse_file(str(dvd_fixture)))
+    edicion.tmdb_poster_url = "https://image.tmdb.org/t/p/w500/poster.jpg"
+    edicion.tmdb_url = "https://www.themoviedb.org/movie/10"
+    session.commit()
+
+    document = build_document(edicion)
+
+    assert document["tmdb_poster_url"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert document["tmdb_url"] == "https://www.themoviedb.org/movie/10"
 
 
 def test_faceta_y_filtro_de_paises_origen() -> None:

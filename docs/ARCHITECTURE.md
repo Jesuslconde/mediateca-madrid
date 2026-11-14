@@ -64,16 +64,18 @@ El tamano del lote y el retardo son configurables desde `mediateca enrich`.
 
 La edicion conserva `pais` con el codigo del MARC del OPAC y añade
 `paises_origen` con la lista de codigos ISO 3166-1 alfa-2 obtenida de TMDB,
-`tmdb_id` y `tmdb_enriched_at`. La migracion `scripts/migrate_tmdb.sql` crea las
-columnas de forma idempotente, indexa `tmdb_enriched_at` y actualiza
-`schema_meta.schema_version` a `2`.
+`tmdb_id`, `tmdb_poster_url` (portada de `image.tmdb.org`) y `tmdb_url` (ficha
+publica de TMDB). La migracion `scripts/migrate_tmdb.sql` crea las columnas de
+forma idempotente, indexa `tmdb_enriched_at` y actualiza
+`schema_meta.schema_version` a `3`.
 
 ## Consulta a TMDB
 
 Cuando existe un token efectivo (guardado en `app_config` o en
 `MEDIATECA_TMDB_API_TOKEN`), el enriquecimiento consulta `/3/search/movie` con el
 titulo y el ano de la edicion y, si hay una coincidencia fiable, `/3/movie/{id}`
-para leer `production_countries` con respaldo de `origin_country`. El token puede
+para leer `production_countries` con respaldo de `origin_country`, la portada
+(`poster_path`) y construir la URL de la imagen y el enlace a TMDB. El token puede
 ser una API Key v3, enviada como `api_key`, o un Read Access Token v4, enviado
 como `Authorization: Bearer`; el formato se detecta por la forma del token.
 

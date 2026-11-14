@@ -37,8 +37,10 @@ A 1 peticion por segundo cada lote tarda aproximadamente 1,4 horas. El trabajo
 guarda un cursor por `TITN`, reintenta las fichas fallidas y solo persiste datos
 parseados: no crea snapshots HTML ni escribe en `MEDIATECA_RAW_DIR`.
 
-El backfill de paises de origen de TMDB se ejecuta por lotes sobre las ediciones
-ya enriquecidas que aun no tienen `tmdb_enriched_at`:
+El backfill de TMDB se ejecuta por lotes sobre las ediciones ya enriquecidas que
+aun no tienen `tmdb_enriched_at`, y tambien sobre las que ya lo tienen pero
+carecen de `tmdb_url` (por ejemplo, fichas sincronizadas antes de guardar las
+portadas):
 
 ```bash
 docker compose run --rm worker mediateca tmdb-enrich --limit 5000 --delay 0.25
@@ -47,7 +49,8 @@ docker compose run --rm worker mediateca tmdb-enrich --limit 5000 --delay 0.25
 El comando reanuda por `TITN` las pendientes, no repite las ya sincronizadas y al
 terminar indexa los TITN procesados; usa `--no-index` para omitir la indexacion.
 Las ediciones sin coincidencia quedan sin marca y se reintentan en ejecuciones
-posteriores. Requiere un token guardado en el dashboard o
+posteriores. La portada se guarda como URL de `image.tmdb.org` y el enlace como
+ficha publica de TMDB, sin descargar imagenes. Requiere un token guardado en el dashboard o
 `MEDIATECA_TMDB_API_TOKEN`.
 
 ## Dashboard de estado
@@ -204,9 +207,10 @@ configurados en el dashboard.
 ## Modelo de datos y esquema
 
 La edicion conserva `pais` con el codigo del MARC del OPAC y añade `paises_origen`
-con la lista de codigos ISO 3166-1 alfa-2 obtenida de TMDB, `tmdb_id` y
-`tmdb_enriched_at`. La version del esquema compartido se guarda en
-`schema_meta.schema_version`; este cambio la sube a `2`.
+con la lista de codigos ISO 3166-1 alfa-2 obtenida de TMDB, `tmdb_id`,
+`tmdb_poster_url` (URL de la portada en `image.tmdb.org`), `tmdb_url` (enlace a
+la ficha de TMDB) y `tmdb_enriched_at`. La version del esquema compartido se
+guarda en `schema_meta.schema_version`; este cambio la sube a `3`.
 
 ## Migraciones
 
@@ -215,8 +219,9 @@ con la lista de codigos ISO 3166-1 alfa-2 obtenida de TMDB, `tmdb_id` y
   y retirada idempotente de la tabla `snapshots`.
 - `scripts/migrate_flaresolverr.sql`: tabla `app_config` para la configuracion
   persistida de FlareSolverr.
-- `scripts/migrate_tmdb.sql`: columnas `paises_origen`, `tmdb_id` y
-  `tmdb_enriched_at`, indice de sincronizacion y `schema_version` 2.
+- `scripts/migrate_tmdb.sql`: columnas `paises_origen`, `tmdb_id`,
+  `tmdb_poster_url`, `tmdb_url` y `tmdb_enriched_at`, indice de sincronizacion y
+  `schema_version` 3.
 
 Todas son idempotentes. `make migrate` requiere PostgreSQL levantado.
 

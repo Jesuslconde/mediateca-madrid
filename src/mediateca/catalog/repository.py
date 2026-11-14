@@ -300,11 +300,15 @@ def apply_tmdb_enrichment(
     *,
     paises_origen: list[str],
     tmdb_id: int,
+    poster_url: str | None = None,
+    tmdb_url: str | None = None,
     enriched_at: datetime | None = None,
 ) -> None:
     """Actualiza los campos TMDB sin tocar el pais del OPAC."""
     edicion.paises_origen = list(paises_origen)
     edicion.tmdb_id = tmdb_id
+    edicion.tmdb_poster_url = poster_url
+    edicion.tmdb_url = tmdb_url
     edicion.tmdb_enriched_at = enriched_at or datetime.now(UTC)
     session.flush()
 

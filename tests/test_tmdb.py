@@ -10,6 +10,8 @@ from mediateca.catalog.tmdb import (
     TmdbClient,
     TmdbMovieDetail,
     TmdbSearchResult,
+    build_movie_url,
+    build_poster_url,
     find_movie,
     is_jwt_token,
     normalize_title,
@@ -120,6 +122,7 @@ def test_get_movie_parsea_paises() -> None:
                     {"iso_3166_1": "FR", "name": "France"},
                 ],
                 "origin_country": ["ES"],
+                "poster_path": "/poster.jpg",
             },
         )
 
@@ -129,6 +132,14 @@ def test_get_movie_parsea_paises() -> None:
     assert detail.id == 7
     assert detail.production_countries == ["ES", "FR"]
     assert detail.origin_country == ["ES"]
+    assert detail.poster_path == "/poster.jpg"
+
+
+def test_construccion_de_urls_de_tmdb() -> None:
+    assert build_poster_url("/poster.jpg") == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert build_poster_url(None) is None
+    assert build_movie_url(10) == "https://www.themoviedb.org/movie/10"
+    assert build_movie_url(None) is None
 
 
 def test_reintenta_error_temporal() -> None:

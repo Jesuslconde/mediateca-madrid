@@ -185,12 +185,16 @@ def test_apply_tmdb_enrichment_es_idempotente_y_conserva_pais(dvd_fixture) -> No
         edicion,
         paises_origen=["ES", "FR"],
         tmdb_id=1,
+        poster_url="https://image.tmdb.org/t/p/w500/uno.jpg",
+        tmdb_url="https://www.themoviedb.org/movie/1",
         enriched_at=primero,
     )
     session.commit()
 
     assert edicion.paises_origen == ["ES", "FR"]
     assert edicion.tmdb_id == 1
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/uno.jpg"
+    assert edicion.tmdb_url == "https://www.themoviedb.org/movie/1"
     assert edicion.tmdb_enriched_at == primero
     assert edicion.pais == pais_opac
 
@@ -200,12 +204,16 @@ def test_apply_tmdb_enrichment_es_idempotente_y_conserva_pais(dvd_fixture) -> No
         edicion,
         paises_origen=["US"],
         tmdb_id=2,
+        poster_url="https://image.tmdb.org/t/p/w500/dos.jpg",
+        tmdb_url="https://www.themoviedb.org/movie/2",
         enriched_at=segundo,
     )
     session.commit()
 
     assert edicion.paises_origen == ["US"]
     assert edicion.tmdb_id == 2
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/dos.jpg"
+    assert edicion.tmdb_url == "https://www.themoviedb.org/movie/2"
     assert edicion.tmdb_enriched_at == segundo
     assert edicion.pais == pais_opac
     assert session.scalar(select(func.count(Edicion.id))) == 1
