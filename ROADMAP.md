@@ -12,34 +12,35 @@ Estado: completado (cambio OpenSpec `mvp-catalogo-video`, archivado el 2026-11-0
 - Portal con búsqueda y ficha.
 - Docker Compose.
 
-## Arquitectura de repositorios
+## Arquitectura del monorepo
 
-| Repositorio | Responsabilidad |
+| Ruta | Responsabilidad |
 |---|---|
-| `mediateca-madrid` | API FastAPI y portal Next.js; PostgreSQL y Meilisearch en solo lectura |
-| `mediateca-madrid-enrich` | Ingesta, descubrimiento, enriquecimiento, worker, scheduler, migraciones e índice |
-| `mediateca-madrid-shared` | Modelos SQLAlchemy, esquemas Pydantic y contratos OpenAPI/JSON |
+| `services/api` | API FastAPI y lectura de PostgreSQL/Meilisearch |
+| `services/enrich` | Ingesta, descubrimiento, enriquecimiento, worker, scheduler, migraciones e índice |
+| `apps/web` | Portal Next.js |
+| `packages/shared` | Modelos SQLAlchemy, esquemas Pydantic y contratos OpenAPI/JSON |
 
-Orden de despliegue: shared → enrich (migraciones) → app.
+Imagenes: `mediateca-batch` para la ingesta y `mediateca-web` para API y portal. Orden de despliegue: `db/meilisearch -> init -> batch/web`.
 
 ## Planes OpenSpec
 
 En este repositorio solo queda activo `extraer-ingesta-proyecto-enrich`.
 
-La planificación de ingesta se trasladó a `mediateca-madrid-enrich`:
+La planificación de ingesta se consolido en `openspec/` en la raíz:
 
 | Cambio | Estado |
 |---|---|
-| `estado-ingesta` | implementado en enrich |
-| `cola-worker` | implementado en enrich |
-| `descubrimiento-catalogo` | pendiente en enrich |
-| `enriquecimiento-fichas` | pendiente en enrich |
-| `indexacion-incremental` | pendiente en enrich |
-| `observabilidad-ingesta` | pendiente en enrich |
+| `estado-ingesta` | implementado |
+| `cola-worker` | implementado |
+| `descubrimiento-catalogo` | pendiente |
+| `enriquecimiento-fichas` | pendiente |
+| `indexacion-incremental` | pendiente |
+| `observabilidad-ingesta` | pendiente |
 
 ## M1 · Ingesta completa
 
-Se ejecuta en `mediateca-madrid-enrich`.
+Se ejecuta en `services/enrich`.
 
 - Descubrir los 67.215 registros de formato 6, incluidos VHS.
 - Crear stubs con metadatos básicos.
@@ -53,7 +54,7 @@ Descartado por decisión de producto. El portal no muestra estado de préstamo n
 
 ## M3 · Enriquecimiento externo
 
-Se ejecuta en `mediateca-madrid-enrich` y se publica a través de la API.
+Se ejecuta en `services/enrich` y se publica a través de la API.
 
 - Portadas y sinopsis desde TMDb/Filmaffinity/IMDb.
 - Enlaces a plataformas legales.
@@ -64,12 +65,12 @@ Se ejecuta en `mediateca-madrid-enrich` y se publica a través de la API.
 - Versionado de API.
 - Exportación MARC/JSON.
 - Límites de uso y claves.
-- Documentación OpenAPI publicada desde `mediateca-madrid-shared`.
+- Documentación OpenAPI publicada desde `contracts/`.
 
 ## M5 · Escala y operación
 
 - Migración a OpenSearch si el volumen lo exige.
 - Solo datos parseados: sin almacenamiento de snapshots HTML.
-- Cola en PostgreSQL y worker en `mediateca-madrid-enrich`; sin Redis/RabbitMQ en el MVP.
+- Cola en PostgreSQL y worker en `services/enrich`; sin Redis/RabbitMQ en el MVP.
 - Métricas, cobertura y alertas básicas en enrich.
-- Despliegue en producción con backups y orden shared → enrich → app.
+- Despliegue en producción con backups y orden `init -> batch/web`.

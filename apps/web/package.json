@@ -1,5 +1,5 @@
 {
-  "name": "mediateca-madrid-web",
+  "name": "mediateca-web",
   "version": "0.1.4",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "generate:api": "openapi-typescript contracts/openapi.json -o lib/api-types.ts"
+    "generate:api": "openapi-typescript ../../contracts/openapi.json -o lib/api-types.ts"
   },
   "dependencies": {
     "next": "^15.5.0",

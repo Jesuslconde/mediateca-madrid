@@ -1,13 +1,15 @@
 # Mediateca Madrid - API
 
-API FastAPI de solo lectura para el portal. Consume los modelos y esquemas de `mediateca-shared` y lee PostgreSQL y Meilisearch; la ingesta se ejecuta en `mediateca-madrid-enrich`.
+API FastAPI de solo lectura para el portal. Consume los modelos y esquemas de `packages/shared` y lee PostgreSQL y Meilisearch; la ingesta se ejecuta en `services/enrich`.
 
 ## Comandos
 
+Desde la raiz del monorepo:
+
 ```bash
-uvicorn mediateca.api.main:app --reload
-pytest -q
-ruff check src tests
+make test-api
+make lint
+make openapi
 ```
 
 La API comprueba `schema_meta.schema_version` al arrancar. Si el esquema no existe o no coincide con `SCHEMA_VERSION`, falla con un error legible.

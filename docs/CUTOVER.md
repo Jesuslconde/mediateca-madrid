@@ -1,37 +1,23 @@
-# Corte a la arquitectura de tres repositorios
+# Corte al monorepo
 
 ## Orden
 
-1. Publicar `mediateca-madrid-shared` `0.1.0` (wheel local o registro).
-2. Arrancar `mediateca-madrid-enrich`:
-   ```bash
-   make up
-   make migrate
-   make init
-   ```
-3. Ejecutar una ingesta de prueba:
-   ```bash
-   make harvest q=cine pages=1 limit=2
-   make index
-   ```
-4. Arrancar `mediateca-madrid`:
-   ```bash
-   docker compose up -d
-   ```
-5. Verificar:
-   ```bash
-   curl localhost:8000/health
-   curl "localhost:8000/api/search?q=cine"
-   docker compose -f ../mediateca-madrid-enrich/docker-compose.yml exec worker mediateca status
-   ```
+1. Publicar las imagenes con `make release`.
+2. Actualizar el stack de Portainer con `deploy/portainer-stack.yml` y los valores de `MEDIATECA_REGISTRY` y `MEDIATECA_IMAGE_TAG`.
+3. Desplegar el stack y esperar a que `init` termine.
+4. Verificar:
+
+```bash
+curl localhost:8000/health
+curl "localhost:8000/api/search?q=cine"
+curl localhost:8080/health
+```
 
 ## Rollback
 
-La etiqueta `pre-enrich-extraction` conserva el monorepo anterior con la ingesta integrada.
+Las bases de datos no cambian durante el corte. Para volver al despliegue anterior:
 
-```bash
-git checkout pre-enrich-extraction
-docker compose up -d --build
-```
+1. Restaurar el stack anterior de Portainer con las imagenes antiguas.
+2. Mantener los repositorios `mediateca-madrid-enrich` y `mediateca-madrid-shared` archivados pero accesibles.
 
-La base de datos compartida mantiene el esquema compatible; no se ejecutan migraciones destructivas durante el corte. Si se necesita volver a enrich, repetir el orden shared → enrich → app.
+Las migraciones son idempotentes y no destructivas; no es necesario revertir datos para volver a la API anterior.

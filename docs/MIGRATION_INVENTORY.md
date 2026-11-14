@@ -1,36 +1,32 @@
-# Inventario de extracción de la ingesta
+# Inventario de migracion
 
-Etiqueta de referencia: `pre-enrich-extraction`.
+## Paquete compartido
 
-## Movido a mediateca-madrid-shared
+Los modelos y esquemas que antes vivian en `mediateca-madrid-shared` se han integrado en:
 
-- `backend/src/mediateca/catalog/models.py` → `mediateca_shared.models`
-- `backend/src/mediateca/catalog/soportes.py` → `mediateca_shared.soportes`
-- `backend/src/mediateca/api/schemas.py` → `mediateca_shared.schemas`
-- `backend/src/mediateca/core/db.py::Base` → `mediateca_shared.db.Base`
-- Constantes de trabajos → `mediateca_shared.constants`
-- `SCHEMA_VERSION` y comprobación → `mediateca_shared.version`
-- Contrato `contracts/openapi.json`
+```text
+packages/shared/src/mediateca_shared/
+```
 
-## Movido a mediateca-madrid-enrich
+- modelos SQLAlchemy
+- esquemas Pydantic
+- soportes y constantes de dominio
+- `SCHEMA_VERSION` y comprobacion de esquema
 
-- `catalog/harvester.py`
-- `catalog/parser.py`
-- `catalog/repository.py`
-- `catalog/jobs.py`
-- escritura de `catalog/indexer.py`
-- `cli.py`, `__main__.py`
-- `core/config.py`, `core/db.py`, `core/search.py` de ingesta
-- `scripts/migrate_disponibilidad.sql`, `scripts/migrate_ingesta.sql`
-- `fixtures/`
-- `tests/test_parser.py`, `test_repository.py`, `test_jobs.py`, `test_indexer.py`
-- servicios `worker` y `scheduler`, volúmenes de snapshots y variables de ingesta
+## API y portal
 
-## Permanece en mediateca-madrid
+- `backend/` -> `services/api/`
+- `frontend/` -> `apps/web/`
 
-- `api/` (FastAPI, routers, serializers, schemas reexportados)
-- `catalog/search.py` (búsqueda de solo lectura)
-- `core/config.py`, `core/db.py`, `core/search.py`, `core/logging.py` de lectura
-- `frontend/`
-- `tests/test_api.py`
-- `openspec/specs/api-portal`, `portal-web`, `busqueda-facetas`, `modelo-catalogo`, etc.
+## Ingesta
+
+- repositorio independiente `mediateca-madrid-enrich` -> `services/enrich/`
+
+## Artefactos eliminados
+
+- `vendor/mediateca_shared-*.whl`
+- dependencias `mediateca-shared==X.Y.Z`
+- `docker-compose.yml` de api y enrich
+- copia duplicada de `openapi.json` en el portal
+
+El contrato unico vive en `contracts/openapi.json`.

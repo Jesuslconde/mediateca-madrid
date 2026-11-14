@@ -1,28 +1,25 @@
 # Mediateca Madrid
 
-Portal alternativo de búsqueda de vídeos, DVD y Blu-ray de las bibliotecas públicas de la Comunidad de Madrid.
+Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.
 
-Este repositorio contiene la **API de solo lectura y el portal**. La ingesta, el descubrimiento, el enriquecimiento y la escritura del índice viven en `mediateca-madrid-enrich`; los modelos y contratos compartidos, en `mediateca-madrid-shared`.
+El repositorio es un monorepo con la API, el portal, la ingesta y los modelos compartidos. Se construyen dos imagenes: `mediateca-batch` para los procesos de ingesta y `mediateca-web` para la API y el portal.
 
-## Repositorios
+## Estructura
 
-| Repositorio | Responsabilidad |
-|---|---|
-| `mediateca-madrid` | API FastAPI, portal Next.js y lectura de PostgreSQL/Meilisearch |
-| `mediateca-madrid-enrich` | Ingesta, worker, scheduler, migraciones y escritura del catálogo |
-| `mediateca-madrid-shared` | Modelos SQLAlchemy, esquemas Pydantic y contratos OpenAPI/JSON |
+```text
+services/api/       API FastAPI de solo lectura
+services/enrich/    ingesta, worker, scheduler, dashboard y migraciones
+apps/web/           portal Next.js
+packages/shared/    modelos SQLAlchemy, esquemas Pydantic y SCHEMA_VERSION
+contracts/          contrato OpenAPI unico
+deploy/             stack de Portainer
+docs/               arquitectura y operacion
+openspec/           especificaciones y cambios
+```
 
-## Inicio rápido
-
-Los servicios de PostgreSQL y Meilisearch los despliega `mediateca-madrid-enrich`. Arranca primero ese proyecto y después este:
+## Inicio rapido
 
 ```bash
-# En mediateca-madrid-enrich
-make up
-make migrate
-make init
-
-# En mediateca-madrid
 cp .env.example .env
 make up
 ```
@@ -31,99 +28,114 @@ Abre:
 
 - Portal: <http://localhost:3000>
 - API: <http://localhost:8000/docs>
+- Dashboard: <http://localhost:8080>
 - Meilisearch: <http://localhost:7700>
 
-La app no ejecuta ingesta ni crea el esquema. Al arrancar comprueba que la versión del esquema compartido (`schema_meta`) coincide con la esperada.
+El servicio `init` crea las tablas, aplica las migraciones idempotentes y prepara el indice antes de arrancar el worker y la API.
+
+## Comandos
+
+```bash
+make help
+make up
+make down
+make logs
+make ps
+make init
+make migrate
+make harvest q=cine pages=2 limit=20
+make index
+make dashboard
+make psql
+make test
+make lint
+make fmt
+make openapi
+make web-types
+make check-schema
+```
+
+Las pruebas se ejecutan en las imagenes correspondientes, de modo que API e ingesta no comparten un unico entorno virtual.
+
+## Imagenes
+
+| Imagen | Servicios |
+|---|---|
+| `mediateca-batch` | `init`, `worker`, `dashboard`, `scheduler` |
+| `mediateca-web` | `api`, `web` |
+
+Para construir y publicar una version:
+
+```bash
+make bump type=fix
+make release
+```
+
+`make bump` actualiza `VERSION`, los `pyproject.toml`, los `__version__` y el `package.json`. `make release` publica las dos imagenes en `${REGISTRY}` con la etiqueta de version y `latest`.
+
+## Despliegue
+
+- Local: `docker-compose.yml`.
+- Portainer: `deploy/portainer-stack.yml`.
+
+El stack de Portainer usa:
+
+```text
+${MEDIATECA_REGISTRY}/mediateca-batch:${MEDIATECA_IMAGE_TAG}
+${MEDIATECA_REGISTRY}/mediateca-web:${MEDIATECA_IMAGE_TAG}
+```
+
+La base de datos y el indice se comparten entre todos los servicios. La ingesta es la unica propietaria de las migraciones y de las escrituras del catalogo; la API y el portal solo leen.
+
+## Gestion de modelos
+
+Los modelos SQLAlchemy, los esquemas Pydantic y `SCHEMA_VERSION` viven en `packages/shared`. API e ingesta instalan ese paquete local durante el build y no existen copias locales ni wheels versionados.
+
+Cuando cambie el modelo:
+
+1. Edita `packages/shared` y la migracion correspondiente en `services/enrich/scripts`.
+2. Sube `SCHEMA_VERSION` si el cambio afecta al esquema.
+3. Reconstruye las dos imagenes con `make release` o `make build`.
+4. Despliega: `init` aplica las migraciones antes de arrancar la API.
 
 ## API
 
-| Método | Ruta | Descripción |
+| Metodo | Ruta | Descripcion |
 |---|---|---|
 | GET | `/health` | Estado de PostgreSQL y Meilisearch |
-| GET | `/api/search` | Búsqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
-| GET | `/api/records/{titn}` | Ficha completa con ejemplares y países de origen |
-| GET | `/api/libraries` | Bibliotecas con número de ejemplares |
+| GET | `/api/search` | Busqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
+| GET | `/api/records/{titn}` | Ficha completa con ejemplares y paises de origen |
+| GET | `/api/libraries` | Bibliotecas con numero de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
-curl "http://localhost:8000/api/search?soporte=Blu-ray&limit=5"
-curl "http://localhost:8000/api/search?q=cine&paises_origen=ES&paises_origen=FR"
 curl "http://localhost:8000/api/records/2101557"
 ```
 
-### Países de origen y TMDB
+## Contratos
 
-`GET /api/search` acepta `paises_origen` repetible con códigos ISO 3166-1 alfa-2 y
-devuelve la faceta `paises_origen`. Los resultados y `GET /api/records/{titn}`
-incluyen el campo `paises_origen`, vacío cuando la edición no tiene países
-conocidos, junto con `tmdb_poster_url` (portada) y `tmdb_url` (enlace a la ficha
-de TMDB). El filtro del portal usa ese campo de TMDB, distinto del `pais`
-bibliográfico del OPAC.
-
-El dato se publica desde `mediateca-madrid-enrich`: requiere el wheel
-`mediateca-shared` `0.3.0`, la migración y el backfill de TMDB, y un
-`mediateca index --reset` para reindexar los documentos con `paises_origen`,
-`tmdb_poster_url` y `tmdb_url`. Sin ese proceso el filtro, la faceta y las
-portadas aparecen vacíos.
-
-La atribución «Este producto usa la API de TMDB, pero no está avalado ni
-certificado por TMDB» se muestra en el pie de página del portal, con enlace a
-<https://www.themoviedb.org/>, conforme a las condiciones de uso de TMDB.
-
-## Estructura
-
-```text
-backend/
-  src/mediateca/
-    api/          FastAPI, routers, schemas y serializers
-    catalog/      adaptador de búsqueda de solo lectura
-    core/         configuración, base de datos, logging y cliente Meilisearch
-  tests/          pytest
-frontend/
-  app/            páginas Next.js (inicio, búsqueda, ficha)
-  components/     buscador, tarjetas, facetas, bibliotecas
-  lib/            cliente de la API y tipos generados
-openspec/         especificaciones y cambios
-docs/             arquitectura
-```
-
-## Contratos compartidos
-
-La app fija una versión de `mediateca-shared` y consume sus modelos y esquemas. El contrato OpenAPI se publica desde `mediateca-madrid-shared` y el portal genera sus tipos TypeScript desde ese artefacto.
-
-## Datos y limitaciones
-
-- La fuente es el catálogo público de AbsysNet. La recolección se ejecuta en `mediateca-madrid-enrich`.
-- La ficha muestra las bibliotecas que poseen cada título y enlaza al OPAC para consultar el estado de préstamo.
-- No se almacenan datos personales, solo metadatos bibliográficos y de ejemplares.
-- Antes de publicar un portal en producción, revisa las condiciones de reutilización de los metadatos y atribuye la fuente.
-
-## OpenSpec
-
-Las especificaciones de lectura viven aquí; la planificación de ingesta se migró a `mediateca-madrid-enrich`.
+La API genera `contracts/openapi.json`. El portal genera `apps/web/lib/api-types.ts` desde ese contrato:
 
 ```bash
-openspec list --specs
-openspec show portal-web
-openspec show api-portal
-openspec view
+make openapi
+make web-types
 ```
+
+## Datos y atribucion
+
+- La fuente es el catalogo publico de AbsysNet. La recoleccion se ejecuta en `services/enrich`.
+- No se almacenan datos personales, solo metadatos bibliograficos y de ejemplares.
+- Las portadas, sinopsis y enlaces externos de TMDB pertenecen a sus respectivos titulares.
+- Este producto usa la API de TMDB, pero no esta avalado ni certificado por TMDB.
 
 ## Licencia
 
-Este proyecto se distribuye bajo la **PolyForm Noncommercial License 1.0.0**. Puedes usar, copiar, modificar y distribuir el software **para fines no comerciales**, siempre que mantengas el aviso de copyright, el texto de la licencia y des crédito al proyecto original. Consulta [`LICENSE`](LICENSE).
+Este proyecto se distribuye bajo la **PolyForm Noncommercial License 1.0.0**. Puedes usar, copiar, modificar y distribuir el software **para fines no comerciales**, manteniendo el aviso de copyright, el texto de la licencia y el credito al proyecto original. Consulta [`LICENSE`](LICENSE).
 
-No está permitido vender el código, usarlo con fines comerciales ni sublicenciarlo comercialmente. Cualquier distribución debe ser gratuita y acompañarse de esta misma licencia. La licencia no cubre los metadatos del catálogo ni contenidos de terceros.
+No esta permitido vender el codigo, usarlo con fines comerciales ni sublicenciarlo comercialmente. La licencia no cubre los metadatos del catalogo ni contenidos de terceros.
 
-**Nota:** por esta restricción comercial, esta licencia es *source-available* y no cumple la definición de open source de la OSI.
-
-### Créditos
+### Creditos
 
 - Proyecto original: [Mediateca Madrid](https://github.com/Jesuslconde/mediateca-madrid), creado por [Jesuslconde](https://github.com/Jesuslconde).
-- Los metadatos del catálogo proceden de las Bibliotecas de la Comunidad de Madrid y no están cubiertos por esta licencia.
-- Las portadas, sinopsis, enlaces externos y demás contenidos de terceros pertenecen a sus respectivos titulares.
-
-## Roadmap
-
-Consulta [`ROADMAP.md`](ROADMAP.md).
+- Los metadatos del catalogo proceden de las Bibliotecas de la Comunidad de Madrid y no estan cubiertos por esta licencia.

@@ -1,17 +1,21 @@
 SHELL := /bin/bash
 
-.PHONY: help up down build logs ps check-schema test lint fmt shell
+q ?= cine
+pages ?= 1
+limit ?= 20
+
+.PHONY: help up down build logs ps init migrate harvest index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump release clean
 
 help: ## Mostrar la ayuda
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-up: ## Levantar API y portal (requiere la red mediateca de enrich)
+up: ## Levantar el stack completo
 	docker compose up -d --build
 
 down: ## Detener los servicios
 	docker compose down
 
-build: ## Construir las imagenes
+build: ## Construir las dos imagenes
 	docker compose build
 
 logs: ## Ver logs en vivo
@@ -20,20 +24,68 @@ logs: ## Ver logs en vivo
 ps: ## Estado de los servicios
 	docker compose ps
 
-openapi: ## Exportar openapi.json al repositorio compartido
-	docker compose run --rm --no-deps -T api python scripts/export_openapi.py - > ../mediateca-madrid-shared/contracts/openapi.json
+init: ## Crear tablas, aplicar migraciones e indexar
+	docker compose run --rm init
 
-check-schema: ## Verificar la version del esquema compartido
-	docker compose run --rm --no-deps api python -c "from mediateca.core.db import check_schema; check_schema(); print('schema ok')"
+migrate: ## Aplicar migraciones idempotentes
+	docker compose run --rm --no-deps worker python -m mediateca migrate
 
-test: ## Ejecutar pytest
-	docker compose run --rm --no-deps api pytest -q
+harvest: ## Recolectar del OPAC: make harvest q=cine pages=2 limit=20
+	docker compose run --rm worker python -m mediateca harvest --query "$(q)" --max-pages $(pages) $(if $(limit),--limit $(limit),)
 
-lint: ## Ejecutar ruff
-	docker compose run --rm --no-deps api ruff check src tests
+index: ## Indexar todas las ediciones
+	docker compose run --rm worker python -m mediateca index
+
+dashboard: ## Levantar el dashboard de estado
+	docker compose up -d dashboard
+
+dashboard-logs: ## Ver logs del dashboard
+	docker compose logs -f --tail=100 dashboard
+
+worker-logs: ## Ver logs del worker
+	docker compose logs -f --tail=100 worker
+
+test: test-shared test-api test-enrich ## Ejecutar todas las pruebas Python
+
+test-shared: ## Ejecutar las pruebas del paquete compartido
+	docker compose run --rm --no-deps worker pytest /app/packages/shared/tests -q
+
+test-api: ## Ejecutar las pruebas de la API
+	docker compose run --rm --no-deps -w /app/api api /opt/venv/bin/pytest -q
+
+test-enrich: ## Ejecutar las pruebas de ingesta
+	docker compose run --rm --no-deps worker pytest -q
+
+lint: ## Ejecutar ruff en API e ingesta
+	docker compose run --rm --no-deps -w /app/api api /opt/venv/bin/ruff check src tests
+	docker compose run --rm --no-deps worker ruff check src tests /app/packages/shared/src /app/packages/shared/tests
 
 fmt: ## Formatear con ruff
-	docker compose run --rm --no-deps api ruff format src tests
+	docker compose run --rm --no-deps -w /app/api api /opt/venv/bin/ruff format src tests
+	docker compose run --rm --no-deps worker ruff format src tests /app/packages/shared/src /app/packages/shared/tests
 
-shell: ## Abrir shell en la API
-	docker compose exec api bash
+shell: ## Abrir shell en el worker
+	docker compose exec worker bash
+
+psql: ## Abrir psql
+	docker compose exec db psql -U $${POSTGRES_USER:-mediateca} -d $${POSTGRES_DB:-mediateca}
+
+openapi: ## Exportar el contrato OpenAPI a contracts/openapi.json
+	./scripts/export-openapi.sh
+
+web-types: ## Regenerar los tipos TypeScript del portal
+	cd apps/web && npm run generate:api
+
+contracts: openapi web-types ## Regenerar contrato y tipos del portal
+
+check-schema: ## Verificar la version del esquema compartido
+	docker compose run --rm --no-deps api /opt/venv/bin/python -c "from mediateca.core.db import check_schema; check_schema(); print('schema ok')"
+
+bump: ## Incrementar version: make bump type=fix|minor|normal
+	./scripts/bump-version.sh "$(type)"
+
+release: ## Construir y publicar las imagenes con la version actual
+	./scripts/release.sh
+
+clean: ## Detener y borrar volumenes (destructivo)
+	docker compose down -v

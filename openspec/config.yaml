@@ -2,6 +2,7 @@ schema: spec-driven
 
 context: |
   Language: Spanish
+  Repository: monorepo with services/api, services/enrich, apps/web and packages/shared.
   All artifacts must be written in Spanish.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 

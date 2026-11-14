@@ -1,12 +1,13 @@
 # Mediateca Madrid - shared
 
-Modelos SQLAlchemy, esquemas Pydantic y contratos compartidos entre la ingesta (`mediateca-madrid-enrich`) y la API/portal (`mediateca-madrid`).
+Modelos SQLAlchemy, esquemas Pydantic y `SCHEMA_VERSION` compartidos por la API (`services/api`) y la ingesta (`services/enrich`) dentro del monorepo.
 
 ## Uso
 
+El paquete se instala desde la ruta local durante el build de las dos imagenes y en los entornos de desarrollo:
+
 ```bash
-python -m build
-pip install dist/mediateca_shared-0.3.0-py3-none-any.whl
+pip install ./packages/shared
 ```
 
-La app y enrich fijan la misma version de `mediateca-shared`. `SCHEMA_VERSION` debe coincidir con la version registrada en la tabla `schema_meta` por la migracion de enrich.
+No se publican wheels ni se fija una version entre repositorios. `SCHEMA_VERSION` debe coincidir con la version registrada en `schema_meta` por las migraciones de `services/enrich`.

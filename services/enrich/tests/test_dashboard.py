@@ -107,7 +107,10 @@ def test_settings_dashboard_defaults_y_variables_de_entorno(monkeypatch) -> None
 
 
 def test_env_example_documenta_las_variables_del_dashboard() -> None:
-    content = (ROOT / ".env.example").read_text(encoding="utf-8")
+    env_example = ROOT / ".env.example"
+    if not env_example.exists():
+        env_example = ROOT.parents[1] / ".env.example"
+    content = env_example.read_text(encoding="utf-8")
     documented = {
         line.split("=", 1)[0]
         for line in content.splitlines()

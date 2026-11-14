@@ -139,7 +139,10 @@ def test_settings_flaresolverr_por_defecto_y_entorno(monkeypatch) -> None:
 
 
 def test_env_example_documenta_las_variables_de_flaresolverr() -> None:
-    content = (ROOT / ".env.example").read_text(encoding="utf-8")
+    env_example = ROOT / ".env.example"
+    if not env_example.exists():
+        env_example = ROOT.parents[1] / ".env.example"
+    content = env_example.read_text(encoding="utf-8")
 
     assert "MEDIATECA_FLARESOLVERR_URL=" in content
     assert "MEDIATECA_FLARESOLVERR_MAX_TIMEOUT_MS=60000" in content
@@ -196,7 +199,10 @@ def test_ignora_token_tmdb_persistido_invalido(monkeypatch) -> None:
 
 
 def test_env_example_documenta_las_variables_de_tmdb() -> None:
-    content = (ROOT / ".env.example").read_text(encoding="utf-8")
+    env_example = ROOT / ".env.example"
+    if not env_example.exists():
+        env_example = ROOT.parents[1] / ".env.example"
+    content = env_example.read_text(encoding="utf-8")
 
     assert "MEDIATECA_TMDB_API_TOKEN=" in content
     assert "MEDIATECA_TMDB_LANGUAGE=es-ES" in content

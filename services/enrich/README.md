@@ -1,17 +1,15 @@
 # Mediateca Madrid - enrich
 
-Proyecto de ingesta, descubrimiento, enriquecimiento, worker, scheduler e indexacion del catalogo de Mediateca Madrid. Escribe en PostgreSQL y Meilisearch; la API y el portal solo leen de esos almacenamientos.
+Servicio de ingesta, descubrimiento, enriquecimiento, worker, scheduler e indexacion del catalogo de Mediateca Madrid dentro del monorepo. Escribe en PostgreSQL y Meilisearch; la API y el portal solo leen de esos almacenamientos.
 
 ## Arranque
 
 ```bash
-cp .env.example .env 2>/dev/null || true
+cp .env.example .env
 make up
-make migrate
-make init
 ```
 
-El worker procesa `harvest_jobs`; el scheduler solo planifica. La API y el portal se despliegan desde `mediateca-madrid`.
+El worker procesa `harvest_jobs`; el scheduler solo planifica. La API y el portal se despliegan desde el mismo stack.
 
 ## Comandos
 
@@ -30,7 +28,7 @@ make psql
 El enriquecimiento completo se ejecuta en lotes de 5.000 fichas:
 
 ```bash
-docker compose run --rm worker mediateca enrich --limit 5000
+docker compose run --rm worker python -m mediateca enrich --limit 5000
 ```
 
 A 1 peticion por segundo cada lote tarda aproximadamente 1,4 horas. El trabajo
@@ -43,7 +41,7 @@ carecen de `tmdb_url` (por ejemplo, fichas sincronizadas antes de guardar las
 portadas):
 
 ```bash
-docker compose run --rm worker mediateca tmdb-enrich --limit 5000 --delay 0.25
+docker compose run --rm worker python -m mediateca tmdb-enrich --limit 5000 --delay 0.25
 ```
 
 El comando reanuda por `TITN` las pendientes, no repite las ya sincronizadas y al
@@ -92,7 +90,7 @@ curl http://localhost:8080/api/ingest/coverage
 Tambien se puede consultar desde la CLI:
 
 ```bash
-docker compose run --rm worker mediateca ingest-status
+docker compose run --rm worker python -m mediateca ingest-status
 ```
 
 Variables de configuracion:
@@ -227,4 +225,4 @@ Todas son idempotentes. `make migrate` requiere PostgreSQL levantado.
 
 ## OpenSpec
 
-La planificacion de ingesta vive en este repositorio. Los cambios `estado-ingesta`, `cola-worker`, `descubrimiento-catalogo`, `enriquecimiento-fichas`, `indexacion-incremental` y `observabilidad-ingesta` se migraron desde `mediateca-madrid`.
+La planificacion de ingesta se consolido en `openspec/` en la raiz del monorepo.

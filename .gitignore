@@ -32,6 +32,8 @@ yarn-error.log*
 data/
 *.sqlite
 *.db
+*.root-old/
+*.whl
 
 # Sistema / editor
 .DS_Store

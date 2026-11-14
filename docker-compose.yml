@@ -1,10 +1,186 @@
-name: mediateca-madrid
+name: mediateca
+
+x-batch-build: &batch-build
+  build:
+    context: .
+    dockerfile: docker/batch.Dockerfile
+  image: mediateca-batch:local
+
+x-web-build: &web-build
+  build:
+    context: .
+    dockerfile: docker/web.Dockerfile
+  image: mediateca-web:local
 
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mediateca}
+      POSTGRES_USER: ${POSTGRES_USER:-mediateca}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mediateca}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - mediateca
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mediateca} -d ${POSTGRES_DB:-mediateca}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    networks:
+      - mediateca
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  init:
+    <<: *batch-build
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    environment:
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_MEILISEARCH_URL: http://meilisearch:7700
+      MEDIATECA_MEILISEARCH_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEDIATECA_MEILISEARCH_INDEX: ${MEDIATECA_MEILISEARCH_INDEX:-ediciones}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    networks:
+      - mediateca
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        python -m mediateca init-db
+        python -m mediateca migrate
+        python -m mediateca index
+
+  worker:
+    <<: *batch-build
+    restart: unless-stopped
+    environment:
+      MEDIATECA_ENVIRONMENT: ${MEDIATECA_ENVIRONMENT:-development}
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_MEILISEARCH_URL: http://meilisearch:7700
+      MEDIATECA_MEILISEARCH_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me_123456}
+      MEDIATECA_MEILISEARCH_INDEX: ${MEDIATECA_MEILISEARCH_INDEX:-ediciones}
+      MEDIATECA_RAW_DIR: /data/raw
+      MEDIATECA_CRAWL_DELAY: ${MEDIATECA_CRAWL_DELAY:-1.0}
+      MEDIATECA_FLARESOLVERR_URL: ${MEDIATECA_FLARESOLVERR_URL:-}
+      MEDIATECA_FLARESOLVERR_MAX_TIMEOUT_MS: ${MEDIATECA_FLARESOLVERR_MAX_TIMEOUT_MS:-60000}
+      MEDIATECA_TMDB_API_TOKEN: ${MEDIATECA_TMDB_API_TOKEN:-}
+      MEDIATECA_TMDB_LANGUAGE: ${MEDIATECA_TMDB_LANGUAGE:-es-ES}
+      MEDIATECA_TMDB_DELAY: ${MEDIATECA_TMDB_DELAY:-0.25}
+      MEDIATECA_TMDB_TIMEOUT: ${MEDIATECA_TMDB_TIMEOUT:-10}
+      MEDIATECA_TMDB_MAX_RETRIES: ${MEDIATECA_TMDB_MAX_RETRIES:-3}
+      MEDIATECA_WORKER_CONCURRENCY: ${MEDIATECA_WORKER_CONCURRENCY:-1}
+      MEDIATECA_WORKER_POLL_SECONDS: ${MEDIATECA_WORKER_POLL_SECONDS:-5.0}
+      MEDIATECA_WORKER_HEARTBEAT_SECONDS: ${MEDIATECA_WORKER_HEARTBEAT_SECONDS:-30.0}
+      MEDIATECA_WORKER_HEARTBEAT_FILE: /run/mediateca/worker.heartbeat
+      MEDIATECA_WORKER_STALE_SECONDS: ${MEDIATECA_WORKER_STALE_SECONDS:-120}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    volumes:
+      - raw_data:/data/raw
+      - worker_heartbeat:/run/mediateca
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      meilisearch:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /run/mediateca/worker.heartbeat && find /run/mediateca/worker.heartbeat -mmin -2 | grep -q .",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mediateca
+    command: ["python", "-m", "mediateca", "worker"]
+
+  dashboard:
+    <<: *batch-build
+    restart: unless-stopped
+    environment:
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_DASHBOARD_HOST: 0.0.0.0
+      MEDIATECA_DASHBOARD_PORT: ${MEDIATECA_DASHBOARD_PORT:-8080}
+      MEDIATECA_DASHBOARD_REFRESH_SECONDS: ${MEDIATECA_DASHBOARD_REFRESH_SECONDS:-15}
+      MEDIATECA_DASHBOARD_RECENT_LIMIT: ${MEDIATECA_DASHBOARD_RECENT_LIMIT:-20}
+      MEDIATECA_DASHBOARD_WORKER_STALE_SECONDS: ${MEDIATECA_DASHBOARD_WORKER_STALE_SECONDS:-120}
+      MEDIATECA_WORKER_HEARTBEAT_FILE: /run/mediateca/worker.heartbeat
+      MEDIATECA_FLARESOLVERR_URL: ${MEDIATECA_FLARESOLVERR_URL:-}
+      MEDIATECA_FLARESOLVERR_MAX_TIMEOUT_MS: ${MEDIATECA_FLARESOLVERR_MAX_TIMEOUT_MS:-60000}
+      MEDIATECA_TMDB_API_TOKEN: ${MEDIATECA_TMDB_API_TOKEN:-}
+      MEDIATECA_TMDB_LANGUAGE: ${MEDIATECA_TMDB_LANGUAGE:-es-ES}
+      MEDIATECA_DASHBOARD_ADMIN_TOKEN: ${MEDIATECA_DASHBOARD_ADMIN_TOKEN:-}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    volumes:
+      - worker_heartbeat:/run/mediateca
+    ports:
+      - "${MEDIATECA_DASHBOARD_PORT:-8080}:${MEDIATECA_DASHBOARD_PORT:-8080}"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:${MEDIATECA_DASHBOARD_PORT:-8080}/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - mediateca
+    command: ["python", "-m", "mediateca", "dashboard"]
+
+  scheduler:
+    <<: *batch-build
+    restart: unless-stopped
+    environment:
+      MEDIATECA_ENVIRONMENT: ${MEDIATECA_ENVIRONMENT:-development}
+      MEDIATECA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mediateca}:${POSTGRES_PASSWORD:-mediateca}@db:5432/${POSTGRES_DB:-mediateca}
+      MEDIATECA_SCHEDULER_ENABLED: ${MEDIATECA_SCHEDULER_ENABLED:-true}
+      MEDIATECA_SCHEDULER_POLL_SECONDS: ${MEDIATECA_SCHEDULER_POLL_SECONDS:-60}
+      MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    networks:
+      - mediateca
+    command: ["python", "-m", "mediateca", "scheduler"]
+
   api:
-    build:
-      context: ./backend
-    image: mediateca-backend:local
+    <<: *web-build
     restart: unless-stopped
     environment:
       MEDIATECA_ENVIRONMENT: ${MEDIATECA_ENVIRONMENT:-development}
@@ -17,24 +193,41 @@ services:
       MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
     ports:
       - "${API_PORT:-8000}:8000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      meilisearch:
+        condition: service_started
     networks:
       - mediateca
+    command:
+      [
+        "/opt/venv/bin/uvicorn",
+        "mediateca.api.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
 
   web:
-    build:
-      context: ./frontend
+    <<: *web-build
     restart: unless-stopped
     environment:
       API_URL: http://api:8000
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_started
     networks:
       - mediateca
 
+volumes:
+  postgres_data:
+  meili_data:
+  raw_data:
+  worker_heartbeat:
+
 networks:
   mediateca:
-    external: true
-    name: mediateca
