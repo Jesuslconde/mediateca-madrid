@@ -227,11 +227,18 @@ class _FakeSession:
         return _FakeScalars(self.edicion)
 
 
-def _edicion(paises_origen: list[str]) -> Edicion:
+def _edicion(
+    paises_origen: list[str],
+    *,
+    tmdb_poster_url: str | None = None,
+    tmdb_url: str | None = None,
+) -> Edicion:
     edicion = Edicion(
         titn="2101557",
         titulo="Abejas",
         paises_origen=paises_origen,
+        tmdb_poster_url=tmdb_poster_url,
+        tmdb_url=tmdb_url,
     )
     edicion.materias = []
     edicion.personas = []
@@ -242,8 +249,18 @@ def _edicion(paises_origen: list[str]) -> Edicion:
     return edicion
 
 
-def _get_record(paises_origen: list[str]):
-    app.dependency_overrides[get_db] = lambda: _FakeSession(_edicion(paises_origen))
+def _get_record(
+    paises_origen: list[str],
+    *,
+    tmdb_poster_url: str | None = None,
+    tmdb_url: str | None = None,
+):
+    edicion = _edicion(
+        paises_origen,
+        tmdb_poster_url=tmdb_poster_url,
+        tmdb_url=tmdb_url,
+    )
+    app.dependency_overrides[get_db] = lambda: _FakeSession(edicion)
     try:
         client = TestClient(app)
         return client.get("/api/records/2101557")
@@ -263,3 +280,16 @@ def test_record_sin_paises_devuelve_lista_vacia() -> None:
 
     assert response.status_code == 200
     assert response.json()["paises_origen"] == []
+
+
+def test_record_devuelve_portada_y_enlace_de_tmdb() -> None:
+    response = _get_record(
+        ["ES"],
+        tmdb_poster_url="https://image.tmdb.org/t/p/w500/poster.jpg",
+        tmdb_url="https://www.themoviedb.org/movie/10",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tmdb_poster_url"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert body["tmdb_url"] == "https://www.themoviedb.org/movie/10"

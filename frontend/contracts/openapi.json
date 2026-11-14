@@ -667,6 +667,28 @@
             "title": "Paises Origen",
             "default": []
           },
+          "tmdb_poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Poster Url"
+          },
+          "tmdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Url"
+          },
           "duracion_min": {
             "anyOf": [
               {
@@ -911,6 +933,28 @@
             "type": "array",
             "title": "Paises Origen",
             "default": []
+          },
+          "tmdb_poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Poster Url"
+          },
+          "tmdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Url"
           },
           "duracion_min": {
             "anyOf": [

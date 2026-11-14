@@ -81,21 +81,42 @@ export default async function RecordPage({
 
       <header className="rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap gap-2">
-              {record.soportes.map((support) => (
-                <SupportBadge key={support} support={support} />
-              ))}
-            </div>
-            <h1 className="mt-4 text-3xl font-black leading-tight text-ink sm:text-4xl">
-              {record.titulo.replace(/\s*\/\s*$/, "")}
-            </h1>
-            {record.titulo_uniforme && record.titulo_uniforme !== record.titulo ? (
-              <p className="mt-2 text-base text-slate-500">{record.titulo_uniforme}</p>
+          <div className="flex min-w-0 gap-4">
+            {record.tmdb_poster_url ? (
+              <img
+                src={record.tmdb_poster_url}
+                alt={`Portada de ${record.titulo}`}
+                width={160}
+                height={240}
+                className="h-60 w-40 flex-none rounded-xl bg-slate-100 object-cover shadow-sm"
+              />
             ) : null}
-            <p className="mt-3 text-sm text-slate-600">
-              {[record.publicacion, record.anio].filter(Boolean).join(" · ")}
-            </p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap gap-2">
+                {record.soportes.map((support) => (
+                  <SupportBadge key={support} support={support} />
+                ))}
+              </div>
+              <h1 className="mt-4 text-3xl font-black leading-tight text-ink sm:text-4xl">
+                {record.titulo.replace(/\s*\/\s*$/, "")}
+              </h1>
+              {record.titulo_uniforme && record.titulo_uniforme !== record.titulo ? (
+                <p className="mt-2 text-base text-slate-500">{record.titulo_uniforme}</p>
+              ) : null}
+              <p className="mt-3 text-sm text-slate-600">
+                {[record.publicacion, record.anio].filter(Boolean).join(" · ")}
+              </p>
+              {record.tmdb_url ? (
+                <a
+                  href={record.tmdb_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-block rounded-lg bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700 underline-offset-4 hover:underline"
+                >
+                  Ver ficha en TMDB
+                </a>
+              ) : null}
+            </div>
           </div>
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right text-xs text-slate-500">
             <p className="font-mono">TITN {record.titn}</p>

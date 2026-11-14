@@ -21,6 +21,8 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
         "idioma": edicion.idioma,
         "pais": edicion.pais,
         "paises_origen": edicion.paises_origen or [],
+        "tmdb_poster_url": edicion.tmdb_poster_url,
+        "tmdb_url": edicion.tmdb_url,
         "duracion_min": edicion.duracion_min,
         "edad_recomendada": edicion.edad_recomendada,
         "sinopsis": edicion.sinopsis,

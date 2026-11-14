@@ -204,6 +204,10 @@ export interface components {
              * @default []
              */
             paises_origen: string[];
+            /** Tmdb Poster Url */
+            tmdb_poster_url?: string | null;
+            /** Tmdb Url */
+            tmdb_url?: string | null;
             /** Duracion Min */
             duracion_min?: number | null;
             /** Edad Recomendada */
@@ -289,6 +293,10 @@ export interface components {
              * @default []
              */
             paises_origen: string[];
+            /** Tmdb Poster Url */
+            tmdb_poster_url?: string | null;
+            /** Tmdb Url */
+            tmdb_url?: string | null;
             /** Duracion Min */
             duracion_min?: number | null;
             /** Edad Recomendada */

@@ -57,13 +57,15 @@ curl "http://localhost:8000/api/records/2101557"
 `GET /api/search` acepta `paises_origen` repetible con códigos ISO 3166-1 alfa-2 y
 devuelve la faceta `paises_origen`. Los resultados y `GET /api/records/{titn}`
 incluyen el campo `paises_origen`, vacío cuando la edición no tiene países
-conocidos. El filtro del portal usa ese campo de TMDB, distinto del `pais`
+conocidos, junto con `tmdb_poster_url` (portada) y `tmdb_url` (enlace a la ficha
+de TMDB). El filtro del portal usa ese campo de TMDB, distinto del `pais`
 bibliográfico del OPAC.
 
 El dato se publica desde `mediateca-madrid-enrich`: requiere el wheel
-`mediateca-shared` `0.2.0`, la migración y el backfill de TMDB, y un
-`mediateca index --reset` para reindexar los documentos con `paises_origen`.
-Sin ese proceso el filtro y la faceta aparecen vacíos.
+`mediateca-shared` `0.3.0`, la migración y el backfill de TMDB, y un
+`mediateca index --reset` para reindexar los documentos con `paises_origen`,
+`tmdb_poster_url` y `tmdb_url`. Sin ese proceso el filtro, la faceta y las
+portadas aparecen vacíos.
 
 La atribución «Este producto usa la API de TMDB, pero no está avalado ni
 certificado por TMDB» se muestra en el pie de página del portal, con enlace a
