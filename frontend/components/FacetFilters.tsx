@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LibrarySelect } from "@/components/LibrarySelect";
 import type { Library } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
 import { buildSearchQuery, first, toArray, type RawSearchParams } from "@/lib/url";
@@ -139,19 +140,10 @@ export function FacetFilters({
         <label htmlFor="biblioteca" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
           Biblioteca
         </label>
-        <select
-          id="biblioteca"
-          name="biblioteca"
+        <LibrarySelect
+          libraries={libraryOptions}
           defaultValue={selectedBiblioteca ?? ""}
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-        >
-          <option value="">Todas</option>
-          {libraryOptions.map((library) => (
-            <option key={`${library.codigo}-${library.nombre}`} value={library.nombre}>
-              {library.nombre}
-            </option>
-          ))}
-        </select>
+        />
       </section>
 
       <section>
