@@ -35,9 +35,11 @@ def test_edicion_incluye_campos_tmdb() -> None:
     columnas = {columna.name for columna in Edicion.__table__.columns}
     assert "paises_origen" in columnas
     assert "tmdb_id" in columnas
+    assert "tmdb_poster_url" in columnas
+    assert "tmdb_url" in columnas
     assert "tmdb_enriched_at" in columnas
     assert "pais" in columnas
 
 
-def test_esquema_version_2() -> None:
-    assert SCHEMA_VERSION == "2"
+def test_esquema_version_3() -> None:
+    assert SCHEMA_VERSION == "3"

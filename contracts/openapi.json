@@ -117,6 +117,27 @@
             }
           },
           {
+            "name": "paises_origen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Puede repetirse: codigos ISO 3166-1 alfa-2 en mayusculas",
+              "title": "Paises Origen"
+            },
+            "description": "Puede repetirse: codigos ISO 3166-1 alfa-2 en mayusculas"
+          },
+          {
             "name": "biblioteca",
             "in": "query",
             "required": false,
@@ -638,6 +659,36 @@
             ],
             "title": "Pais"
           },
+          "paises_origen": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paises Origen",
+            "default": []
+          },
+          "tmdb_poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Poster Url"
+          },
+          "tmdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Url"
+          },
           "duracion_min": {
             "anyOf": [
               {
@@ -874,6 +925,36 @@
               }
             ],
             "title": "Pais"
+          },
+          "paises_origen": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paises Origen",
+            "default": []
+          },
+          "tmdb_poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Poster Url"
+          },
+          "tmdb_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Url"
           },
           "duracion_min": {
             "anyOf": [

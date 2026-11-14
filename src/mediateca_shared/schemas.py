@@ -31,6 +31,8 @@ class SearchHit(BaseModel):
     idioma: str | None = None
     pais: str | None = None
     paises_origen: list[str] = []
+    tmdb_poster_url: str | None = None
+    tmdb_url: str | None = None
     duracion_min: int | None = None
     edad_recomendada: str | None = None
     sinopsis: str | None = None
@@ -98,6 +100,8 @@ class RecordDetail(BaseModel):
     idioma: str | None = None
     pais: str | None = None
     paises_origen: list[str] = []
+    tmdb_poster_url: str | None = None
+    tmdb_url: str | None = None
     duracion_min: int | None = None
     edad_recomendada: str | None = None
     sinopsis: str | None = None

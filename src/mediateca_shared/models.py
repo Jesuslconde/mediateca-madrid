@@ -51,6 +51,8 @@ class Edicion(Base):
     pais: Mapped[str | None] = mapped_column(String(16), index=True)
     paises_origen: Mapped[list[str]] = mapped_column(JSON, default=list)
     tmdb_id: Mapped[int | None] = mapped_column(Integer)
+    tmdb_poster_url: Mapped[str | None] = mapped_column(Text)
+    tmdb_url: Mapped[str | None] = mapped_column(Text)
     tmdb_enriched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True
     )

@@ -6,7 +6,7 @@ Modelos SQLAlchemy, esquemas Pydantic y contratos compartidos entre la ingesta (
 
 ```bash
 python -m build
-pip install dist/mediateca_shared-0.1.0-py3-none-any.whl
+pip install dist/mediateca_shared-0.3.0-py3-none-any.whl
 ```
 
 La app y enrich fijan la misma version de `mediateca-shared`. `SCHEMA_VERSION` debe coincidir con la version registrada en la tabla `schema_meta` por la migracion de enrich.
