@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="MEDIATECA_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    environment: str = "development"
+    database_url: str = "postgresql+psycopg://mediateca:mediateca@localhost:5432/mediateca"
+    meilisearch_url: str = "http://localhost:7700"
+    meilisearch_key: str = "masterKey"
+    meilisearch_index: str = "ediciones"
+
+    opac_base_url: str = "https://gestiona.comunidad.madrid"
+    opac_path: str = "/biblio_publicas/cgi-bin/abnetopac"
+    raw_dir: Path = Path("./data/raw")
+    crawl_delay: float = 1.0
+    crawl_timeout: float = 30.0
+    crawl_max_retries: int = 3
+    flaresolverr_url: str | None = None
+    flaresolverr_max_timeout_ms: int = 60000
+    tmdb_api_token: str | None = None
+    tmdb_language: str = "es-ES"
+    tmdb_delay: float = 0.25
+    tmdb_timeout: float = 10.0
+    tmdb_max_retries: int = 3
+    user_agent: str = (
+        "MediatecaMadrid/0.1 (portal alternativo de consulta; "
+        "contacto: mediateca@example.org)"
+    )
+
+    api_cors_origins: str = "http://localhost:3000"
+    log_level: str = "INFO"
+
+    harvest_queries: str = "cine,documental,animacion,musica"
+    scheduler_enabled: bool = True
+    scheduler_harvest_hours: int = 24
+    scheduler_poll_seconds: float = 60.0
+
+    worker_concurrency: int = 1
+    worker_poll_seconds: float = 5.0
+    worker_heartbeat_seconds: float = 30.0
+    worker_heartbeat_file: Path = Path("/tmp/mediateca-worker.heartbeat")
+    worker_stale_seconds: int = 120
+
+    dashboard_host: str = "127.0.0.1"
+    dashboard_port: int = 8080
+    dashboard_admin_token: str | None = None
+    dashboard_refresh_seconds: int = 15
+    dashboard_recent_limit: int = 20
+    dashboard_worker_stale_seconds: int = 120
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [item.strip() for item in self.api_cors_origins.split(",") if item.strip()]
+
+    @property
+    def queries(self) -> list[str]:
+        return [item.strip() for item in self.harvest_queries.split(",") if item.strip()]
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
