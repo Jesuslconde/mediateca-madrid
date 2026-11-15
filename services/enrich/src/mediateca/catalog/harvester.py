@@ -23,6 +23,8 @@ from mediateca.catalog.parser import parse_detail, parse_search_results
 from mediateca.catalog.repository import (
     apply_tmdb_enrichment,
     mark_absent_since,
+    record_enrich_failure,
+    record_tmdb_outcome,
     select_pending_titns,
     upsert_edicion,
     upsert_stub,
@@ -500,6 +502,7 @@ class Harvester:
     def _enrich_tmdb(self, edicion) -> str:
         if self.tmdb_client is None:
             self.tmdb_skipped += 1
+            record_tmdb_outcome(self.session, edicion, "skipped")
             return "skipped"
         try:
             found = find_movie(
@@ -510,6 +513,7 @@ class Harvester:
             )
             if found is None:
                 self.tmdb_unmatched += 1
+                record_tmdb_outcome(self.session, edicion, "unmatched")
                 return "unmatched"
             match, detail = found
             apply_tmdb_enrichment(
@@ -520,17 +524,20 @@ class Harvester:
                 poster_url=build_poster_url(detail.poster_path),
                 tmdb_url=build_movie_url(detail.id or match.id),
             )
+            record_tmdb_outcome(self.session, edicion, "matched")
             self.session.commit()
             self.tmdb_matched += 1
             return "matched"
         except TmdbError as exc:
             self.session.rollback()
             self.tmdb_errors += 1
+            record_tmdb_outcome(self.session, edicion, "error", error=str(exc))
             logger.warning("No se pudo enriquecer %s con TMDB: %s", edicion.titn, exc)
             return "error"
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
             self.session.rollback()
             self.tmdb_errors += 1
+            record_tmdb_outcome(self.session, edicion, "error", error=str(exc))
             logger.exception("Error inesperado en el enriquecimiento TMDB de %s", edicion.titn)
             return "error"
 
@@ -682,6 +689,7 @@ class Harvester:
                 except Exception as exc:  # noqa: BLE001
                     errors += 1
                     failed.append(titn)
+                    record_enrich_failure(self.session, titn, str(exc))
                     logger.exception(
                         "Ficha fallida tras reintentos",
                         extra={

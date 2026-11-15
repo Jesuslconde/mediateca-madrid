@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section>
+    <h2>Resumen del catálogo</h2>
+    <div class="grid">
+      <div class="metric"><span class="muted">Total</span><strong>{{ summary.total }}</strong></div>
+      {% for status in estados_enrich %}
+        <div class="metric"><span class="muted">OPAC {{ status }}</span><strong>{{ summary.por_enrich.get(status, 0) }}</strong></div>
+      {% endfor %}
+      {% for status in estados_tmdb %}
+        <div class="metric"><span class="muted">TMDB {{ status }}</span><strong>{{ summary.por_tmdb.get(status, 0) }}</strong></div>
+      {% endfor %}
+      <div class="metric"><span class="muted">Desaparecidas</span><strong>{{ summary.desaparecidas }}</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Filtros</h2>
+    <form method="get" action="/catalogo">
+      <label>Estado OPAC
+        <select name="enrich_status">
+          <option value="">Todos</option>
+          {% for status in estados_enrich %}
+            <option value="{{ status }}" {% if filter.enrich_status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Estado TMDB
+        <select name="tmdb_status">
+          <option value="">Todos</option>
+          {% for status in estados_tmdb %}
+            <option value="{{ status }}" {% if filter.tmdb_status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Desaparición
+        <select name="missing">
+          <option value="incluir" {% if filter.missing == 'incluir' %}selected{% endif %}>Incluir</option>
+          <option value="excluir" {% if filter.missing == 'excluir' %}selected{% endif %}>Excluir</option>
+          <option value="solo" {% if filter.missing == 'solo' %}selected{% endif %}>Solo</option>
+        </select>
+      </label>
+      <label>Texto <input type="text" name="q" value="{{ filter.texto or '' }}"></label>
+      <label>Soporte <input type="text" name="soporte" value="{{ filter.soporte or '' }}"></label>
+      <label>Año desde <input type="number" name="anio_desde" value="{{ filter.anio_desde if filter.anio_desde is not none else '' }}"></label>
+      <label>Año hasta <input type="number" name="anio_hasta" value="{{ filter.anio_hasta if filter.anio_hasta is not none else '' }}"></label>
+      <label>Idioma <input type="text" name="idioma" value="{{ filter.idioma or '' }}"></label>
+      <label>País <input type="text" name="pais" value="{{ filter.pais or '' }}"></label>
+      <label>Biblioteca <input type="text" name="biblioteca" value="{{ filter.biblioteca or '' }}"></label>
+      <button type="submit">Filtrar</button>
+      <a href="/catalogo" class="muted">Limpiar</a>
+    </form>
+    <style>
+      select, input[type="text"] { padding: .45rem .6rem; border: 1px solid #cfd6df; border-radius: 6px; }
+    </style>
+  </section>
+
+  <section>
+    <h2>Ediciones</h2>
+    <p class="muted">{{ summary.total }} edición{% if summary.total != 1 %}es{% endif %} coincidentes · Página {{ page }} de {{ pages }}</p>
+    {% if rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>TITN</th>
+            <th>Título</th>
+            <th>Año</th>
+            <th>Soporte</th>
+            <th>Estado OPAC</th>
+            <th>Int.</th>
+            <th>Error OPAC</th>
+            <th>Estado TMDB</th>
+            <th>Int.</th>
+            <th>Error TMDB</th>
+            <th>Descubierta</th>
+            <th>Ficha</th>
+            <th>TMDB</th>
+            <th>Desaparecida</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for edicion in rows %}
+            <tr>
+              <td>{{ edicion.titn }}</td>
+              <td>{{ edicion.titulo }}</td>
+              <td>{{ edicion.anio if edicion.anio is not none else '—' }}</td>
+              <td>{{ edicion.soporte_principal or '—' }}</td>
+              <td>{{ edicion.enrich_status }}</td>
+              <td>{{ edicion.enrich_attempts or 0 }}</td>
+              <td class="error">{{ edicion.enrich_last_error or '' }}</td>
+              <td>{{ edicion.tmdb_status }}</td>
+              <td>{{ edicion.tmdb_attempts or 0 }}</td>
+              <td class="error">{{ edicion.tmdb_last_error or '' }}</td>
+              <td>{{ edicion.discovery_seen_at.strftime('%Y-%m-%d') if edicion.discovery_seen_at else '—' }}</td>
+              <td>{{ edicion.detail_fetched_at.strftime('%Y-%m-%d') if edicion.detail_fetched_at else '—' }}</td>
+              <td>{{ edicion.tmdb_enriched_at.strftime('%Y-%m-%d') if edicion.tmdb_enriched_at else '—' }}</td>
+              <td>{{ edicion.missing_at.strftime('%Y-%m-%d') if edicion.missing_at else '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="actions">
+        {% if has_prev %}<a href="/catalogo?{{ prev_query }}"><button type="button">Anterior</button></a>{% endif %}
+        {% if has_next %}<a href="/catalogo?{{ next_query }}"><button type="button">Siguiente</button></a>{% endif %}
+      </div>
+    {% else %}
+      <p class="muted">No hay resultados para los filtros indicados.</p>
+    {% endif %}
+  </section>
+{% endblock %}

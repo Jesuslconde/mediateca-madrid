@@ -1133,3 +1133,121 @@ def test_configuracion_oculta_formularios_sin_admin(monkeypatch, tmp_path) -> No
     assert "Desbloquea la administracion" in bloqueada.text
     assert 'action="/config/tmdb"' not in bloqueada.text
     assert 'action="/config/tmdb"' in desbloqueada.text
+
+
+def test_catalogo_responde_y_muestra_datos(monkeypatch, tmp_path) -> None:
+    session = _session()
+    create_stub(session, "1")
+    enriquecida = create_stub(session, "2")
+    enriquecida.enrich_status = "enriched"
+    enriquecida.tmdb_status = "matched"
+    fallida = create_stub(session, "3")
+    fallida.enrich_status = "failed"
+    fallida.tmdb_status = "unmatched"
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    client = _client_for(session)
+    try:
+        response = client.get("/catalogo")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    html = response.text
+    assert "enriched" in html
+    assert "failed" in html
+    assert "matched" in html
+    assert "unmatched" in html
+    assert "Estado OPAC" in html
+    assert "Estado TMDB" in html
+    assert "TITN" in html
+    assert "Desaparecidas" in html
+
+
+def test_catalogo_es_de_solo_lectura(monkeypatch, tmp_path) -> None:
+    session = _session()
+    create_job(session, "discover")
+    create_stub(session, "1")
+    session.commit()
+
+    before_jobs = session.scalar(select(func.count(HarvestJob.id)))
+    before_ediciones = session.scalar(select(func.count(Edicion.id)))
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    client = _client_for(session)
+    try:
+        for path in ("/catalogo", "/catalogo?enrich_status=failed&q=1&biblioteca=B1"):
+            assert client.get(path).status_code == 200
+    finally:
+        _clear_overrides()
+
+    assert session.scalar(select(func.count(HarvestJob.id))) == before_jobs
+    assert session.scalar(select(func.count(Edicion.id))) == before_ediciones
+
+
+def test_catalogo_filtro_sin_resultados(monkeypatch, tmp_path) -> None:
+    session = _session()
+    create_stub(session, "1")
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    client = _client_for(session)
+    try:
+        response = client.get("/catalogo?enrich_status=failed")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert "No hay resultados" in response.text
+
+
+def test_catalogo_degradado_sin_trazas(monkeypatch) -> None:
+    class BrokenSession:
+        def execute(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def scalar(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def scalars(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def get_bind(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+    broken = BrokenSession()
+
+    def dependency():
+        yield broken
+
+    dashboard_module.app.dependency_overrides[dashboard_module.get_session] = dependency
+    client = TestClient(dashboard_module.app)
+    try:
+        response = client.get("/catalogo")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert "Estado degradado" in response.text
+    assert "Traceback" not in response.text
+
+
+def test_catalogo_en_menu_lateral_y_seccion_activa(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        inicio = client.get("/")
+        catalogo = client.get("/catalogo")
+        tareas = client.get("/tareas")
+        configuracion = client.get("/configuracion")
+    finally:
+        _clear_overrides()
+
+    for html in (inicio.text, catalogo.text, tareas.text, configuracion.text):
+        assert 'href="/catalogo"' in html
+    assert '<a href="/catalogo" class="nav-link active" aria-current="page">Catálogo</a>' in catalogo.text
+    assert catalogo.text.count('aria-current="page"') == 1

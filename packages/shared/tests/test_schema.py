@@ -41,5 +41,17 @@ def test_edicion_incluye_campos_tmdb() -> None:
     assert "pais" in columnas
 
 
-def test_esquema_version_3() -> None:
-    assert SCHEMA_VERSION == "3"
+def test_edicion_incluye_campos_de_estado() -> None:
+    columnas = {columna.name for columna in Edicion.__table__.columns}
+    assert "enrich_status" in columnas
+    assert "enrich_attempts" in columnas
+    assert "enrich_last_attempt_at" in columnas
+    assert "enrich_last_error" in columnas
+    assert "tmdb_status" in columnas
+    assert "tmdb_attempts" in columnas
+    assert "tmdb_last_attempt_at" in columnas
+    assert "tmdb_last_error" in columnas
+
+
+def test_esquema_version_4() -> None:
+    assert SCHEMA_VERSION == "4"

@@ -36,6 +36,10 @@ class Obra(Base):
 
 class Edicion(Base):
     __tablename__ = "ediciones"
+    __table_args__ = (
+        Index("ix_ediciones_enrich_status_titn", "enrich_status", "titn"),
+        Index("ix_ediciones_tmdb_status_titn", "tmdb_status", "titn"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     titn: Mapped[str] = mapped_column(String(32), unique=True, index=True)
@@ -56,6 +60,14 @@ class Edicion(Base):
     tmdb_enriched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True
     )
+    enrich_status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    enrich_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    enrich_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    enrich_last_error: Mapped[str | None] = mapped_column(Text)
+    tmdb_status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    tmdb_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    tmdb_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tmdb_last_error: Mapped[str | None] = mapped_column(Text)
     duracion_min: Mapped[int | None] = mapped_column(Integer)
     edad_recomendada: Mapped[str | None] = mapped_column(String(250))
     sinopsis: Mapped[str | None] = mapped_column(Text)

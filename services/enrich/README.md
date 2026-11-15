@@ -60,18 +60,27 @@ nunca el scheduler: solo se lanza a mano desde el dashboard o la CLI.
 
 ## Dashboard de estado
 
-La vista web se divide en tres paginas con un menu lateral comun:
+La vista web se divide en cuatro paginas con un menu lateral comun:
 
 - `Inicio` (`/`): salud del worker, trabajos por estado y tipo, cobertura del
   catalogo y metricas de ingesta.
+- `Catálogo` (`/catalogo`): vista de solo lectura del estado de enriquecimiento
+  por edicion, con resumen por estado y tabla paginada filtrable por estado OPAC,
+  estado TMDB, desaparicion, texto, soporte, biblioteca, año, idioma y país.
 - `Tareas` (`/tareas`): tabla de trabajos recientes y acciones de descubrimiento,
   enriquecimiento, indexacion y actualizacion de metadatos TMDB.
 - `Configuracion` (`/configuracion`): programacion, URL de FlareSolverr y token
   de TMDB.
 
-Inicio y Tareas se refrescan automaticamente; Configuracion no, para no perder
-los formularios mientras se editan. Las unicas escrituras son las secciones de
-configuracion y el encolado de trabajos; no crea ni modifica ediciones,
+El estado OPAC de una edicion puede ser `pending` (sin ficha), `enriched` (ficha
+guardada) o `failed` (ultimo intento fallido). El estado TMDB puede ser `pending`
+(sin intentar), `matched` (coincidencia), `unmatched` (sin coincidencia fiable),
+`error` (consulta fallida) o `skipped` (sin token). Cada edicion conserva tambien
+el numero de intentos y el ultimo error de cada capa.
+
+Inicio y Tareas se refrescan automaticamente; Configuracion y Catálogo no, para
+no perder los formularios ni los filtros. Las unicas escrituras son las secciones
+de configuracion y el encolado de trabajos; no crea ni modifica ediciones,
 ejemplares ni entradas del indice. Los mensajes de exito y error vuelven a la
 pagina donde se origino la accion.
 

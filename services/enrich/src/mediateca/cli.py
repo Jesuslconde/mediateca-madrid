@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob
+from mediateca_shared.version import SCHEMA_VERSION
 from rich.console import Console
 from rich.table import Table
 from sqlalchemy import func, select
@@ -64,6 +65,11 @@ def migrate_command() -> None:
         for migration in migrations:
             conn.exec_driver_sql(migration.read_text(encoding="utf-8"))
             console.print(f"[green]Migracion aplicada:[/green] {migration.name}")
+        conn.exec_driver_sql(
+            "INSERT INTO schema_meta (key, value) VALUES ('schema_version', %(v)s) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+            {"v": SCHEMA_VERSION},
+        )
     console.print("[green]Migraciones aplicadas[/green]")
 
 

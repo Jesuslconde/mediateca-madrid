@@ -236,6 +236,7 @@ def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
     if edicion.discovery_seen_at is None:
         edicion.discovery_seen_at = timestamp
     mark_enriched(session, edicion, fetched_at=timestamp)
+    record_enrich_success(session, edicion, at=timestamp)
 
     session.flush()
     return edicion
@@ -310,6 +311,54 @@ def apply_tmdb_enrichment(
     edicion.tmdb_poster_url = poster_url
     edicion.tmdb_url = tmdb_url
     edicion.tmdb_enriched_at = enriched_at or datetime.now(UTC)
+    session.flush()
+
+
+def record_enrich_success(
+    session: Session,
+    edicion: Edicion,
+    *,
+    at: datetime | None = None,
+) -> None:
+    edicion.enrich_status = "enriched"
+    edicion.enrich_attempts = (edicion.enrich_attempts or 0) + 1
+    edicion.enrich_last_attempt_at = at or datetime.now(UTC)
+    edicion.enrich_last_error = None
+    session.flush()
+
+
+def record_enrich_failure(
+    session: Session,
+    titn: str,
+    error: str,
+    *,
+    at: datetime | None = None,
+) -> None:
+    edicion = session.scalars(select(Edicion).where(Edicion.titn == titn)).first()
+    if edicion is None:
+        return
+    edicion.enrich_status = "failed"
+    edicion.enrich_attempts = (edicion.enrich_attempts or 0) + 1
+    edicion.enrich_last_attempt_at = at or datetime.now(UTC)
+    edicion.enrich_last_error = error
+    session.flush()
+
+
+def record_tmdb_outcome(
+    session: Session,
+    edicion: Edicion,
+    status: str,
+    *,
+    error: str | None = None,
+    at: datetime | None = None,
+) -> None:
+    edicion.tmdb_status = status
+    if status == "skipped":
+        edicion.tmdb_last_error = None
+    else:
+        edicion.tmdb_attempts = (edicion.tmdb_attempts or 0) + 1
+        edicion.tmdb_last_attempt_at = at or datetime.now(UTC)
+        edicion.tmdb_last_error = error
     session.flush()
 
 

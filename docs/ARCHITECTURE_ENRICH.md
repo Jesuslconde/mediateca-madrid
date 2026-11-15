@@ -72,6 +72,25 @@ publica de TMDB). La migracion `scripts/migrate_tmdb.sql` crea las columnas de
 forma idempotente, indexa `tmdb_enriched_at` y actualiza
 `schema_meta.schema_version` a `3`.
 
+## Estado de enriquecimiento por edicion
+
+Cada edicion conserva el resultado del ultimo intento de enriquecimiento para
+distinguir "nunca intentado", "fallo" y "TMDB sin coincidencia". La migracion
+`scripts/migrate_enriquecimiento_estado.sql` añade de forma idempotente:
+
+- `enrich_status` (`pending`, `enriched`, `failed`), `enrich_attempts`,
+  `enrich_last_attempt_at` y `enrich_last_error` para el enriquecimiento OPAC.
+- `tmdb_status` (`pending`, `matched`, `unmatched`, `error`, `skipped`),
+  `tmdb_attempts`, `tmdb_last_attempt_at` y `tmdb_last_error` para TMDB.
+
+El exito de una ficha marca `enrich_status='enriched'` e incrementa
+`enrich_attempts`; un fallo terminal marca `'failed'` y guarda el error. TMDB
+marca `matched`, `unmatched`, `error` o `skipped` (sin token) e incrementa
+`tmdb_attempts` salvo en `skipped`. `tmdb_enriched_at` sigue registrando solo la
+ultima coincidencia. La migracion rellena `enrich_status='enriched'` donde ya
+habia `detail_fetched_at` y `tmdb_status='matched'` donde ya habia
+`tmdb_enriched_at`, sube `SCHEMA_VERSION` a `4` y crea indices por estado.
+
 ## Consulta a TMDB
 
 Cuando existe un token efectivo (guardado en `app_config` o en
@@ -221,18 +240,21 @@ guarda en una cookie `HttpOnly` con `SameSite=Strict`.
 
 ## Dashboard de administracion
 
-El dashboard sirve tres paginas con un menu lateral comun: Inicio (`/`), Tareas
-(`/tareas`) y Configuracion (`/configuracion`). Inicio muestra la salud del
-worker, el resumen de trabajos por estado y tipo, la cobertura y las metricas.
+El dashboard sirve cuatro paginas con un menu lateral comun: Inicio (`/`),
+Catálogo (`/catalogo`), Tareas (`/tareas`) y Configuracion (`/configuracion`).
+Inicio muestra la salud del worker, el resumen de trabajos por estado y tipo, la
+cobertura y las metricas. Catálogo es una vista de solo lectura del estado de
+enriquecimiento por edicion, con resumen por estado OPAC y TMDB, filtros (estado,
+texto, soporte, biblioteca, año, idioma y país, desaparición) y tabla paginada.
 Tareas muestra la tabla de trabajos recientes y las acciones de descubrimiento,
 enriquecimiento e indexacion. Configuracion agrupa la programacion, la URL de
 FlareSolverr y el token de TMDB.
 
-Inicio y Tareas incluyen `meta http-equiv="refresh"`; Configuracion no lo incluye
-para no perder los formularios. Las rutas POST conservan su URL y redirigen a la
-pagina de origen con `message` o `error`; el campo `next` se valida contra `/`,
-`/tareas` y `/configuracion`. El estado de administracion y el login/logout viven
-en el menu lateral.
+Inicio y Tareas incluyen `meta http-equiv="refresh"`; Configuracion y Catálogo no
+lo incluyen para no perder los formularios ni los filtros. Las rutas POST
+conservan su URL y redirigen a la pagina de origen con `message` o `error`; el
+campo `next` se valida contra `/`, `/catalogo`, `/tareas` y `/configuracion`. El
+estado de administracion y el login/logout viven en el menu lateral.
 
 ## Observabilidad de la ingesta
 

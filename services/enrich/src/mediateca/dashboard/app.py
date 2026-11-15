@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlencode
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from mediateca_shared.constants import JOB_TYPES
+from mediateca_shared.constants import ENRICH_STATUSES, JOB_TYPES, TMDB_STATUSES
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -45,6 +45,13 @@ from mediateca.core.scheduling import (
     save_schedule_settings,
 )
 
+from .catalog_queries import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    CatalogFilter,
+    catalog_rows,
+    catalog_summary,
+)
 from .queries import (
     catalog_coverage,
     enrichment_percentage,
@@ -68,7 +75,7 @@ DEGRADED_MESSAGE = (
 
 ADMIN_COOKIE = "mediateca_admin"
 ADMIN_COOKIE_MAX_AGE = 8 * 60 * 60
-NEXT_PATHS = {"/", "/tareas", "/configuracion"}
+NEXT_PATHS = {"/", "/catalogo", "/tareas", "/configuracion"}
 
 
 def _has_write_access(request: Request) -> bool:
@@ -191,6 +198,66 @@ def _configuracion_context(request: Request, session: Session) -> dict[str, Any]
     return context
 
 
+def _parse_catalog_filter(request: Request) -> CatalogFilter:
+    q = request.query_params
+
+    def _int(name: str, default: int | None) -> int | None:
+        raw = q.get(name)
+        if raw is None or raw == "":
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+
+    return CatalogFilter(
+        enrich_status=q.get("enrich_status") or None,
+        tmdb_status=q.get("tmdb_status") or None,
+        missing=q.get("missing") or "incluir",
+        texto=q.get("q") or None,
+        soporte=q.get("soporte") or None,
+        biblioteca=q.get("biblioteca") or None,
+        anio_desde=_int("anio_desde", None),
+        anio_hasta=_int("anio_hasta", None),
+        idioma=q.get("idioma") or None,
+        pais=q.get("pais") or None,
+        page=max(_int("page", 1) or 1, 1),
+        limit=min(max(_int("limit", DEFAULT_LIMIT) or DEFAULT_LIMIT, 1), MAX_LIMIT),
+    )
+
+
+def _page_query(request: Request, page: int) -> str:
+    params = [(key, value) for key, value in request.query_params.multi_items() if key != "page"]
+    params.append(("page", str(page)))
+    return urlencode(params)
+
+
+def _catalogo_context(request: Request, session: Session) -> dict[str, Any]:
+    filtro = _parse_catalog_filter(request)
+    summary = catalog_summary(session, filtro)
+    rows = catalog_rows(session, filtro)
+    page = filtro.page
+    limit = filtro.limit
+    pages = max(1, (summary.total + limit - 1) // limit) if summary.total > 0 else 1
+    context = _base_context(request, "catalogo", refresh_seconds=None)
+    context.update(
+        {
+            "filter": filtro,
+            "summary": summary,
+            "rows": rows,
+            "page": page,
+            "pages": pages,
+            "has_prev": page > 1,
+            "has_next": page < pages,
+            "prev_query": _page_query(request, page - 1),
+            "next_query": _page_query(request, page + 1),
+            "estados_enrich": ENRICH_STATUSES,
+            "estados_tmdb": TMDB_STATUSES,
+        }
+    )
+    return context
+
+
 def _degraded(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
@@ -238,6 +305,22 @@ def tareas(
     return templates.TemplateResponse(
         request=request,
         name="tareas.html",
+        context=context,
+    )
+
+
+@app.get("/catalogo", response_class=HTMLResponse)
+def catalogo(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    try:
+        context = _catalogo_context(request, session)
+    except SQLAlchemyError:
+        logger.exception("No se pudo leer el catalogo")
+        return _degraded(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="catalogo.html",
         context=context,
     )
 
