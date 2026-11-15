@@ -18,7 +18,7 @@ Opciones:
   -h, --help   Muestra esta ayuda.
 
 Variables de entorno:
-  REGISTRY     Registro de destino (por defecto 192.168.1.168:5000).
+  REGISTRY     Registro de destino (por defecto 192.168.1.169:5000).
   BATCH_IMAGE  Nombre de la imagen de ingesta (por defecto mediateca-batch).
   WEB_IMAGE    Nombre de la imagen web (por defecto mediateca-web).
 EOF
@@ -48,7 +48,7 @@ echo "==> Incrementando version (${BUMP_TYPE})"
 ./scripts/bump-version.sh "$BUMP_TYPE"
 
 VERSION="$(tr -d '[:space:]' < VERSION)"
-export REGISTRY="${REGISTRY:-192.168.1.168:5000}"
+export REGISTRY="${REGISTRY:-192.168.1.169:5000}"
 export NO_CACHE
 
 echo "==> Reconstruyendo y publicando imagenes ${VERSION} en ${REGISTRY}"
