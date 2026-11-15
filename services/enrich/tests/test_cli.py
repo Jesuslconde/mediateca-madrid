@@ -298,6 +298,61 @@ def test_cli_tmdb_enrich_completa_portadas_ya_enriquecidas(
     assert tmdb.calls
 
 
+def test_cli_tmdb_enrich_refresh_reactualiza_ya_sincronizadas(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    edicion = _enriched_edition(session, "1", "Pelicula A", 2020)
+    edicion.tmdb_id = 42
+    edicion.tmdb_url = "https://www.themoviedb.org/movie/42"
+    edicion.tmdb_poster_url = "https://image.tmdb.org/t/p/w500/old.jpg"
+    edicion.tmdb_enriched_at = datetime(2025, 1, 1, tzinfo=UTC)
+    session.commit()
+
+    class FakeOpacClient:
+        delay = 0.0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "OpacClient", FakeOpacClient)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    sin_refresco = _FakeTmdbClient()
+    monkeypatch.setattr(
+        cli_module, "build_tmdb_client", lambda *args, **kwargs: sin_refresco
+    )
+    sin_refresco_result = CliRunner().invoke(
+        cli_module.app,
+        ["tmdb-enrich", "--limit", "10", "--delay", "0", "--no-index"],
+    )
+    assert sin_refresco_result.exit_code == 0, sin_refresco_result.output
+    assert sin_refresco.calls == []
+
+    con_refresco = _FakeTmdbClient()
+    monkeypatch.setattr(
+        cli_module, "build_tmdb_client", lambda *args, **kwargs: con_refresco
+    )
+    con_refresco_result = CliRunner().invoke(
+        cli_module.app,
+        ["tmdb-enrich", "--limit", "10", "--delay", "0", "--no-index", "--refresh"],
+    )
+
+    assert con_refresco_result.exit_code == 0, con_refresco_result.output
+    assert con_refresco.calls
+    session.refresh(edicion)
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/poster.jpg"
+    assert edicion.tmdb_url != "https://www.themoviedb.org/movie/42"
+
+
 def test_cli_tmdb_enrich_sin_token_falla_sin_modificar(monkeypatch, tmp_path) -> None:
     session = _session()
     edicion = _enriched_edition(session, "1", "Pelicula A", 2020)

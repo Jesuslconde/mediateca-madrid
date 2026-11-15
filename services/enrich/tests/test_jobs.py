@@ -16,6 +16,7 @@ from mediateca.catalog.jobs import (
     coverage,
     create_job,
     create_stub,
+    enqueue_tmdb_job,
     finish_job,
     mark_enriched,
     recover_stale_jobs,
@@ -272,6 +273,75 @@ def test_worker_ejecuta_el_handler_enrich(monkeypatch) -> None:
     assert processed.status == "completed"
     assert processed.stats == {"processed": 3}
     assert visto["job_id"] == job.id
+    assert backoff == 0.0
+
+
+def test_enqueue_tmdb_job_guarda_el_modo() -> None:
+    session = _session()
+
+    job = enqueue_tmdb_job(session, batch_size=123, refresh=True)
+    session.commit()
+
+    assert job.job_type == "tmdb"
+    assert job.status == "pending"
+    assert job.batch_size == 123
+    assert job.stats == {"reason": "manual", "refresh": True}
+
+
+def test_worker_ejecuta_el_handler_tmdb(monkeypatch) -> None:
+    import mediateca.catalog.harvester as harvester_module
+    import mediateca.catalog.jobs as jobs_module
+
+    session = _session()
+    job = enqueue_tmdb_job(session, batch_size=250, refresh=True)
+    session.commit()
+
+    visto: dict[str, object] = {}
+
+    class FakeTmdbClient:
+        def close(self) -> None:
+            visto["closed"] = True
+
+    class FakeHarvester:
+        def __init__(self, session, client=None, tmdb_client=None) -> None:
+            pass
+
+        def harvest_tmdb_enrichment(self, *, limit, delay, refresh):  # noqa: ANN001
+            visto["limit"] = limit
+            visto["refresh"] = refresh
+            return {"processed": 1, "processed_titns": []}
+
+    monkeypatch.setattr(
+        jobs_module, "build_tmdb_client", lambda session: FakeTmdbClient()
+    )
+    monkeypatch.setattr(harvester_module, "Harvester", FakeHarvester)
+
+    processed, backoff = worker_tick(session)
+    session.commit()
+
+    assert processed is not None
+    assert processed.id == job.id
+    assert processed.status == "completed"
+    assert visto == {"limit": 250, "refresh": True, "closed": True}
+    assert backoff == 0.0
+
+
+def test_worker_falla_tmdb_sin_token(monkeypatch) -> None:
+    import mediateca.catalog.jobs as jobs_module
+
+    session = _session()
+    job = create_job(session, "tmdb", batch_size=10, max_attempts=1)
+    session.commit()
+
+    monkeypatch.setattr(jobs_module, "build_tmdb_client", lambda session: None)
+
+    processed, backoff = worker_tick(session)
+    session.commit()
+
+    assert processed is not None
+    assert processed.id == job.id
+    assert processed.status == "failed"
+    assert "token de TMDB" in (processed.error or "")
     assert backoff == 0.0
 
 

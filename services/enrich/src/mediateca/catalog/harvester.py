@@ -763,28 +763,40 @@ class Harvester:
         *,
         limit: int = 5000,
         delay: float | None = None,
-    ) -> dict[str, int | list[str]]:
+        refresh: bool = False,
+    ) -> dict[str, int | bool | list[str]]:
         if self.tmdb_client is None:
             raise TmdbError("No hay token de TMDB configurado")
         delay = self.client.delay if delay is None else delay
         self._reset_tmdb_counters()
         self.processed_titns = []
 
-        stmt = (
-            select(Edicion)
-            .where(
-                Edicion.detail_fetched_at.is_not(None),
-                or_(
-                    Edicion.tmdb_enriched_at.is_(None),
-                    and_(
-                        Edicion.tmdb_id.is_not(None),
-                        Edicion.tmdb_url.is_(None),
-                    ),
-                ),
+        if refresh:
+            stmt = (
+                select(Edicion)
+                .where(Edicion.detail_fetched_at.is_not(None))
+                .order_by(
+                    Edicion.tmdb_enriched_at.asc().nulls_last(),
+                    Edicion.titn,
+                )
+                .limit(limit)
             )
-            .order_by(Edicion.titn)
-            .limit(limit)
-        )
+        else:
+            stmt = (
+                select(Edicion)
+                .where(
+                    Edicion.detail_fetched_at.is_not(None),
+                    or_(
+                        Edicion.tmdb_enriched_at.is_(None),
+                        and_(
+                            Edicion.tmdb_id.is_not(None),
+                            Edicion.tmdb_url.is_(None),
+                        ),
+                    ),
+                )
+                .order_by(Edicion.titn)
+                .limit(limit)
+            )
         pending = list(self.session.scalars(stmt))
         processed_titns: list[str] = []
         failed: list[str] = []
@@ -805,6 +817,7 @@ class Harvester:
             "errors": self.tmdb_errors,
             "failed": failed,
             "processed_titns": processed_titns,
+            "refresh": refresh,
         }
 
     def harvest_discovery(

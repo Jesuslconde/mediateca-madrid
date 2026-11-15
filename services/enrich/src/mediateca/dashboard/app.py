@@ -20,6 +20,7 @@ from mediateca.catalog.jobs import (
     enqueue_discover_job,
     enqueue_enrich_job,
     enqueue_index_job,
+    enqueue_tmdb_job,
     has_active_job,
     ingest_metrics,
 )
@@ -29,6 +30,7 @@ from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
     ConfigValidationError,
+    effective_tmdb_api_token,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
     set_config_value,
@@ -353,6 +355,28 @@ async def enqueue_job_from_dashboard(
             )
         elif job_type == "index":
             job = enqueue_index_job(session)
+        elif job_type == "tmdb":
+            if not effective_tmdb_api_token(session):
+                raise ValueError(
+                    "No hay token de TMDB configurado; guardalo en Configuracion"
+                )
+            limit = int((values.get("limit") or ["5000"])[0])
+            if not 1 <= limit <= 50000:
+                raise ValueError("El lote debe estar entre 1 y 50000")
+            refresh = (values.get("refresh") or ["false"])[0].lower() in {
+                "1",
+                "true",
+                "on",
+                "yes",
+                "si",
+                "sí",
+            }
+            job = enqueue_tmdb_job(
+                session,
+                batch_size=limit,
+                refresh=refresh,
+                reason="dashboard",
+            )
         else:
             raise ValueError("Tipo de trabajo no valido")
         session.commit()

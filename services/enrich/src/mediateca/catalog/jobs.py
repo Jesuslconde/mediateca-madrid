@@ -184,6 +184,21 @@ def enqueue_index_job(session: Session) -> HarvestJob:
     return enqueue_job(session, "index")
 
 
+def enqueue_tmdb_job(
+    session: Session,
+    *,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    refresh: bool = False,
+    reason: str = "manual",
+) -> HarvestJob:
+    return enqueue_job(
+        session,
+        "tmdb",
+        batch_size=batch_size,
+        stats={"reason": reason, "refresh": refresh},
+    )
+
+
 def claim_job(
     session: Session,
     *,
@@ -652,10 +667,37 @@ def _enrich_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
     return stats
 
 
+def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
+    from mediateca.catalog.harvester import Harvester, OpacClient
+    from mediateca.catalog.tmdb import TmdbError
+
+    _flush_pending_index(session, job)
+    tmdb_client = build_tmdb_client(session)
+    if tmdb_client is None:
+        raise TmdbError("No hay token de TMDB configurado")
+    try:
+        with OpacClient(flaresolverr_url=effective_flaresolverr_url(session)) as client:
+            harvester = Harvester(
+                session,
+                client=client,
+                tmdb_client=tmdb_client,
+            )
+            stats = harvester.harvest_tmdb_enrichment(
+                limit=job.batch_size or DEFAULT_BATCH_SIZE,
+                delay=settings.tmdb_delay,
+                refresh=bool((job.stats or {}).get("refresh")),
+            )
+    finally:
+        tmdb_client.close()
+    _index_titns_for_job(session, job, stats.get("processed_titns", []))
+    return stats
+
+
 DEFAULT_HANDLERS: dict[str, JobHandler] = {
     "discover": _discover_handler,
     "enrich": _enrich_handler,
     "index": _index_handler,
+    "tmdb": _tmdb_handler,
 }
 
 

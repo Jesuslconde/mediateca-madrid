@@ -163,8 +163,13 @@ def tmdb_enrich_command(
     no_index: bool = typer.Option(
         False, "--no-index", help="No indexar los TITN procesados"
     ),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help="Reconsultar TMDB tambien para las ediciones ya sincronizadas",
+    ),
 ) -> None:
-    """Completa los paises de origen de las ediciones ya enriquecidas."""
+    """Completa los metadatos TMDB de las ediciones ya enriquecidas."""
     configure_logging()
     with session_scope() as session:
         tmdb_client = build_tmdb_client(session, delay=delay)
@@ -182,7 +187,7 @@ def tmdb_enrich_command(
                     tmdb_client=tmdb_client,
                 )
                 stats = harvester.harvest_tmdb_enrichment(
-                    limit=limit, delay=delay
+                    limit=limit, delay=delay, refresh=refresh
                 )
         finally:
             tmdb_client.close()

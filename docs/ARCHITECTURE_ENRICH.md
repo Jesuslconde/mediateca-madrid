@@ -85,6 +85,18 @@ normalizan a codigos ISO 3166-1 alfa-2 en mayusculas y se deduplican. El cliente
 aplica el retardo configurado, respeta `Retry-After` y reintenta errores
 temporales con backoff. El token nunca se registra en logs.
 
+## Actualizacion manual de metadatos TMDB
+
+Ademas del enriquecimiento del OPAC, la cola admite un trabajo de tipo `tmdb`
+que solo consulta TMDB y actualiza `paises_origen`, `tmdb_id`,
+`tmdb_poster_url`, `tmdb_url` y `tmdb_enriched_at`. Se lanza unicamente a mano
+desde `Tareas` (`/tareas`) o con `mediateca tmdb-enrich`; el scheduler nunca lo
+encola. Por defecto selecciona las ediciones pendientes (sin `tmdb_enriched_at`
+o con `tmdb_id` sin `tmdb_url`). Con el modo refresco vuelve a consultar tambien
+las ya sincronizadas, ordenadas por `tmdb_enriched_at` mas antiguo y luego por
+`TITN`, para rotar los lotes. Al terminar indexa los `TITN` procesados con
+`index_titns`.
+
 ## Cursor, reintentos y errores
 
 El trabajo `enrich` guarda el ultimo `TITN` procesado en `cursor_titn` y actualiza

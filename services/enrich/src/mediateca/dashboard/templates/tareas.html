@@ -27,6 +27,13 @@
         <input type="hidden" name="job_type" value="index">
         <button type="submit" {% if active_jobs['index'] or not is_admin %}disabled{% endif %}>Reindexar</button>
       </form>
+      <form method="post" action="/jobs">
+        <input type="hidden" name="next" value="/tareas">
+        <input type="hidden" name="job_type" value="tmdb">
+        <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
+        <label><input type="checkbox" name="refresh" value="true"> Reactualizar también las ya sincronizadas</label>
+        <button type="submit" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>
+      </form>
     </div>
     <p class="muted">Los trabajos se ejecutan de uno en uno en el worker. No se encola un trabajo si ya hay otro del mismo tipo activo.</p>
   </section>

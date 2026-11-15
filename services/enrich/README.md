@@ -46,10 +46,17 @@ docker compose run --rm worker python -m mediateca tmdb-enrich --limit 5000 --de
 
 El comando reanuda por `TITN` las pendientes, no repite las ya sincronizadas y al
 terminar indexa los TITN procesados; usa `--no-index` para omitir la indexacion.
-Las ediciones sin coincidencia quedan sin marca y se reintentan en ejecuciones
-posteriores. La portada se guarda como URL de `image.tmdb.org` y el enlace como
-ficha publica de TMDB, sin descargar imagenes. Requiere un token guardado en el dashboard o
-`MEDIATECA_TMDB_API_TOKEN`.
+Con `--refresh` vuelve a consultar TMDB tambien para las ediciones ya
+sincronizadas, priorizando las de `tmdb_enriched_at` mas antiguo para rotar los
+lotes. Las ediciones sin coincidencia quedan sin marca y se reintentan en
+ejecuciones posteriores. La portada se guarda como URL de `image.tmdb.org` y el
+enlace como ficha publica de TMDB, sin descargar imagenes. Requiere un token
+guardado en el dashboard o `MEDIATECA_TMDB_API_TOKEN`.
+
+La misma actualizacion TMDB puede lanzarse como trabajo manual desde `Tareas`
+(`/tareas`) con un lote y la casilla "Reactualizar también las ya sincronizadas".
+El trabajo se ejecuta en el worker, indexa los TITN procesados y no lo encola
+nunca el scheduler: solo se lanza a mano desde el dashboard o la CLI.
 
 ## Dashboard de estado
 
@@ -58,7 +65,7 @@ La vista web se divide en tres paginas con un menu lateral comun:
 - `Inicio` (`/`): salud del worker, trabajos por estado y tipo, cobertura del
   catalogo y metricas de ingesta.
 - `Tareas` (`/tareas`): tabla de trabajos recientes y acciones de descubrimiento,
-  enriquecimiento e indexacion.
+  enriquecimiento, indexacion y actualizacion de metadatos TMDB.
 - `Configuracion` (`/configuracion`): programacion, URL de FlareSolverr y token
   de TMDB.
 

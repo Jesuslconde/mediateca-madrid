@@ -143,6 +143,7 @@ def test_conteos_por_estado_y_tipo() -> None:
         "discover": 1,
         "enrich": 1,
         "index": 1,
+        "tmdb": 0,
     }
 
 
@@ -544,6 +545,7 @@ def test_dashboard_muestra_programacion_y_tareas(monkeypatch, tmp_path) -> None:
     assert "Tareas bajo demanda" in tareas.text
     assert "Buscar novedades" in tareas.text
     assert "Enriquecer pendientes" in tareas.text
+    assert "Actualizar metadatos TMDB" in tareas.text
 
 
 def test_post_programacion_guarda_los_intervalos(monkeypatch, tmp_path) -> None:
@@ -603,6 +605,60 @@ def test_post_job_encola_descubrimiento(monkeypatch, tmp_path) -> None:
     assert response.headers["location"].startswith("/tareas")
     assert job is not None
     assert job.status == "pending"
+
+
+def test_post_job_encola_tmdb(monkeypatch, tmp_path) -> None:
+    session = _session()
+    set_config_value(session, TMDB_API_TOKEN_KEY, "db-token-123456")
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "tmdb_api_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs",
+            data={"job_type": "tmdb", "limit": "250", "refresh": "true"},
+            follow_redirects=False,
+        )
+        job = session.scalars(
+            select(HarvestJob).where(HarvestJob.job_type == "tmdb")
+        ).first()
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/tareas")
+    assert job is not None
+    assert job.status == "pending"
+    assert job.batch_size == 250
+    assert job.stats["refresh"] is True
+
+
+def test_post_job_tmdb_sin_token_no_encola(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "tmdb_api_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs",
+            data={"job_type": "tmdb", "limit": "250"},
+            follow_redirects=False,
+        )
+        job = session.scalars(
+            select(HarvestJob).where(HarvestJob.job_type == "tmdb")
+        ).first()
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/tareas?error=")
+    assert job is None
+    assert "token de TMDB" in unquote_plus(response.headers["location"])
 
 
 def test_post_job_duplicado_no_crea_otro(monkeypatch, tmp_path) -> None:
