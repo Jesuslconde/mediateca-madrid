@@ -138,7 +138,7 @@ El sistema MUST NOT mostrar el token completo en la interfaz ni registrarlo en l
 
 ### Requirement: Resumen de trabajos por estado y tipo
 
-El sistema MUST mostrar el número de trabajos agrupados por estado (`pending`, `running`, `completed`, `failed`, `cancelled`) y por tipo (`discover`, `enrich`, `index`).
+El sistema MUST mostrar el número de trabajos agrupados por estado (`pending`, `running`, `completed`, `failed`, `cancelled`) y por tipo (`discover`, `enrich`, `index`, `tmdb`).
 
 #### Scenario: Conteo por estado
 
@@ -148,7 +148,7 @@ El sistema MUST mostrar el número de trabajos agrupados por estado (`pending`, 
 
 #### Scenario: Conteo por tipo
 
-- **WHEN** existen trabajos de descubrimiento, enriquecimiento e indexación
+- **WHEN** existen trabajos de descubrimiento, enriquecimiento, indexación y actualización TMDB
 - **THEN** la vista muestra el total de cada tipo
 - **AND** los tipos sin trabajos se muestran con valor cero
 
@@ -228,7 +228,7 @@ El sistema MUST responder con un estado de error comprensible cuando la base de 
 
 ### Requirement: Tareas bajo demanda
 
-El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento e indexación, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo.
+El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento, indexación y actualización de metadatos TMDB, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo. La actualización TMDB SHALL permitir elegir el lote y reactualizar también las ediciones ya sincronizadas, y MUST rechazarse si no hay token de TMDB configurado.
 
 #### Scenario: Buscar novedades
 
@@ -241,6 +241,18 @@ El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento co
 - **WHEN** el operador pulsa "Enriquecer pendientes"
 - **THEN** se encola un `enrich` con el lote indicado
 - **AND** se procesan todos los stubs pendientes, no solo los de la última búsqueda
+
+#### Scenario: Actualizar metadatos TMDB
+
+- **WHEN** el operador pulsa "Actualizar metadatos TMDB" con un lote y, opcionalmente, la casilla de refresco
+- **THEN** se encola un trabajo `tmdb` con el lote y el modo indicados
+- **AND** el trabajo se ejecuta en el worker y queda registrado en el historial
+
+#### Scenario: Actualización TMDB sin token
+
+- **WHEN** el operador solicita una actualización TMDB sin un token configurado
+- **THEN** el dashboard muestra un error comprensible
+- **AND** no se crea ningún trabajo
 
 #### Scenario: Trabajo duplicado
 
@@ -326,7 +338,7 @@ La página de Inicio MUST mostrar únicamente la salud del worker, el resumen de
 
 ### Requirement: Página de Tareas
 
-La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento e indexación. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura.
+La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento, indexación y actualización de metadatos TMDB. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura.
 
 #### Scenario: Visualización de trabajos
 
@@ -336,7 +348,7 @@ La página de Tareas MUST mostrar los trabajos recientes y las acciones de descu
 
 #### Scenario: Acciones bajo demanda
 
-- **WHEN** el operador pulsa una acción de descubrimiento, enriquecimiento o indexación
+- **WHEN** el operador pulsa una acción de descubrimiento, enriquecimiento, indexación o actualización TMDB
 - **THEN** se encola el trabajo con las mismas reglas que en la vista anterior
 - **AND** las acciones con un trabajo activo del mismo tipo siguen deshabilitadas
 

@@ -8,7 +8,7 @@ Ejecutar trabajos de ingesta largos y reanudables fuera del scheduler, con una c
 
 ### Requirement: Encolado de trabajos
 
-El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich` e `index` con un lote y un cursor inicial desde la CLI, el dashboard o el scheduler.
+El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich`, `index` y `tmdb` con un lote y un cursor inicial desde la CLI o el dashboard. El scheduler SHALL limitarse a encolar `discover`, `enrich` e `index`.
 
 #### Scenario: Encolar enriquecimiento
 
@@ -21,6 +21,12 @@ El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich` e `index`
 - **WHEN** el operador solicita un trabajo bajo demanda
 - **THEN** se crea un trabajo `pending` con el tipo y lote solicitados
 - **AND** el dashboard no ejecuta la ingesta
+
+#### Scenario: Encolar actualización TMDB
+
+- **WHEN** el operador solicita una actualización de metadatos TMDB desde el dashboard
+- **THEN** se crea un trabajo `pending` de tipo `tmdb` con el lote y el modo de refresco indicados
+- **AND** el worker lo ejecuta cuando esté libre
 
 ### Requirement: Reclamo atómico
 
@@ -147,3 +153,19 @@ Al completar un lote `enrich` con progreso y pendientes restantes, el worker MUS
 
 - **WHEN** termina un lote encadenado
 - **THEN** las estadísticas incluyen los pendientes restantes, la profundidad del encadenamiento y el motivo de parada
+
+### Requirement: Tarea TMDB solo manual
+
+El sistema MUST NOT encolar trabajos de tipo `tmdb` desde el scheduler. El trabajo `tmdb` SHALL crearse solo por una acción explícita del operador desde el dashboard o la CLI.
+
+#### Scenario: Scheduler sin tarea TMDB
+
+- **WHEN** el scheduler comprueba los intervalos configurados
+- **THEN** no crea ningún trabajo de tipo `tmdb`
+- **AND** solo puede encolar `discover`, `enrich` e `index`
+
+#### Scenario: Lanzamiento explícito
+
+- **WHEN** no hay ningún trabajo `tmdb` activo y el operador lo solicita manualmente
+- **THEN** se crea un trabajo `tmdb` en estado `pending`
+- **AND** no se crea ningún otro trabajo `tmdb` mientras siga activo
