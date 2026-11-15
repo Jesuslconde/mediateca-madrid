@@ -5,10 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 usage() {
-  echo "Uso: $0 <fix|minor|normal>" >&2
-  echo "  fix    incrementa la ultima cifra (patch)" >&2
+  echo "Uso: $0 <major|minor|fix>" >&2
+  echo "  major  incrementa la primera cifra (major)" >&2
   echo "  minor  incrementa la cifra de en medio (minor)" >&2
-  echo "  normal incrementa la primera cifra (major)" >&2
+  echo "  fix    incrementa la ultima cifra (patch)" >&2
+  echo "  normal alias historico de major" >&2
   exit 1
 }
 
@@ -18,7 +19,7 @@ fi
 
 BUMP_TYPE="$1"
 case "$BUMP_TYPE" in
-  fix | minor | normal) ;;
+  major | minor | fix | normal) ;;
   *) usage ;;
 esac
 
@@ -35,7 +36,7 @@ PATCH="${BASH_REMATCH[3]}"
 case "$BUMP_TYPE" in
   fix) PATCH=$((PATCH + 1)) ;;
   minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-  normal) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+  major | normal) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
 esac
 
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"

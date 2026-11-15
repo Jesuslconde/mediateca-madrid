@@ -64,14 +64,25 @@ Las pruebas se ejecutan en las imagenes correspondientes, de modo que API e inge
 | `mediateca-batch` | `init`, `worker`, `dashboard`, `scheduler` |
 | `mediateca-web` | `api`, `web` |
 
-Para construir y publicar una version:
+Para incrementar la version, reconstruir las dos imagenes y publicarlas en una
+sola orden:
 
 ```bash
-make bump type=fix
-make release
+make bump-release type=fix    # tambien type=major o type=minor
 ```
 
-`make bump` actualiza `VERSION`, los `pyproject.toml`, los `__version__` y el `package.json`. `make release` publica las dos imagenes en `${REGISTRY}` con la etiqueta de version y `latest`.
+El script `scripts/bump-release.sh` actualiza `VERSION`, los `pyproject.toml`, los
+`__version__` y el `package.json`, reconstruye `mediateca-batch` y
+`mediateca-web`, y las publica con la etiqueta de version y `latest`. Por defecto
+usa el registro `192.168.1.168:5000`; se puede cambiar con `REGISTRY`. Para
+reconstruir sin cache, añade `--no-cache`:
+
+```bash
+REGISTRY=otro.registro:5000 ./scripts/bump-release.sh minor --no-cache
+```
+
+Los pasos siguen disponibles por separado con `make bump type=...` y
+`make release`.
 
 ## Despliegue
 

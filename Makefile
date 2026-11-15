@@ -4,7 +4,7 @@ q ?= cine
 pages ?= 1
 limit ?= 20
 
-.PHONY: help up down build logs ps init migrate harvest index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump release clean
+.PHONY: help up down build logs ps init migrate harvest index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump bump-release release clean
 
 help: ## Mostrar la ayuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -81,8 +81,11 @@ contracts: openapi web-types ## Regenerar contrato y tipos del portal
 check-schema: ## Verificar la version del esquema compartido
 	docker compose run --rm --no-deps api /opt/venv/bin/python -c "from mediateca.core.db import check_schema; check_schema(); print('schema ok')"
 
-bump: ## Incrementar version: make bump type=fix|minor|normal
+bump: ## Incrementar version: make bump type=major|minor|fix
 	./scripts/bump-version.sh "$(type)"
+
+bump-release: ## Incrementar, reconstruir y publicar: make bump-release type=fix
+	./scripts/bump-release.sh "$(type)"
 
 release: ## Construir y publicar las imagenes con la version actual
 	./scripts/release.sh

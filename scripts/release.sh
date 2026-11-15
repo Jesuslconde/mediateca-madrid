@@ -14,11 +14,16 @@ BATCH_LATEST="${REGISTRY}/${BATCH_IMAGE}:latest"
 WEB_TAG="${REGISTRY}/${WEB_IMAGE}:${VERSION}"
 WEB_LATEST="${REGISTRY}/${WEB_IMAGE}:latest"
 
+BUILD_ARGS=()
+if [[ "${NO_CACHE:-0}" == "1" ]]; then
+  BUILD_ARGS+=(--no-cache)
+fi
+
 echo "Construyendo ${BATCH_TAG}"
-docker build -f docker/batch.Dockerfile -t "$BATCH_TAG" -t "$BATCH_LATEST" .
+docker build "${BUILD_ARGS[@]}" -f docker/batch.Dockerfile -t "$BATCH_TAG" -t "$BATCH_LATEST" .
 
 echo "Construyendo ${WEB_TAG}"
-docker build -f docker/web.Dockerfile -t "$WEB_TAG" -t "$WEB_LATEST" .
+docker build "${BUILD_ARGS[@]}" -f docker/web.Dockerfile -t "$WEB_TAG" -t "$WEB_LATEST" .
 
 echo "Publicando imagenes en ${REGISTRY}"
 docker push "$BATCH_TAG"
