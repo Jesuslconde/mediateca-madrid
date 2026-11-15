@@ -60,6 +60,9 @@ A 1 peticion por segundo, un lote de 5.000 fichas tarda aproximadamente 1,4 hora
 la primera pasada completa de 67.215 fichas requiere unas 14 ejecuciones nocturnas.
 El tamano del lote y el retardo son configurables desde `mediateca enrich`.
 
+Cuando un lote termina con pendientes restantes, el worker encadena el siguiente
+lote para drenar el backlog (ver "Programacion de la ingesta").
+
 ## Campos de enriquecimiento TMDB
 
 La edicion conserva `pais` con el codigo del MARC del OPAC y añade
@@ -183,8 +186,8 @@ toca Meilisearch. Cada `MEDIATECA_SCHEDULER_POLL_SECONDS` lee la configuracion d
 - `discover` incremental cada `discover_interval_hours` (12 por defecto);
 - `discover` completo cada `full_sweep_interval_hours` (168 por defecto, `0` lo
   desactiva);
-- `enrich` de los stubs nuevos si no hay un descubrimiento activo y quedan
-  pendientes desde el ultimo descubrimiento completado.
+- `enrich` de todos los pendientes de ficha OPAC si no hay un descubrimiento o
+  enriquecimiento activo.
 
 El descubrimiento incremental reutiliza el `cursor_doc` y `cursor_titn` del ultimo
 descubrimiento completado. El barrido completo semanal corrige posibles cambios
@@ -196,10 +199,20 @@ reencola el trabajo y pausa la ingesta `captcha_pause_minutes` minutos (30 por
 defecto, configurable desde el dashboard).
 
 Cuando un descubrimiento termina con nuevos registros, el worker encola
-automaticamente un `enrich` con `stats.since = started_at` del descubrimiento.
-`select_pending_titns` filtra por `discovery_seen_at >= since`, de modo que el
-enriquecimiento programado procesa solo los stubs nuevos. El boton manual del
-dashboard encola un enriquecimiento de todos los pendientes.
+automaticamente un `enrich` con `stats.since = started_at` para priorizar lo
+recien descubierto. El `enrich` programado, en cambio, encola sobre todos los
+pendientes (sin `since`), sin limitarse a la ultima cohorte.
+
+Tras completar un lote de enriquecimiento, el worker drena el backlog: si quedan
+pendientes y el lote hizo progreso, encola el siguiente lote usando `cursor_titn`
+para no repetir una cabeza de fallos. Al llegar al final, da una vuelta
+(`cursor_titn` nulo) solo si el lote anterior hizo progreso; si un lote no
+procesa ninguna ficha, el drenado se detiene. El tope de encadenamientos se
+controla con `MEDIATECA_ENRICH_DRAIN_MAX_CHAIN` (100 por defecto; `0` lo
+desactiva) y todo el drenado con `MEDIATECA_ENRICH_DRAIN_ENABLED`. Cada lote
+guarda en `stats` `pending_after`, `pending_after_cursor`, `drain_chain`,
+`drained` y `stop_reason` (`chain_forward`, `chain_wrap`, `no_pending`,
+`no_progress`, `max_chain`, `disabled`, `already_active` o `enqueue_error`).
 
 El dashboard permite encolar `discover`, `enrich` e `index` bajo demanda y editar
 la programacion. Las acciones de escritura se protegen con

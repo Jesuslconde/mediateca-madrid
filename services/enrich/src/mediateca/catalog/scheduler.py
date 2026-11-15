@@ -17,7 +17,6 @@ from mediateca.core.logging import get_logger
 from mediateca.core.scheduling import (
     ScheduleSettings,
     has_active_job,
-    last_completed_discover,
     last_full_discover,
     last_job,
     load_schedule_settings,
@@ -74,21 +73,15 @@ def enqueue_due_jobs(
                 extra={"job_id": job.id, "job_type": job.job_type, "action": mode},
             )
 
-    last_discover = last_completed_discover(session)
-    if (
-        last_discover is not None
-        and not has_active_job(session, "discover")
-        and not has_active_job(session, "enrich")
-    ):
-        since = last_discover.started_at or last_discover.created_at
-        pending = count_pending_titns(session, since=since)
+    if not has_active_job(session, "discover") and not has_active_job(session, "enrich"):
+        pending = count_pending_titns(session)
         if pending > 0 and _is_due(
             last_job(session, "enrich"), schedule.enrich_interval_hours, current
         ):
             try:
                 job = enqueue_enrich_job(
                     session,
-                    since=since,
+                    since=None,
                     batch_size=schedule.enrich_batch_size,
                     reason="scheduler",
                 )

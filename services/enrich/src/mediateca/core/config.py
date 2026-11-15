@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     scheduler_harvest_hours: int = 24
     scheduler_poll_seconds: float = 60.0
 
+    enrich_drain_enabled: bool = True
+    enrich_drain_max_chain: int = 100
+
     worker_concurrency: int = 1
     worker_poll_seconds: float = 5.0
     worker_heartbeat_seconds: float = 30.0

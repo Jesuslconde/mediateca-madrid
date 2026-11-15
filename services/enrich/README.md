@@ -179,8 +179,10 @@ trabajos en `harvest_jobs`. Por defecto:
 
 - busca novedades cada 12 horas mediante descubrimiento incremental;
 - hace un barrido completo del catalogo cada 7 dias como red de seguridad;
-- encola el enriquecimiento de los nuevos registros despues de cada
-  descubrimiento;
+- encola el enriquecimiento de todos los pendientes de ficha OPAC, sin limitarse
+  a la ultima cohorte descubierta;
+- drena el backlog: al terminar un lote con pendientes y progreso, encadena el
+  siguiente lote con `cursor_titn` para no repetir una cabeza de fallos;
 - reconcilia el indice de Meilisearch una vez por semana;
 - evita duplicados si ya hay un trabajo activo del mismo tipo.
 
@@ -201,6 +203,10 @@ Variables relacionadas:
   dashboard.
 - `MEDIATECA_SCHEDULER_POLL_SECONDS`: frecuencia con la que el scheduler revisa
   si toca encolar.
+- `MEDIATECA_ENRICH_DRAIN_ENABLED`: activa o desactiva el drenado automatico del
+  backlog de enriquecimiento (por defecto `true`).
+- `MEDIATECA_ENRICH_DRAIN_MAX_CHAIN`: tope de lotes encadenados seguidos (100 por
+  defecto; `0` desactiva el drenado).
 - `MEDIATECA_DASHBOARD_ADMIN_TOKEN`: token necesario para las acciones de
   escritura del dashboard. Si queda vacio, las acciones estan abiertas.
 

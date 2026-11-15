@@ -218,10 +218,10 @@ def test_scheduler_no_encola_si_esta_desactivado() -> None:
     assert session.scalars(select(HarvestJob)).first() is None
 
 
-def test_scheduler_encola_enriquecimiento_de_nuevos() -> None:
+def test_scheduler_encola_enriquecimiento_sobre_todos_los_pendientes() -> None:
     session = _session()
     now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
-    completed = _completed_discover(
+    _completed_discover(
         session,
         created_at=now - timedelta(hours=1),
         mode="incremental",
@@ -239,9 +239,99 @@ def test_scheduler_encola_enriquecimiento_de_nuevos() -> None:
     assert len(jobs) == 1
     assert jobs[0].job_type == "enrich"
     assert jobs[0].batch_size == 100
-    assert jobs[0].stats["since"] == (
-        completed.started_at or completed.created_at
-    ).isoformat()
+    assert jobs[0].stats["reason"] == "scheduler"
+    assert "since" not in jobs[0].stats
+
+
+def test_scheduler_encola_enriquecimiento_de_cohorte_antigua() -> None:
+    session = _session()
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    _completed_discover(
+        session,
+        created_at=now - timedelta(hours=1),
+        mode="incremental",
+    )
+    create_stub(session, "1", seen_at=now - timedelta(hours=2))
+    session.commit()
+
+    jobs = enqueue_due_jobs(
+        session,
+        now=now,
+        settings=ScheduleSettings(True, 12, 168, 12, 100),
+    )
+    session.commit()
+
+    assert [job.job_type for job in jobs] == ["enrich"]
+
+
+def test_scheduler_no_encola_enriquecimiento_sin_pendientes() -> None:
+    session = _session()
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    _completed_discover(
+        session,
+        created_at=now - timedelta(hours=1),
+        mode="incremental",
+    )
+    session.commit()
+
+    jobs = enqueue_due_jobs(
+        session,
+        now=now,
+        settings=ScheduleSettings(True, 12, 168, 12, 100),
+    )
+    session.commit()
+
+    assert [job.job_type for job in jobs] == ["index"]
+
+
+def test_scheduler_no_encola_enriquecimiento_si_no_toca_intervalo() -> None:
+    session = _session()
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    _completed_discover(
+        session,
+        created_at=now - timedelta(hours=13),
+        mode="incremental",
+    )
+    recent_enrich = create_job(session, "enrich")
+    recent_enrich.created_at = now - timedelta(hours=1)
+    finish_job(session, recent_enrich, status="completed", stats={"processed": 0})
+    create_stub(session, "1", seen_at=now - timedelta(hours=2))
+    session.commit()
+
+    jobs = enqueue_due_jobs(
+        session,
+        now=now,
+        settings=ScheduleSettings(True, 12, 168, 12, 100),
+    )
+    session.commit()
+
+    assert "enrich" not in [job.job_type for job in jobs]
+
+
+def test_settings_de_drenado_por_defecto_y_entorno(monkeypatch) -> None:
+    monkeypatch.delenv("MEDIATECA_ENRICH_DRAIN_ENABLED", raising=False)
+    monkeypatch.delenv("MEDIATECA_ENRICH_DRAIN_MAX_CHAIN", raising=False)
+    defaults = Settings(_env_file=None)
+    assert defaults.enrich_drain_enabled is True
+    assert defaults.enrich_drain_max_chain == 100
+
+    monkeypatch.setenv("MEDIATECA_ENRICH_DRAIN_ENABLED", "false")
+    monkeypatch.setenv("MEDIATECA_ENRICH_DRAIN_MAX_CHAIN", "7")
+    configured = Settings(_env_file=None)
+    assert configured.enrich_drain_enabled is False
+    assert configured.enrich_drain_max_chain == 7
+
+
+def test_count_pending_titns_respeta_after_titn() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    create_stub(session, "3")
+    session.commit()
+
+    assert count_pending_titns(session) == 3
+    assert count_pending_titns(session, after_titn="1") == 2
+    assert count_pending_titns(session, after_titn="3") == 0
 
 
 def test_scheduler_no_encola_la_tarea_manual_tmdb() -> None:

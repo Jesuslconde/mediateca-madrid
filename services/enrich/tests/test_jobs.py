@@ -16,9 +16,12 @@ from mediateca.catalog.jobs import (
     coverage,
     create_job,
     create_stub,
+    enqueue_enrich_job,
+    enqueue_job,
     enqueue_tmdb_job,
     finish_job,
     mark_enriched,
+    maybe_chain_enrich,
     recover_stale_jobs,
     requeue_job,
     touch_job,
@@ -186,7 +189,8 @@ def test_worker_tick_procesa_un_trabajo() -> None:
 
     assert job is not None
     assert job.status == "completed"
-    assert job.stats == {"processed": 1}
+    assert job.stats["processed"] == 1
+    assert job.stats["stop_reason"] == "no_pending"
     assert backoff == 0.0
     assert seen == ["enrich"]
 
@@ -271,7 +275,8 @@ def test_worker_ejecuta_el_handler_enrich(monkeypatch) -> None:
     assert processed is not None
     assert processed.id == job.id
     assert processed.status == "completed"
-    assert processed.stats == {"processed": 3}
+    assert processed.stats["processed"] == 3
+    assert processed.stats["stop_reason"] == "no_pending"
     assert visto["job_id"] == job.id
     assert backoff == 0.0
 
@@ -701,3 +706,203 @@ def test_captcha_reencola_y_pausa_la_ingesta() -> None:
     assert processed.attempts == 0
     assert processed.error == "captcha"
     assert backoff == 900.0
+
+
+def _completed_enrich(session, *, stats: dict) -> HarvestJob:
+    job = create_job(session, "enrich", batch_size=100)
+    finish_job(session, job, status="completed", stats=stats)
+    session.commit()
+    return job
+
+
+def test_enqueue_enrich_job_guarda_cursor_titn() -> None:
+    session = _session()
+    job = enqueue_enrich_job(session, cursor_titn="100", batch_size=7)
+    session.commit()
+
+    assert job.cursor_titn == "100"
+    assert job.batch_size == 7
+    assert job.stats["reason"] == "manual"
+    assert "since" not in job.stats
+
+
+def test_maybe_chain_enrich_chain_forward() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    create_stub(session, "3")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+
+    maybe_chain_enrich(session, job)
+
+    nxt = session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first()
+    assert nxt is not None
+    assert nxt.job_type == "enrich"
+    assert nxt.cursor_titn == "1"
+    assert nxt.stats["reason"] == "drain"
+    assert "since" not in nxt.stats
+    assert nxt.stats["drain_chain"] == 1
+    assert job.stats["drained"] is True
+    assert job.stats["stop_reason"] == "chain_forward"
+    assert job.stats["pending_after"] == 3
+    assert job.stats["pending_after_cursor"] == 2
+
+
+def test_maybe_chain_enrich_chain_wrap() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "2"})
+
+    maybe_chain_enrich(session, job)
+
+    nxt = session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first()
+    assert nxt is not None
+    assert nxt.cursor_titn is None
+    assert nxt.stats["drain_chain"] == 1
+    assert job.stats["stop_reason"] == "chain_wrap"
+    assert job.stats["drained"] is True
+
+
+def test_maybe_chain_enrich_no_pending() -> None:
+    session = _session()
+    stub = create_stub(session, "1")
+    mark_enriched(session, stub)
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+
+    maybe_chain_enrich(session, job)
+
+    assert session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first() is None
+    assert job.stats["stop_reason"] == "no_pending"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_no_progress() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    job = _completed_enrich(session, stats={"processed": 0, "cursor_titn": "2"})
+
+    maybe_chain_enrich(session, job)
+
+    assert session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first() is None
+    assert job.stats["stop_reason"] == "no_progress"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_max_chain() -> None:
+    session = _session()
+    create_stub(session, "1")
+    job = _completed_enrich(
+        session,
+        stats={"processed": 1, "cursor_titn": "1", "drain_chain": 100},
+    )
+
+    maybe_chain_enrich(session, job)
+
+    assert session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first() is None
+    assert job.stats["stop_reason"] == "max_chain"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_desactivado(monkeypatch) -> None:
+    import mediateca.catalog.jobs as jobs_module
+
+    session = _session()
+    create_stub(session, "1")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+    monkeypatch.setattr(jobs_module.settings, "enrich_drain_enabled", False)
+
+    maybe_chain_enrich(session, job)
+
+    assert session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first() is None
+    assert job.stats["stop_reason"] == "disabled"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_tope_cero_desactiva(monkeypatch) -> None:
+    import mediateca.catalog.jobs as jobs_module
+
+    session = _session()
+    create_stub(session, "1")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+    monkeypatch.setattr(jobs_module.settings, "enrich_drain_max_chain", 0)
+
+    maybe_chain_enrich(session, job)
+
+    assert session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first() is None
+    assert job.stats["stop_reason"] == "disabled"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_already_active() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    enqueue_job(session, "enrich")
+    session.commit()
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+
+    maybe_chain_enrich(session, job)
+
+    assert job.status == "completed"
+    assert job.stats["stop_reason"] == "already_active"
+    assert job.stats["drained"] is False
+
+
+def test_maybe_chain_enrich_enqueue_error_no_marca_fallido(monkeypatch) -> None:
+    import mediateca.catalog.jobs as jobs_module
+
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("fallo al encolar")
+
+    monkeypatch.setattr(jobs_module, "enqueue_enrich_job", boom)
+
+    maybe_chain_enrich(session, job)
+
+    assert job.status == "completed"
+    assert job.stats["stop_reason"] == "enqueue_error"
+    assert job.stats["drained"] is False
+
+
+def test_worker_tick_encadena_enrich_con_pendientes() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    create_stub(session, "3")
+    create_job(session, "enrich", batch_size=100)
+    session.commit()
+
+    def handler(session, job):  # noqa: ANN001, ANN202
+        return {"processed": 1, "cursor_titn": "1"}
+
+    processed, backoff = worker_tick(session, handlers={"enrich": handler})
+    session.commit()
+
+    assert processed is not None
+    assert processed.status == "completed"
+    nxt = session.scalars(select(HarvestJob).where(HarvestJob.status == "pending")).first()
+    assert nxt is not None
+    assert nxt.job_type == "enrich"
+    assert nxt.stats["drain_chain"] == 1
+    assert processed.stats["drained"] is True
+    assert backoff == 0.0
+
+
+def test_stats_de_drenado_persistidos() -> None:
+    session = _session()
+    create_stub(session, "1")
+    create_stub(session, "2")
+    job = _completed_enrich(session, stats={"processed": 1, "cursor_titn": "1"})
+
+    maybe_chain_enrich(session, job)
+
+    persisted = session.get(HarvestJob, job.id)
+    assert persisted is not None
+    for key in ("pending_after", "pending_after_cursor", "drain_chain", "drained", "stop_reason"):
+        assert key in persisted.stats

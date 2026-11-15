@@ -168,6 +168,7 @@ def enqueue_enrich_job(
     since: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     reason: str = "manual",
+    cursor_titn: str | None = None,
 ) -> HarvestJob:
     stats: dict[str, object] = {"reason": reason}
     if since is not None:
@@ -176,6 +177,7 @@ def enqueue_enrich_job(
         session,
         "enrich",
         batch_size=batch_size,
+        cursor_titn=cursor_titn,
         stats=stats,
     )
 
@@ -522,6 +524,68 @@ def worker_state(
     return WorkerState(status=status, last_heartbeat=last_heartbeat, source=source)
 
 
+def maybe_chain_enrich(session: Session, job: HarvestJob) -> None:
+    """Encadena el siguiente lote de enriquecimiento tras completar uno con pendientes."""
+    from mediateca.catalog.repository import count_pending_titns
+
+    stats = dict(job.stats or {})
+    chain = int(stats.get("drain_chain", 0) or 0)
+    processed = int(stats.get("processed", 0) or 0)
+    cursor = stats.get("cursor_titn")
+
+    pending_total = count_pending_titns(session)
+    pending_after_cursor = count_pending_titns(session, after_titn=cursor)
+
+    next_cursor: str | None = None
+    if not settings.enrich_drain_enabled or settings.enrich_drain_max_chain <= 0:
+        stop_reason = "disabled"
+    elif pending_total <= 0:
+        stop_reason = "no_pending"
+    elif chain >= settings.enrich_drain_max_chain:
+        stop_reason = "max_chain"
+    elif pending_after_cursor > 0:
+        next_cursor = cursor
+        stop_reason = "chain_forward"
+    elif processed > 0:
+        stop_reason = "chain_wrap"
+    else:
+        stop_reason = "no_progress"
+
+    drained = False
+    if stop_reason in ("chain_forward", "chain_wrap"):
+        try:
+            enqueued = enqueue_enrich_job(
+                session,
+                since=None,
+                batch_size=job.batch_size or DEFAULT_BATCH_SIZE,
+                cursor_titn=next_cursor,
+                reason="drain",
+            )
+            next_stats = dict(enqueued.stats or {})
+            next_stats["drain_chain"] = chain + 1
+            enqueued.stats = next_stats
+            session.commit()
+            drained = True
+        except JobAlreadyActive:
+            session.rollback()
+            stop_reason = "already_active"
+        except Exception:  # noqa: BLE001
+            session.rollback()
+            logger.exception(
+                "No se pudo encolar el siguiente lote de enriquecimiento",
+                extra={"job_id": job.id, "job_type": job.job_type},
+            )
+            stop_reason = "enqueue_error"
+
+    stats["pending_after"] = pending_total
+    stats["pending_after_cursor"] = pending_after_cursor
+    stats["drain_chain"] = chain
+    stats["drained"] = drained
+    stats["stop_reason"] = stop_reason
+    job.stats = stats
+    session.commit()
+
+
 JobHandler = Callable[[Session, HarvestJob], dict[str, Any] | None]
 
 
@@ -792,6 +856,8 @@ def worker_tick(
         stats = execute_job(session, job, handlers=handlers)
         finish_job(session, job, status="completed", stats=stats)
         session.commit()
+        if job.job_type == "enrich":
+            maybe_chain_enrich(session, job)
         logger.info(
             "Trabajo completado",
             extra={
