@@ -15,10 +15,13 @@ function Meta({ label, value }: { label: string; value: string | number | null |
   );
 }
 
-export function RecordCard({ hit }: { hit: SearchHit }) {
+export function RecordCard({ hit, volver }: { hit: SearchHit; volver?: string }) {
   const title = hit._formatted?.titulo ?? hit.titulo;
   const synopsis = hit._formatted?.sinopsis ?? hit.sinopsis;
   const countries = (hit.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
+  const detailHref = volver
+    ? `/registro/${hit.titn}?volver=${encodeURIComponent(volver)}`
+    : `/registro/${hit.titn}`;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-slate-300">
@@ -38,7 +41,7 @@ export function RecordCard({ hit }: { hit: SearchHit }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <Link
-                href={`/registro/${hit.titn}`}
+                href={detailHref}
                 className="text-lg font-bold leading-tight text-ink underline-offset-4 hover:text-accent hover:underline"
               >
                 <span dangerouslySetInnerHTML={{ __html: title }} />

@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 
 import { LibrarySelect } from "@/components/LibrarySelect";
@@ -68,8 +69,11 @@ export function FacetFilters({
     : libraries;
 
   return (
-    <form action="/buscar" method="get" className="space-y-6">
+    <Form action="/buscar" className="space-y-6">
       {query ? <input type="hidden" name="q" value={query} /> : null}
+      {selectedSort !== "relevancia" ? (
+        <input type="hidden" name="sort" value={selectedSort} />
+      ) : null}
 
       <section>
         <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -189,24 +193,6 @@ export function FacetFilters({
         </div>
       </section>
 
-      <section>
-        <label htmlFor="sort" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-          Ordenar por
-        </label>
-        <select
-          id="sort"
-          name="sort"
-          defaultValue={selectedSort}
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-        >
-          <option value="relevancia">Relevancia</option>
-          <option value="anio_desc">Año (más reciente)</option>
-          <option value="anio_asc">Año (más antiguo)</option>
-          <option value="titulo_asc">Título (A-Z)</option>
-          <option value="duracion_asc">Duración (menor)</option>
-        </select>
-      </section>
-
       <div className="flex flex-col gap-2">
         <button
           type="submit"
@@ -221,6 +207,6 @@ export function FacetFilters({
           Limpiar filtros
         </Link>
       </div>
-    </form>
+    </Form>
   );
 }

@@ -69,7 +69,7 @@ class CatalogSearch:
         idioma: str | None = None,
         paises_origen: list[str] | None = None,
         biblioteca: str | None = None,
-        sort: str | None = None,
+        sort: list[str] | None = None,
         page: int = 1,
         limit: int = 20,
     ) -> dict[str, Any]:
@@ -95,7 +95,7 @@ class CatalogSearch:
             active_filters.append(filters)
         options["filter"] = " AND ".join(active_filters)
         if sort:
-            options["sort"] = [sort]
+            options["sort"] = sort
 
         result = self.index.search(query or "", options)
         hits = result.get("hits", [])

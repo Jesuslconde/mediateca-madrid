@@ -5,8 +5,15 @@ import { LibrariesTable } from "@/components/LibrariesTable";
 import { SupportBadge } from "@/components/SupportBadge";
 import { getRecord, type Persona } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
+import { first, type RawSearchParams } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
+
+function safeVolver(value: string | undefined): string {
+  if (!value || !value.startsWith("/buscar")) return "/buscar";
+  if (value.startsWith("//") || value.startsWith("/\\")) return "/buscar";
+  return value;
+}
 
 function roleGroup(role: string): string {
   const normalized = role.toLowerCase();
@@ -54,10 +61,14 @@ function Meta({ label, value }: { label: string; value: string | number | null |
 
 export default async function RecordPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ titn: string }>;
+  searchParams: Promise<RawSearchParams>;
 }) {
   const { titn } = await params;
+  const sp = await searchParams;
+  const volver = safeVolver(first(sp.volver));
   const record = await getRecord(titn).catch(() => null);
   if (!record) notFound();
 
@@ -72,7 +83,7 @@ export default async function RecordPage({
     <article className="space-y-8">
       <div>
         <Link
-          href="/buscar"
+          href={volver}
           className="text-sm font-medium text-slate-500 underline-offset-4 hover:text-ink hover:underline"
         >
           ← Volver a la búsqueda

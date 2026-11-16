@@ -1,3 +1,5 @@
+import Form from "next/form";
+
 export function SearchBar({
   defaultValue = "",
   compact = false,
@@ -6,9 +8,8 @@ export function SearchBar({
   compact?: boolean;
 }) {
   return (
-    <form
+    <Form
       action="/buscar"
-      method="get"
       className={`flex w-full items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card ${
         compact ? "" : "sm:p-3"
       }`}
@@ -34,6 +35,6 @@ export function SearchBar({
       >
         Buscar
       </button>
-    </form>
+    </Form>
   );
 }

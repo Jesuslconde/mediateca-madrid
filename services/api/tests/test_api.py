@@ -43,6 +43,13 @@ class _FakeMeiliIndex:
         }
 
 
+def _indexer_override(indexer: CatalogSearch):
+    def override() -> CatalogSearch:
+        return indexer
+
+    return override
+
+
 def _catalog_search() -> tuple[CatalogSearch, _FakeMeiliIndex]:
     index = _FakeMeiliIndex()
     search = CatalogSearch.__new__(CatalogSearch)
@@ -427,3 +434,23 @@ def test_openapi_incluye_ubicacion_opcional() -> None:
     ejemplar = schema["components"]["schemas"]["EjemplarOut"]
     assert "ubicacion" in ejemplar["properties"]
     assert "ubicacion" not in ejemplar.get("required", [])
+
+
+def test_search_envia_criterios_de_orden_estables() -> None:
+    esperados = {
+        "anio_desc": ["anio:desc", "titulo:asc"],
+        "anio_asc": ["anio:asc", "titulo:asc"],
+        "duracion_asc": ["duracion_min:asc", "titulo:asc"],
+    }
+    for sort, criterios in esperados.items():
+        search, index = _catalog_search()
+        app.dependency_overrides[get_indexer] = _indexer_override(search)
+        try:
+            client = TestClient(app)
+            response = client.get("/api/search", params={"q": "cine", "sort": sort})
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        assert index.options is not None
+        assert index.options["sort"] == criterios

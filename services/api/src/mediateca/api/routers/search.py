@@ -8,12 +8,12 @@ from mediateca.catalog.search import CatalogSearch
 
 router = APIRouter(tags=["busqueda"])
 
-SORT_MAP: dict[str, str | None] = {
+SORT_MAP: dict[str, list[str] | None] = {
     "relevancia": None,
-    "anio_desc": "anio:desc",
-    "anio_asc": "anio:asc",
-    "titulo_asc": "titulo:asc",
-    "duracion_asc": "duracion_min:asc",
+    "anio_desc": ["anio:desc", "titulo:asc"],
+    "anio_asc": ["anio:asc", "titulo:asc"],
+    "titulo_asc": ["titulo:asc"],
+    "duracion_asc": ["duracion_min:asc", "titulo:asc"],
 }
 
 
