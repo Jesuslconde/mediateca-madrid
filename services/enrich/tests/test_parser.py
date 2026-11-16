@@ -5,7 +5,7 @@ def test_parsea_dvd(dvd_fixture) -> None:
     parsed = parse_file(str(dvd_fixture))
 
     assert parsed.titn == "2101557"
-    assert parsed.titulo.startswith("20.000 especies de abejas")
+    assert parsed.titulo == "20.000 especies de abejas"
     assert parsed.anio == 2023
     assert parsed.duracion_min == 129
     assert parsed.idioma == "spa"
@@ -84,7 +84,7 @@ def test_parsea_listado_de_resultados(search_results_fixture) -> None:
     primero = resultados[0]
     assert primero.doc == 1
     assert primero.titn == "2101557"
-    assert primero.titulo.startswith("20.000 especies de abejas")
+    assert primero.titulo == "20.000 especies de abejas"
     assert primero.anio == 2023
     assert primero.idioma == "spa"
     assert primero.descripcion_fisica.startswith("1 DVD-Video")
@@ -103,3 +103,61 @@ def test_parsea_listado_de_resultados(search_results_fixture) -> None:
     assert resultados[2].anio == 1998
     assert resultados[2].soportes == ["VHS"]
 
+
+
+def test_parse_detail_usa_titulo_completo_y_limpio() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">123</span>
+      <span class="doc_title js-doc_title js-removePunt" data-punt="/">Historia cinematográfica de la Unión Europea : legislación cinematográfica europea / </span>
+      <span class="js-ntitl">Historia cinematográfica de la Unión Europea : </span>
+      <dl class="docu_etiq">
+        <dt>Título uniforme:</dt>
+        <dd>Historia cinematográfica de la Unión Europea (Película cinematográfica)</dd>
+      </dl>
+    </body></html>
+    """
+
+    parsed = parse_detail(html)
+
+    assert parsed.titulo == (
+        "Historia cinematográfica de la Unión Europea : legislación cinematográfica europea"
+    )
+    assert parsed.titulo_uniforme == (
+        "Historia cinematográfica de la Unión Europea (Película cinematográfica)"
+    )
+
+
+def test_parse_search_usa_titulo_visible_sin_responsabilidad() -> None:
+    html = """
+    <ol>
+      <li class="c-docs_unit">
+        <h3><a href="?ACC=165&amp;DOC=1">
+          <span class="c-docs_title">20.000 especies de abejas /</span>
+          <span class="c-docs_titleRest">dirección y guión de Estibaliz Urresola</span>
+        </a></h3>
+        <span class="js-TITN">2101557</span>
+        <span class="js-T245">20.000 especies de abejas / dirección y guión de Estibaliz Urresola</span>
+      </li>
+      <li class="c-docs_unit">
+        <h3><a href="?ACC=165&amp;DOC=2">
+          <span class="c-docs_title">Imágenes y justicia : el Derecho a través del cine /</span>
+        </a></h3>
+        <span class="js-TITN">2</span>
+      </li>
+      <li class="c-docs_unit">
+        <h3><a href="?ACC=165&amp;DOC=3">
+          <span class="js-T245">Alfredo el Grande /Marcos Ordóñez</span>
+        </a></h3>
+        <span class="js-TITN">3</span>
+      </li>
+    </ol>
+    """
+
+    resultados = parse_search_results(html)
+
+    assert [resultado.titulo for resultado in resultados] == [
+        "20.000 especies de abejas",
+        "Imágenes y justicia : el Derecho a través del cine",
+        "Alfredo el Grande",
+    ]

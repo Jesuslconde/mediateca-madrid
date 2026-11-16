@@ -27,6 +27,7 @@ from mediateca.catalog.jobs import (
 )
 from mediateca.catalog.parser import parse_file
 from mediateca.catalog.scheduler import enqueue_due_jobs, run_scheduler
+from mediateca.catalog.title_backfill import backfill_titles
 from mediateca.core.config import settings
 from mediateca.core.config_store import effective_flaresolverr_url
 from mediateca.core.db import get_engine, get_session_factory, init_db, session_scope
@@ -236,6 +237,64 @@ def tmdb_enrich_command(
                 session, stats["processed_titns"]
             )
         console.print(f"[green]{total} ediciones indexadas[/green]")
+
+
+@app.command("normalize-titles")
+def normalize_titles_command(
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplicar los titulos calculados en la base de datos"
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", min=1, help="Numero maximo de ediciones"
+    ),
+    reindex: bool = typer.Option(
+        False,
+        "--reindex",
+        help="Reindexar los TITN modificados (requiere --apply)",
+    ),
+) -> None:
+    """Recalcula los titulos existentes desde el MARC guardado."""
+    configure_logging()
+    indexed = 0
+    with session_scope() as session:
+        stats = backfill_titles(session, apply=apply, limit=limit)
+        if apply and reindex and stats.changed_titns:
+            indexed = MeiliIndexer().index_titns(session, stats.changed_titns)
+
+    table = Table(title="Normalizacion de titulos")
+    table.add_column("Metrica")
+    table.add_column("Valor", justify="right")
+    table.add_row("Modo", "aplicado" if apply else "dry-run")
+    table.add_row("Ediciones leidas", str(stats.scanned))
+    table.add_row("Titulos cambiados", str(stats.changed))
+    table.add_row("Sin cambios", str(stats.unchanged))
+    if reindex:
+        table.add_row(
+            "TITN reindexados",
+            str(indexed) if apply else "no (requiere --apply)",
+        )
+    console.print(table)
+
+    if stats.samples:
+        sample_table = Table(title="Ejemplos de cambios")
+        sample_table.add_column("TITN")
+        sample_table.add_column("Antes")
+        sample_table.add_column("Despues")
+        for change in stats.samples:
+            sample_table.add_row(
+                change.titn,
+                change.old_titulo or "",
+                change.new_titulo or "",
+            )
+        console.print(sample_table)
+
+    if not apply:
+        console.print(
+            "[yellow]Dry-run: no se ha modificado la base de datos. "
+            "Usa --apply para aplicar.[/yellow]"
+        )
+    elif reindex and not stats.changed_titns:
+        console.print("[green]No hay TITN que reindexar.[/green]")
 
 
 @app.command("index")

@@ -101,11 +101,13 @@ para leer `production_countries` con respaldo de `origin_country`, la portada
 ser una API Key v3, enviada como `api_key`, o un Read Access Token v4, enviado
 como `Authorization: Bearer`; el formato se detecta por la forma del token.
 
-El emparejamiento normaliza titulos y exige un ano dentro de +-1 y una similitud
-de al menos 0,90, o coincidencia exacta si la edicion no tiene ano. Los paises se
-normalizan a codigos ISO 3166-1 alfa-2 en mayusculas y se deduplican. El cliente
-aplica el retardo configurado, respeta `Retry-After` y reintenta errores
-temporales con backoff. El token nunca se registra en logs.
+El emparejamiento normaliza titulos: elimina la puntuacion final, los
+calificadores de forma entre parentesis (`Película cinematográfica`, etc.) y la
+mencion de responsabilidad antes de consultar TMDB. Exige un ano dentro de +-1 y
+una similitud de al menos 0,90, o coincidencia exacta si la edicion no tiene ano.
+Los paises se normalizan a codigos ISO 3166-1 alfa-2 en mayusculas y se
+deduplican. El cliente aplica el retardo configurado, respeta `Retry-After` y
+reintenta errores temporales con backoff. El token nunca se registra en logs.
 
 ## Actualizacion manual de metadatos TMDB
 

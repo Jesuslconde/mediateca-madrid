@@ -11,6 +11,11 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
+from mediateca_shared.titles import (
+    clean_title,
+    split_responsibility,
+    strip_form_qualifier,
+)
 
 from mediateca.core.config import settings
 
@@ -81,10 +86,12 @@ def title_candidates(titulo_uniforme: str | None, titulo: str | None) -> list[st
     for raw in (titulo_uniforme, titulo):
         if not raw:
             continue
-        cleaned = re.sub(r"\s*[/:;,.]+$", "", raw.strip()).strip()
-        if cleaned and cleaned not in candidates:
+        cleaned = strip_form_qualifier(clean_title(raw))
+        if not cleaned:
+            continue
+        if cleaned not in candidates:
             candidates.append(cleaned)
-        head = re.split(r"\s+/\s+", cleaned, maxsplit=1)[0].strip()
+        head = clean_title(split_responsibility(cleaned))
         if head and head not in candidates:
             candidates.append(head)
     return candidates

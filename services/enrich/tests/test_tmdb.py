@@ -358,3 +358,23 @@ def test_api_key_v3_no_aparece_en_logs(caplog) -> None:
         client.search_movie("cine")
 
     assert "token-v3" not in caplog.text
+
+
+def test_candidatos_tmdb_limpian_calificadores_y_responsabilidad() -> None:
+    assert title_candidates("Un amor (Película cinematográfica)", "Un amor /") == [
+        "Un amor"
+    ]
+    assert title_candidates(
+        "Angel (Película cinematográfica: 1937)", "Ángel ="
+    ) == ["Angel", "Ángel"]
+    assert title_candidates(None, "Alfredo el Grande /Marcos Ordóñez") == [
+        "Alfredo el Grande /Marcos Ordóñez",
+        "Alfredo el Grande",
+    ]
+    assert title_candidates(
+        "The Prado Museum. A Collection of Wonders (Película cinematográfica)",
+        "Pintores y reyes del Prado :",
+    ) == [
+        "The Prado Museum. A Collection of Wonders",
+        "Pintores y reyes del Prado",
+    ]

@@ -9,6 +9,7 @@ from mediateca_shared.soportes import (
     canonical_soporte,
     detect_soportes,
 )
+from mediateca_shared.titles import clean_title, split_responsibility
 
 try:  # lxml es opcional en pruebas; html.parser siempre esta disponible
     import lxml  # noqa: F401
@@ -371,14 +372,12 @@ def _parse_search_item(scope: Tag) -> ParsedEdicion | None:
     if not titn:
         return None
 
-    titulo = clean(
-        _first_marc_value(marc.get("T245a"))
-        or _first_marc_value(marc.get("T245"))
-        or _js_text(scope, "ntitl")
-        or _text(
-            scope.select_one("a.c-docs_title, h3 a, .c-docs_header a"),
-            strip_trailing=True,
-        )
+    titulo = (
+        clean_title(_text(scope.select_one(".c-docs_title")))
+        or clean_title(_first_marc_value(marc.get("T245ab")))
+        or clean_title(_first_marc_value(marc.get("T245a")))
+        or clean_title(split_responsibility(_first_marc_value(marc.get("T245"))))
+        or clean_title(_js_text(scope, "ntitl"))
     ) or titn
 
     publicacion = (
@@ -465,8 +464,8 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
     if not titn:
         raise ValueError("No se ha podido identificar el TITN de la ficha")
 
-    titulo = _js_text(soup, "ntitl") or _text(
-        soup.select_one(".doc_title"), strip_trailing=True
+    titulo = clean_title(_text(soup.select_one(".doc_title"))) or clean_title(
+        _js_text(soup, "ntitl")
     )
     if not titulo:
         raise ValueError(f"La ficha {titn} no tiene titulo")
@@ -513,7 +512,7 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
     return ParsedEdicion(
         titn=str(titn),
         titulo=titulo,
-        titulo_uniforme=data.get("Título uniforme"),
+        titulo_uniforme=clean_title(data.get("Título uniforme")),
         publicacion=publicacion,
         anio=_extract_year(
             data.get("Año"),
