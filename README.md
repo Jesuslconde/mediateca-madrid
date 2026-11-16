@@ -45,6 +45,7 @@ make init
 make migrate
 make harvest q=cine pages=2 limit=20
 make branches
+make branches-enqueue
 make index
 make dashboard
 make psql
@@ -61,6 +62,8 @@ Las pruebas se ejecutan en las imagenes correspondientes, de modo que API e inge
 ## Sucursales y orden por cercania
 
 `make branches` actualiza direcciones, codigos postales y coordenadas de las sucursales desde el Directorio de Bibliotecas de la Comunidad de Madrid. El comando es idempotente, no borra sucursales ausentes y no geocodifica direcciones: si una ficha no trae coordenadas, el portal usa el centroide de su codigo postal. Para una prueba limitada: `make branches branches_limit=20`.
+
+La misma actualizacion puede encolarse como tarea manual con `make branches-enqueue` (o `python -m mediateca enqueue-branches`) y desde el boton "Recargar direcciones de bibliotecas" del dashboard. Esa tarea solo actualiza bibliotecas y sucursales que ya existen en el catalogo; las fichas desconocidas se omiten y no se crean registros nuevos. El scheduler no la ejecuta automaticamente.
 
 En la ficha de un registro se puede elegir un codigo postal para ordenar las bibliotecas por cercania. Sin seleccion, el orden es alfabetico. La eleccion se guarda en `localStorage`; no se solicita geolocalizacion del navegador. Las distancias son aproximadas.
 

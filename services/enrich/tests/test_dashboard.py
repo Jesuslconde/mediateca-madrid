@@ -144,6 +144,7 @@ def test_conteos_por_estado_y_tipo() -> None:
         "enrich": 1,
         "index": 1,
         "tmdb": 0,
+        "branches": 0,
     }
 
 
@@ -605,6 +606,32 @@ def test_post_job_encola_descubrimiento(monkeypatch, tmp_path) -> None:
     assert response.headers["location"].startswith("/tareas")
     assert job is not None
     assert job.status == "pending"
+
+
+def test_post_job_encola_recarga_de_bibliotecas(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs",
+            data={"job_type": "branches"},
+            follow_redirects=False,
+        )
+        job = session.scalars(
+            select(HarvestJob).where(HarvestJob.job_type == "branches")
+        ).first()
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/tareas")
+    assert job is not None
+    assert job.status == "pending"
+    assert job.stats["reason"] == "dashboard"
+    assert job.stats["only_known"] is True
 
 
 def test_post_job_encola_tmdb(monkeypatch, tmp_path) -> None:

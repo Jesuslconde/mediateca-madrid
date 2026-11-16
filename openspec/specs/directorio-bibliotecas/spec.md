@@ -97,12 +97,19 @@ El sistema SHALL usar únicamente la coordenada `ll=` del enlace de mapa y SHALL
 
 ### Requirement: Actualización manual y cobertura
 
-El sistema SHALL ofrecer un comando de actualización manual e idempotente del directorio, con retardo configurable y límite opcional, que SHALL informar de fichas leídas, con `SUBC`, con código postal, con coordenadas, emparejadas y omitidas. SHALL NOT borrar sucursales ausentes ni geocodificar direcciones en esta versión.
+El sistema SHALL ofrecer un comando de actualización manual e idempotente del directorio y SHALL permitir encolar la misma actualización como trabajo `branches` desde el dashboard o la CLI. La actualización SHALL usar retardo configurable y límite opcional y SHALL informar de fichas leídas, con `SUBC`, con código postal, con coordenadas, emparejadas y omitidas. SHALL NOT borrar sucursales ausentes ni geocodificar direcciones en esta versión.
 
 #### Scenario: Resumen de cobertura
 
 - **WHEN** termina una actualización del directorio
-- **THEN** el comando muestra el número de fichas leídas, con `SUBC`, con código postal, con coordenadas, emparejadas y omitidas
+- **THEN** el comando o el trabajo muestra el número de fichas leídas, con `SUBC`, con código postal, con coordenadas, emparejadas y omitidas
+
+#### Scenario: Recarga de bibliotecas conocidas
+
+- **WHEN** se ejecuta la tarea `branches` sobre un catálogo con bibliotecas y sucursales existentes
+- **THEN** solo se actualizan las bibliotecas y sucursales ya conocidas
+- **AND** las fichas de códigos desconocidos se contabilizan como omitidas
+- **AND** no se crean bibliotecas ni sucursales nuevas
 
 #### Scenario: Sucursal ausente
 

@@ -8,7 +8,7 @@ Ejecutar trabajos de ingesta largos y reanudables fuera del scheduler, con una c
 
 ### Requirement: Encolado de trabajos
 
-El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich`, `index` y `tmdb` con un lote y un cursor inicial desde la CLI o el dashboard. El scheduler SHALL limitarse a encolar `discover`, `enrich` e `index`.
+El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich`, `index`, `tmdb` y `branches` con un lote y un cursor inicial desde la CLI o el dashboard. El scheduler SHALL limitarse a encolar `discover`, `enrich` e `index`; `tmdb` y `branches` SHALL ser siempre manuales.
 
 #### Scenario: Encolar enriquecimiento
 
@@ -26,6 +26,12 @@ El sistema MUST permitir encolar trabajos de tipo `discover`, `enrich`, `index` 
 
 - **WHEN** el operador solicita una actualización de metadatos TMDB desde el dashboard
 - **THEN** se crea un trabajo `pending` de tipo `tmdb` con el lote y el modo de refresco indicados
+- **AND** el worker lo ejecuta cuando esté libre
+
+#### Scenario: Encolar recarga de bibliotecas
+
+- **WHEN** el operador solicita una recarga de direcciones de bibliotecas desde el dashboard o la CLI
+- **THEN** se crea un trabajo `pending` de tipo `branches`
 - **AND** el worker lo ejecuta cuando esté libre
 
 ### Requirement: Reclamo atómico
@@ -169,3 +175,20 @@ El sistema MUST NOT encolar trabajos de tipo `tmdb` desde el scheduler. El traba
 - **WHEN** no hay ningún trabajo `tmdb` activo y el operador lo solicita manualmente
 - **THEN** se crea un trabajo `tmdb` en estado `pending`
 - **AND** no se crea ningún otro trabajo `tmdb` mientras siga activo
+
+### Requirement: Recarga de bibliotecas solo manual
+
+El sistema MUST NOT encolar trabajos de tipo `branches` desde el scheduler. El trabajo `branches` SHALL crearse solo por una acción explícita del operador desde el dashboard o la CLI y SHALL actualizar únicamente bibliotecas y sucursales que ya existan en el catálogo.
+
+#### Scenario: Scheduler sin recarga de bibliotecas
+
+- **WHEN** el scheduler comprueba los intervalos configurados
+- **THEN** no crea ningún trabajo de tipo `branches`
+- **AND** solo puede encolar `discover`, `enrich` e `index`
+
+#### Scenario: Recarga solo de bibliotecas conocidas
+
+- **WHEN** el operador lanza una recarga de bibliotecas
+- **THEN** se crea un trabajo `branches` en estado `pending`
+- **AND** el trabajo omite las fichas de bibliotecas o sucursales que no existan previamente
+- **AND** no crea bibliotecas ni sucursales nuevas

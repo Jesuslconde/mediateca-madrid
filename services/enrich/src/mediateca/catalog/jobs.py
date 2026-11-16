@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -199,6 +199,21 @@ def enqueue_tmdb_job(
         batch_size=batch_size,
         stats={"reason": reason, "refresh": refresh},
     )
+
+
+def enqueue_branches_job(
+    session: Session,
+    *,
+    delay: float | None = None,
+    max_pages: int | None = None,
+    reason: str = "manual",
+) -> HarvestJob:
+    stats: dict[str, object] = {"reason": reason, "only_known": True}
+    if delay is not None:
+        stats["delay"] = delay
+    if max_pages is not None:
+        stats["max_pages"] = max_pages
+    return enqueue_job(session, "branches", stats=stats)
 
 
 def claim_job(
@@ -757,11 +772,31 @@ def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
     return stats
 
 
+def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
+    from mediateca.catalog.directory import DirectoryClient, refresh_sucursales
+
+    stats = dict(job.stats or {})
+    delay = stats.get("delay")
+    if delay is None:
+        delay = settings.crawl_delay
+    max_pages = stats.get("max_pages")
+
+    with DirectoryClient(delay=float(delay)) as client:
+        result = refresh_sucursales(
+            session,
+            client,
+            max_pages=int(max_pages) if max_pages is not None else None,
+            only_known=True,
+        )
+    return asdict(result)
+
+
 DEFAULT_HANDLERS: dict[str, JobHandler] = {
     "discover": _discover_handler,
     "enrich": _enrich_handler,
     "index": _index_handler,
     "tmdb": _tmdb_handler,
+    "branches": _branches_handler,
 }
 
 

@@ -228,7 +228,7 @@ El sistema MUST responder con un estado de error comprensible cuando la base de 
 
 ### Requirement: Tareas bajo demanda
 
-El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento, indexación y actualización de metadatos TMDB, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo. La actualización TMDB SHALL permitir elegir el lote y reactualizar también las ediciones ya sincronizadas, y MUST rechazarse si no hay token de TMDB configurado.
+El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo. La actualización TMDB SHALL permitir elegir el lote y reactualizar también las ediciones ya sincronizadas, y MUST rechazarse si no hay token de TMDB configurado. La recarga de bibliotecas SHALL actualizar solo bibliotecas y sucursales ya conocidas.
 
 #### Scenario: Buscar novedades
 
@@ -247,6 +247,13 @@ El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento co
 - **WHEN** el operador pulsa "Actualizar metadatos TMDB" con un lote y, opcionalmente, la casilla de refresco
 - **THEN** se encola un trabajo `tmdb` con el lote y el modo indicados
 - **AND** el trabajo se ejecuta en el worker y queda registrado en el historial
+
+#### Scenario: Recargar direcciones de bibliotecas
+
+- **WHEN** el operador pulsa "Recargar direcciones de bibliotecas"
+- **THEN** se encola un trabajo `branches`
+- **AND** el trabajo solo actualiza bibliotecas y sucursales ya conocidas
+- **AND** las fichas desconocidas se omiten sin crear registros nuevos
 
 #### Scenario: Actualización TMDB sin token
 
@@ -338,7 +345,7 @@ La página de Inicio MUST mostrar únicamente la salud del worker, el resumen de
 
 ### Requirement: Página de Tareas
 
-La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento, indexación y actualización de metadatos TMDB. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura.
+La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura.
 
 #### Scenario: Visualización de trabajos
 
@@ -348,7 +355,7 @@ La página de Tareas MUST mostrar los trabajos recientes y las acciones de descu
 
 #### Scenario: Acciones bajo demanda
 
-- **WHEN** el operador pulsa una acción de descubrimiento, enriquecimiento, indexación o actualización TMDB
+- **WHEN** el operador pulsa una acción de descubrimiento, enriquecimiento, indexación, actualización TMDB o recarga de bibliotecas
 - **THEN** se encola el trabajo con las mismas reglas que en la vista anterior
 - **AND** las acciones con un trabajo activo del mismo tipo siguen deshabilitadas
 

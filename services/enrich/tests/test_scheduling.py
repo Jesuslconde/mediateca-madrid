@@ -354,6 +354,25 @@ def test_scheduler_no_encola_la_tarea_manual_tmdb() -> None:
     assert tmdb_jobs == []
 
 
+def test_scheduler_no_encola_la_recarga_de_bibliotecas() -> None:
+    session = _session()
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    _completed_discover(session, created_at=now - timedelta(hours=1))
+    session.commit()
+
+    enqueue_due_jobs(
+        session,
+        now=now,
+        settings=ScheduleSettings(True, 12, 168, 12, 100),
+    )
+    session.commit()
+
+    branches_jobs = list(
+        session.scalars(select(HarvestJob).where(HarvestJob.job_type == "branches"))
+    )
+    assert branches_jobs == []
+
+
 def test_scheduler_respeta_trabajos_activos() -> None:
     session = _session()
     enqueue_job(session, "discover")

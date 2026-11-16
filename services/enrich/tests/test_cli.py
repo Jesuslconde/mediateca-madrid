@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
-from mediateca_shared.models import Edicion
+from mediateca_shared.models import Edicion, HarvestJob
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -115,6 +115,25 @@ def test_cli_incluye_el_comando_dashboard() -> None:
 
     assert result.exit_code == 0
     assert "dashboard" in result.output
+
+
+def test_cli_enqueue_branches_crea_el_trabajo(monkeypatch) -> None:
+    session = _session()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(cli_module.app, ["enqueue-branches"])
+
+    assert result.exit_code == 0, result.output
+    job = session.scalars(select(HarvestJob)).one()
+    assert job.job_type == "branches"
+    assert job.status == "pending"
+    assert job.stats["only_known"] is True
 
 
 def test_cli_discover_usa_la_url_de_flaresolverr(monkeypatch) -> None:

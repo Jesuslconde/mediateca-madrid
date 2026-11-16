@@ -17,8 +17,10 @@ from mediateca.catalog.harvester import Harvester, OpacClient
 from mediateca.catalog.indexer import MeiliIndexer
 from mediateca.catalog.jobs import (
     DEFAULT_HANDLERS,
+    JobAlreadyActive,
     build_tmdb_client,
     coverage,
+    enqueue_branches_job,
     ingest_metrics,
     recent_jobs,
     run_worker,
@@ -104,6 +106,22 @@ def refresh_branches_command(
     table.add_row("Bibliotecas moviles", str(stats.mobile))
     table.add_row("Omitidas", str(stats.omitted))
     console.print(table)
+
+
+@app.command("enqueue-branches")
+def enqueue_branches_command() -> None:
+    """Encola la recarga de direcciones de bibliotecas ya conocidas."""
+    configure_logging()
+    with session_scope() as session:
+        try:
+            job = enqueue_branches_job(session, reason="cli")
+        except JobAlreadyActive as exc:
+            console.print(f"[yellow]{exc}[/yellow]")
+            raise typer.Exit(code=1) from exc
+        session.commit()
+    console.print(
+        f"[green]Trabajo {job.id} ({job.job_type}) encolado[/green]"
+    )
 
 
 @app.command("harvest")

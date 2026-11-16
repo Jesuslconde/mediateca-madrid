@@ -121,6 +121,17 @@ las ya sincronizadas, ordenadas por `tmdb_enriched_at` mas antiguo y luego por
 `TITN`, para rotar los lotes. Al terminar indexa los `TITN` procesados con
 `index_titns`.
 
+## Actualizacion manual de direcciones de bibliotecas
+
+La cola admite un trabajo de tipo `branches` que recorre el Directorio de
+Bibliotecas de la Comunidad de Madrid y actualiza direccion, codigo postal y
+coordenadas de las sucursales. Se lanza unicamente a mano desde `Tareas`
+(`/tareas`), con `mediateca enqueue-branches` o `make branches-enqueue`; el
+scheduler nunca lo encola. La tarea precarga los codigos de `Biblioteca` y
+`Sucursal` existentes, omite las fichas de codigos desconocidos y no crea
+bibliotecas ni sucursales nuevas. El comando directo `refresh-branches` conserva
+el comportamiento completo anterior.
+
 ## Cursor, reintentos y errores
 
 El trabajo `enrich` guarda el ultimo `TITN` procesado en `cursor_titn` y actualiza

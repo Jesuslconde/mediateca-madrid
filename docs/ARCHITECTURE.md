@@ -24,7 +24,7 @@ services/enrich                  services/api + apps/web
 
 1. **Descubrimiento**: enrich consulta el OPAC y crea stubs con cursor y marcas de progreso.
 2. **Enriquecimiento**: enrich descarga cada ficha, normaliza metadatos y ejemplares y actualiza PostgreSQL.
-3. **Directorio**: `mediateca refresh-branches` lee el Directorio de Bibliotecas de la Comunidad de Madrid y completa direccion, codigo postal y coordenadas de las sucursales.
+3. **Directorio**: `mediateca refresh-branches` lee el Directorio de Bibliotecas de la Comunidad de Madrid y completa direccion, codigo postal y coordenadas de las sucursales. La misma actualizacion puede encolarse como trabajo manual `branches` desde `mediateca enqueue-branches` o el dashboard; en ese caso solo actualiza bibliotecas y sucursales ya conocidas y nunca crea registros nuevos.
 4. **Indexacion**: enrich actualiza Meilisearch al terminar cada lote.
 5. **Lectura**: la API consulta PostgreSQL para fichas y bibliotecas, y Meilisearch para busqueda y facetas.
 6. **Portal**: Next.js consume la API; no accede directamente a la base ni al indice. La ordenacion por cercania se calcula en el cliente a partir del codigo postal elegido.

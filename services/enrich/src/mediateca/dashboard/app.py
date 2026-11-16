@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from mediateca.api.routers.ingest import router as ingest_router
 from mediateca.catalog.jobs import (
     JobAlreadyActive,
+    enqueue_branches_job,
     enqueue_discover_job,
     enqueue_enrich_job,
     enqueue_index_job,
@@ -438,6 +439,8 @@ async def enqueue_job_from_dashboard(
             )
         elif job_type == "index":
             job = enqueue_index_job(session)
+        elif job_type == "branches":
+            job = enqueue_branches_job(session, reason="dashboard")
         elif job_type == "tmdb":
             if not effective_tmdb_api_token(session):
                 raise ValueError(

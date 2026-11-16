@@ -29,6 +29,12 @@
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
+        <input type="hidden" name="job_type" value="branches">
+        <button type="submit" {% if active_jobs['branches'] or not is_admin %}disabled{% endif %}>Recargar direcciones de bibliotecas</button>
+        <span class="muted">Solo actualiza bibliotecas y sucursales ya conocidas</span>
+      </form>
+      <form method="post" action="/jobs">
+        <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="tmdb">
         <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
         <label><input type="checkbox" name="refresh" value="true"> Reactualizar también las ya sincronizadas</label>

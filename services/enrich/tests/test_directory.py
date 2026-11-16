@@ -281,6 +281,52 @@ class _FakeDirectoryClient:
         yield from self.records
 
 
+def test_refresh_sucursales_solo_conocidas_no_crea_nuevas() -> None:
+    session = _session()
+    biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
+    sucursal = Sucursal(
+        biblioteca=biblioteca,
+        codigo="BMALC1",
+        nombre="Cardenal Cisneros",
+    )
+    session.add_all([biblioteca, sucursal])
+    session.commit()
+
+    conocida = ParsedSucursal(
+        biblioteca_codigo="RBMALC",
+        sucursal_codigo="BMALC1",
+        nombre="Cardenal Cisneros",
+        direccion="Nueva dirección, 1",
+        codigo_postal="28801",
+    )
+    sucursal_desconocida = replace(conocida, sucursal_codigo="BMALC9")
+    biblioteca_nivel = ParsedSucursal(
+        biblioteca_codigo="RBMALC",
+        sucursal_codigo=None,
+        nombre="Bibliotecas Municipales Alcalá",
+        direccion="Plaza de San Julián, 1",
+        codigo_postal="28801",
+    )
+    biblioteca_desconocida = replace(conocida, biblioteca_codigo="DESCONOCIDA")
+
+    stats = refresh_sucursales(
+        session,
+        _FakeDirectoryClient(
+            [conocida, sucursal_desconocida, biblioteca_nivel, biblioteca_desconocida]
+        ),
+        only_known=True,
+    )
+    session.commit()
+
+    assert stats.records == 4
+    assert stats.branches_matched == 1
+    assert stats.libraries_updated == 1
+    assert stats.omitted == 2
+    assert session.scalar(select(func.count(Sucursal.id))) == 1
+    assert sucursal.direccion == "Nueva dirección, 1"
+    assert biblioteca.direccion == "Plaza de San Julián, 1"
+
+
 def test_refresh_sucursales_y_cobertura() -> None:
     session = _session()
     session.add(Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá"))

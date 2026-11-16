@@ -16,6 +16,7 @@ from mediateca.catalog.jobs import (
     coverage,
     create_job,
     create_stub,
+    enqueue_branches_job,
     enqueue_enrich_job,
     enqueue_job,
     enqueue_tmdb_job,
@@ -291,6 +292,63 @@ def test_enqueue_tmdb_job_guarda_el_modo() -> None:
     assert job.status == "pending"
     assert job.batch_size == 123
     assert job.stats == {"reason": "manual", "refresh": True}
+
+
+def test_enqueue_branches_job_guarda_solo_conocidas() -> None:
+    session = _session()
+
+    job = enqueue_branches_job(session, delay=0.5, max_pages=2)
+    session.commit()
+
+    assert job.job_type == "branches"
+    assert job.status == "pending"
+    assert job.stats == {
+        "reason": "manual",
+        "only_known": True,
+        "delay": 0.5,
+        "max_pages": 2,
+    }
+
+
+def test_worker_ejecuta_el_handler_branches(monkeypatch) -> None:
+    import mediateca.catalog.directory as directory_module
+    from mediateca.catalog.directory import RefreshStats
+
+    session = _session()
+    job = enqueue_branches_job(session, delay=0.25, max_pages=3)
+    session.commit()
+
+    visto: dict[str, object] = {}
+
+    class FakeDirectoryClient:
+        def __init__(self, *, delay) -> None:  # noqa: ANN001
+            visto["delay"] = delay
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    def fake_refresh(session, client, *, max_pages=None, only_known=False):  # noqa: ANN001
+        visto["max_pages"] = max_pages
+        visto["only_known"] = only_known
+        return RefreshStats(records=3, branches_matched=1, libraries_updated=1)
+
+    monkeypatch.setattr(directory_module, "DirectoryClient", FakeDirectoryClient)
+    monkeypatch.setattr(directory_module, "refresh_sucursales", fake_refresh)
+
+    processed, backoff = worker_tick(session)
+    session.commit()
+
+    assert processed is not None
+    assert processed.id == job.id
+    assert processed.status == "completed"
+    assert processed.stats["records"] == 3
+    assert processed.stats["branches_matched"] == 1
+    assert processed.stats["libraries_updated"] == 1
+    assert visto == {"delay": 0.25, "max_pages": 3, "only_known": True}
+    assert backoff == 0.0
 
 
 def test_worker_ejecuta_el_handler_tmdb(monkeypatch) -> None:
