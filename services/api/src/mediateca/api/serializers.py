@@ -2,13 +2,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from mediateca_shared.models import Edicion
+from mediateca_shared.models import Edicion, Ejemplar
 
 from mediateca.core.config import settings
 
 
 def _opac_permalink(titn: str) -> str:
     return f"{settings.opac_base_url.rstrip('/')}{settings.opac_path}?TITN={titn}"
+
+
+def _ubicacion(ejemplar: Ejemplar) -> dict[str, Any] | None:
+    """Resuelve la ubicacion del ejemplar: sucursal, biblioteca o nada."""
+    if ejemplar.sucursal is not None:
+        datos = {
+            "codigo_postal": ejemplar.sucursal.codigo_postal,
+            "municipio": ejemplar.sucursal.municipio,
+            "latitud": ejemplar.sucursal.latitud,
+            "longitud": ejemplar.sucursal.longitud,
+        }
+    else:
+        datos = {
+            "codigo_postal": ejemplar.biblioteca.codigo_postal,
+            "municipio": ejemplar.biblioteca.municipio,
+            "latitud": ejemplar.biblioteca.latitud,
+            "longitud": ejemplar.biblioteca.longitud,
+        }
+    if all(value is None for value in datos.values()):
+        return None
+    return datos
 
 
 def serialize_record(edicion: Edicion) -> dict[str, Any]:
@@ -51,6 +72,7 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
                 "signatura": ejemplar.signatura,
                 "tipo_ejemplar": ejemplar.tipo_ejemplar,
                 "soporte": ejemplar.soporte,
+                "ubicacion": _ubicacion(ejemplar),
             }
             for ejemplar in edicion.ejemplares
         ],

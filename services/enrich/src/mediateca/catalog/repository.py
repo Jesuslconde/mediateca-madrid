@@ -5,6 +5,7 @@ import re
 import unicodedata
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from mediateca_shared.models import (
     Biblioteca,
@@ -16,6 +17,7 @@ from mediateca_shared.models import (
     Materia,
     Obra,
     Persona,
+    Sucursal,
 )
 from mediateca_shared.soportes import soporte_principal
 from sqlalchemy import func, select
@@ -23,6 +25,9 @@ from sqlalchemy.orm import Session
 
 from mediateca.catalog.jobs import mark_enriched
 from mediateca.catalog.parser import ParsedEdicion
+
+if TYPE_CHECKING:
+    from mediateca.catalog.directory import ParsedSucursal
 
 
 def _fold(value: str) -> str:
@@ -103,6 +108,63 @@ def get_or_create_biblioteca(
     elif nombre and biblioteca.nombre != nombre:
         biblioteca.nombre = nombre
     return biblioteca
+
+
+def update_biblioteca_location(
+    session: Session, biblioteca: Biblioteca, parsed: ParsedSucursal
+) -> None:
+    """Actualiza la ubicacion de respaldo de una biblioteca sin borrar datos."""
+    if parsed.municipio is not None:
+        biblioteca.municipio = parsed.municipio
+    if parsed.direccion is not None:
+        biblioteca.direccion = parsed.direccion
+    if parsed.codigo_postal is not None:
+        biblioteca.codigo_postal = parsed.codigo_postal
+    if parsed.latitud is not None:
+        biblioteca.latitud = parsed.latitud
+    if parsed.longitud is not None:
+        biblioteca.longitud = parsed.longitud
+    session.flush()
+
+
+def upsert_sucursal(
+    session: Session, biblioteca: Biblioteca, parsed: ParsedSucursal
+) -> Sucursal:
+    """Crea o actualiza una sucursal por codigo, sin duplicados ni borrados."""
+    if parsed.sucursal_codigo is None:
+        raise ValueError("La ficha del directorio no tiene codigo de sucursal")
+
+    sucursal = session.scalars(
+        select(Sucursal).where(Sucursal.codigo == parsed.sucursal_codigo)
+    ).first()
+    if sucursal is None:
+        sucursal = Sucursal(
+            biblioteca=biblioteca,
+            codigo=parsed.sucursal_codigo,
+            nombre=parsed.nombre,
+            municipio=parsed.municipio,
+            direccion=parsed.direccion,
+            codigo_postal=parsed.codigo_postal,
+            latitud=parsed.latitud,
+            longitud=parsed.longitud,
+        )
+        session.add(sucursal)
+    else:
+        sucursal.biblioteca = biblioteca
+        if parsed.nombre:
+            sucursal.nombre = parsed.nombre
+        if parsed.municipio is not None:
+            sucursal.municipio = parsed.municipio
+        if parsed.direccion is not None:
+            sucursal.direccion = parsed.direccion
+        if parsed.codigo_postal is not None:
+            sucursal.codigo_postal = parsed.codigo_postal
+        if parsed.latitud is not None:
+            sucursal.latitud = parsed.latitud
+        if parsed.longitud is not None:
+            sucursal.longitud = parsed.longitud
+    session.flush()
+    return sucursal
 
 
 def _get_or_create_persona(session: Session, nombre: str) -> Persona:

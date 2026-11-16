@@ -10,6 +10,7 @@ from mediateca_shared.schemas import (
     RecordDetail,
     SearchResponse,
     StatsResponse,
+    UbicacionOut,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "RecordDetail",
     "SearchResponse",
     "StatsResponse",
+    "UbicacionOut",
 ]

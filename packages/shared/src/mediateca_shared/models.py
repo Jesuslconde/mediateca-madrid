@@ -115,10 +115,35 @@ class Biblioteca(Base):
     nombre: Mapped[str] = mapped_column(String(500), index=True)
     municipio: Mapped[str | None] = mapped_column(String(250), index=True)
     direccion: Mapped[str | None] = mapped_column(Text)
+    codigo_postal: Mapped[str | None] = mapped_column(String(5))
     latitud: Mapped[float | None] = mapped_column(Float)
     longitud: Mapped[float | None] = mapped_column(Float)
 
     ejemplares: Mapped[list[Ejemplar]] = relationship(back_populates="biblioteca")
+    sucursales: Mapped[list[Sucursal]] = relationship(
+        back_populates="biblioteca", cascade="all, delete-orphan"
+    )
+
+
+class Sucursal(Base):
+    __tablename__ = "sucursales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    biblioteca_id: Mapped[int] = mapped_column(
+        ForeignKey("bibliotecas.id", ondelete="CASCADE"), index=True
+    )
+    codigo: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    nombre: Mapped[str] = mapped_column(String(500))
+    municipio: Mapped[str | None] = mapped_column(String(250), index=True)
+    direccion: Mapped[str | None] = mapped_column(Text)
+    codigo_postal: Mapped[str | None] = mapped_column(String(5), index=True)
+    latitud: Mapped[float | None] = mapped_column(Float)
+    longitud: Mapped[float | None] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    biblioteca: Mapped[Biblioteca] = relationship(back_populates="sucursales")
 
 
 class Ejemplar(Base):
@@ -146,6 +171,12 @@ class Ejemplar(Base):
 
     edicion: Mapped[Edicion] = relationship(back_populates="ejemplares")
     biblioteca: Mapped[Biblioteca] = relationship(back_populates="ejemplares")
+    sucursal: Mapped[Sucursal | None] = relationship(
+        "Sucursal",
+        primaryjoin="foreign(Ejemplar.sucursal_codigo) == Sucursal.codigo",
+        viewonly=True,
+        uselist=False,
+    )
 
 
 class Persona(Base):

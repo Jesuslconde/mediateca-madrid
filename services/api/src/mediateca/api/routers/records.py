@@ -25,6 +25,7 @@ def get_record(titn: str, session: Session = Depends(get_db)) -> RecordDetail:
         .options(
             joinedload(Edicion.obra),
             selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
+            selectinload(Edicion.ejemplares).selectinload(Ejemplar.sucursal),
             selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
             selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
             selectinload(Edicion.enlaces),

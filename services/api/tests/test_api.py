@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-from mediateca_shared.models import Edicion
+from mediateca_shared.db import Base
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Sucursal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from mediateca.api.deps import get_db, get_indexer
 from mediateca.api.main import app
@@ -293,3 +297,133 @@ def test_record_devuelve_portada_y_enlace_de_tmdb() -> None:
     body = response.json()
     assert body["tmdb_poster_url"] == "https://image.tmdb.org/t/p/w500/poster.jpg"
     assert body["tmdb_url"] == "https://www.themoviedb.org/movie/10"
+
+
+def _sqlite_session():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, expire_on_commit=False)()
+
+
+def _record_with_location(
+    *,
+    with_sucursal: bool = True,
+    sucursal_coords: bool = True,
+    biblioteca_coords: bool = True,
+):
+    session = _sqlite_session()
+    biblioteca = Biblioteca(
+        codigo="RBMALC",
+        nombre="Bibliotecas Municipales Alcalá",
+        municipio="Alcalá de Henares",
+        codigo_postal="28801",
+        latitud=40.48156 if biblioteca_coords else None,
+        longitud=-3.36521 if biblioteca_coords else None,
+    )
+    edicion = Edicion(titn="2101557", titulo="Abejas")
+    session.add_all([biblioteca, edicion])
+    if with_sucursal:
+        session.add(
+            Sucursal(
+                biblioteca=biblioteca,
+                codigo="BMALC1",
+                nombre="Cardenal Cisneros",
+                municipio="Alcalá de Henares",
+                codigo_postal="28801",
+                latitud=40.480773 if sucursal_coords else None,
+                longitud=-3.362149 if sucursal_coords else None,
+            )
+        )
+    session.add(
+        Ejemplar(
+            edicion=edicion,
+            biblioteca=biblioteca,
+            external_key="k1",
+            sucursal_codigo="BMALC1" if with_sucursal else None,
+            sucursal_nombre="Cardenal Cisneros" if with_sucursal else None,
+        )
+    )
+    session.commit()
+    return session
+
+
+def _get_record_with_session(session):
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        client = TestClient(app)
+        return client.get("/api/records/2101557")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_record_incluye_ubicacion_de_sucursal() -> None:
+    session = _record_with_location()
+    try:
+        response = _get_record_with_session(session)
+    finally:
+        session.close()
+
+    assert response.status_code == 200
+    ubicacion = response.json()["ejemplares"][0]["ubicacion"]
+    assert ubicacion == {
+        "codigo_postal": "28801",
+        "municipio": "Alcalá de Henares",
+        "latitud": 40.480773,
+        "longitud": -3.362149,
+    }
+
+
+def test_record_ubicacion_solo_codigo_postal() -> None:
+    session = _record_with_location(sucursal_coords=False)
+    try:
+        response = _get_record_with_session(session)
+    finally:
+        session.close()
+
+    assert response.status_code == 200
+    ubicacion = response.json()["ejemplares"][0]["ubicacion"]
+    assert ubicacion["codigo_postal"] == "28801"
+    assert ubicacion["latitud"] is None
+    assert ubicacion["longitud"] is None
+
+
+def test_record_ubicacion_fallback_biblioteca() -> None:
+    session = _record_with_location(with_sucursal=False)
+    try:
+        response = _get_record_with_session(session)
+    finally:
+        session.close()
+
+    assert response.status_code == 200
+    ubicacion = response.json()["ejemplares"][0]["ubicacion"]
+    assert ubicacion["codigo_postal"] == "28801"
+    assert ubicacion["latitud"] == 40.48156
+    assert ubicacion["longitud"] == -3.36521
+
+
+def test_record_sin_ubicacion() -> None:
+    session = _record_with_location(
+        with_sucursal=False, biblioteca_coords=False
+    )
+    biblioteca = session.query(Biblioteca).one()
+    biblioteca.municipio = None
+    biblioteca.codigo_postal = None
+    session.commit()
+    try:
+        response = _get_record_with_session(session)
+    finally:
+        session.close()
+
+    assert response.status_code == 200
+    assert response.json()["ejemplares"][0]["ubicacion"] is None
+
+
+def test_openapi_incluye_ubicacion_opcional() -> None:
+    schema = app.openapi()
+    ejemplar = schema["components"]["schemas"]["EjemplarOut"]
+    assert "ubicacion" in ejemplar["properties"]
+    assert "ubicacion" not in ejemplar.get("required", [])

@@ -415,3 +415,50 @@ def test_cli_tmdb_enrich_indexa_los_titn_procesados(monkeypatch, tmp_path) -> No
 
     assert result.exit_code == 0, result.output
     assert indexer.calls == [["1"]]
+
+
+def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
+    from mediateca.catalog.directory import RefreshStats
+
+    session = _session()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    class FakeDirectoryClient:
+        def __init__(self, *args, **kwargs) -> None:
+            self.delay = 0.0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    seen: dict[str, int | None] = {}
+
+    def fake_refresh(session_arg, client, *, limit=None, max_pages=None):
+        seen["limit"] = limit
+        seen["max_pages"] = max_pages
+        return RefreshStats(
+            records=2,
+            with_subc=2,
+            with_postal_code=2,
+            with_coordinates=1,
+            branches_matched=2,
+        )
+
+    monkeypatch.setattr(cli_module, "DirectoryClient", FakeDirectoryClient)
+    monkeypatch.setattr(cli_module, "refresh_sucursales", fake_refresh)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(
+        cli_module.app,
+        ["refresh-branches", "--limit", "2", "--max-pages", "1", "--delay", "0"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen == {"limit": 2, "max_pages": 1}
+    assert "Fichas leidas" in result.output

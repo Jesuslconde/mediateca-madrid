@@ -24,9 +24,10 @@ services/enrich                  services/api + apps/web
 
 1. **Descubrimiento**: enrich consulta el OPAC y crea stubs con cursor y marcas de progreso.
 2. **Enriquecimiento**: enrich descarga cada ficha, normaliza metadatos y ejemplares y actualiza PostgreSQL.
-3. **Indexacion**: enrich actualiza Meilisearch al terminar cada lote.
-4. **Lectura**: la API consulta PostgreSQL para fichas y bibliotecas, y Meilisearch para busqueda y facetas.
-5. **Portal**: Next.js consume la API; no accede directamente a la base ni al indice.
+3. **Directorio**: `mediateca refresh-branches` lee el Directorio de Bibliotecas de la Comunidad de Madrid y completa direccion, codigo postal y coordenadas de las sucursales.
+4. **Indexacion**: enrich actualiza Meilisearch al terminar cada lote.
+5. **Lectura**: la API consulta PostgreSQL para fichas y bibliotecas, y Meilisearch para busqueda y facetas.
+6. **Portal**: Next.js consume la API; no accede directamente a la base ni al indice. La ordenacion por cercania se calcula en el cliente a partir del codigo postal elegido.
 
 ## Propiedad de escritura
 
@@ -40,6 +41,14 @@ services/enrich                  services/api + apps/web
 ## Modelo de datos compartido
 
 El modelo obra -> edicion -> ejemplar, las marcas de progreso, los paises de origen de TMDB, la cola `harvest_jobs` y `schema_meta` viven en `packages/shared/src/mediateca_shared`. La API y la ingesta instalan el paquete local; no hay wheels ni copias versionadas.
+
+## Sucursales y ubicaciones
+
+La tabla `sucursales` guarda una ficha por sucursal con `codigo` unico, biblioteca, nombre, municipio, direccion, codigo postal y coordenadas opcionales. `Ejemplar` se relaciona con su sucursal por `sucursal_codigo` mediante una relacion de solo lectura, sin clave foranea ni relleno retroactivo. `Biblioteca.codigo_postal` y el resto de campos de ubicacion sirven de respaldo cuando un ejemplar no tiene sucursal.
+
+`SCHEMA_VERSION` es `5`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema.
+
+La API expone `EjemplarOut.ubicacion` con codigo postal, municipio, latitud y longitud. El portal usa esos datos y, si faltan coordenadas de sucursal, el centroide del codigo postal del JSON `apps/web/lib/codigos-postales-madrid.json`. Ese JSON se genera con `scripts/generate_codigos_postales.py` a partir de centroides abiertos y del municipio del INE; no se sirve desde PostgreSQL ni desde Meilisearch.
 
 ## Imagenes
 

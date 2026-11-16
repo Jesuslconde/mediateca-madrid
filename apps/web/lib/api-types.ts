@@ -130,6 +130,8 @@ export interface components {
             tipo_ejemplar?: string | null;
             /** Soporte */
             soporte?: string | null;
+            /** @description Ubicacion disponible de la sucursal o biblioteca */
+            ubicacion?: components["schemas"]["UbicacionOut"] | null;
         };
         /** EnlaceOut */
         EnlaceOut: {
@@ -391,6 +393,29 @@ export interface components {
             por_soporte: {
                 [key: string]: number;
             };
+        };
+        /** UbicacionOut */
+        UbicacionOut: {
+            /**
+             * Codigo Postal
+             * @description Codigo postal de la sucursal o biblioteca
+             */
+            codigo_postal?: string | null;
+            /**
+             * Municipio
+             * @description Municipio de la sucursal o biblioteca
+             */
+            municipio?: string | null;
+            /**
+             * Latitud
+             * @description Latitud WGS84 cuando esta disponible
+             */
+            latitud?: number | null;
+            /**
+             * Longitud
+             * @description Longitud WGS84 cuando esta disponible
+             */
+            longitud?: number | null;
         };
         /** ValidationError */
         ValidationError: {

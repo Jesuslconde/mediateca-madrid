@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine
 
 from mediateca_shared.db import Base
-from mediateca_shared.models import Edicion, HarvestJob, SchemaMeta
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob, SchemaMeta, Sucursal
 from mediateca_shared.version import SCHEMA_VERSION, SchemaVersionError, check_schema_version
 
 
@@ -14,6 +14,7 @@ def test_modelos_se_crean_en_sqlite() -> None:
     assert "ediciones" in Base.metadata.tables
     assert "harvest_jobs" in Base.metadata.tables
     assert "schema_meta" in Base.metadata.tables
+    assert "sucursales" in Base.metadata.tables
 
 
 def test_version_compatible() -> None:
@@ -53,5 +54,18 @@ def test_edicion_incluye_campos_de_estado() -> None:
     assert "tmdb_last_error" in columnas
 
 
-def test_esquema_version_4() -> None:
-    assert SCHEMA_VERSION == "4"
+def test_sucursal_incluye_ubicacion() -> None:
+    columnas = {columna.name for columna in Sucursal.__table__.columns}
+    assert "codigo" in columnas
+    assert "biblioteca_id" in columnas
+    assert "municipio" in columnas
+    assert "direccion" in columnas
+    assert "codigo_postal" in columnas
+    assert "latitud" in columnas
+    assert "longitud" in columnas
+    assert "codigo_postal" in {columna.name for columna in Biblioteca.__table__.columns}
+    assert hasattr(Ejemplar, "sucursal")
+
+
+def test_esquema_version_5() -> None:
+    assert SCHEMA_VERSION == "5"

@@ -3,8 +3,9 @@ SHELL := /bin/bash
 q ?= cine
 pages ?= 1
 limit ?= 20
+branches_limit ?=
 
-.PHONY: help up down build logs ps init migrate harvest index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump bump-release release clean
+.PHONY: help up down build logs ps init migrate harvest branches index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump bump-release release clean
 
 help: ## Mostrar la ayuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -32,6 +33,9 @@ migrate: ## Aplicar migraciones idempotentes
 
 harvest: ## Recolectar del OPAC: make harvest q=cine pages=2 limit=20
 	docker compose run --rm worker python -m mediateca harvest --query "$(q)" --max-pages $(pages) $(if $(limit),--limit $(limit),)
+
+branches: ## Actualizar sucursales desde el directorio: make branches branches_limit=20
+	docker compose run --rm worker python -m mediateca refresh-branches $(if $(branches_limit),--limit $(branches_limit),)
 
 index: ## Indexar todas las ediciones
 	docker compose run --rm worker python -m mediateca index

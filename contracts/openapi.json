@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.1.4"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/search": {
@@ -427,6 +427,17 @@
               }
             ],
             "title": "Soporte"
+          },
+          "ubicacion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UbicacionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ubicacion disponible de la sucursal o biblioteca"
           }
         },
         "type": "object",
@@ -1196,6 +1207,60 @@
           "por_soporte"
         ],
         "title": "StatsResponse"
+      },
+      "UbicacionOut": {
+        "properties": {
+          "codigo_postal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Postal",
+            "description": "Codigo postal de la sucursal o biblioteca"
+          },
+          "municipio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipio",
+            "description": "Municipio de la sucursal o biblioteca"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud",
+            "description": "Latitud WGS84 cuando esta disponible"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud",
+            "description": "Longitud WGS84 cuando esta disponible"
+          }
+        },
+        "type": "object",
+        "title": "UbicacionOut"
       },
       "ValidationError": {
         "properties": {

@@ -71,6 +71,21 @@ class EnlaceOut(BaseModel):
     etiqueta: str | None = None
 
 
+class UbicacionOut(BaseModel):
+    codigo_postal: str | None = Field(
+        default=None, description="Codigo postal de la sucursal o biblioteca"
+    )
+    municipio: str | None = Field(
+        default=None, description="Municipio de la sucursal o biblioteca"
+    )
+    latitud: float | None = Field(
+        default=None, description="Latitud WGS84 cuando esta disponible"
+    )
+    longitud: float | None = Field(
+        default=None, description="Longitud WGS84 cuando esta disponible"
+    )
+
+
 class EjemplarOut(BaseModel):
     id: int
     biblioteca: str
@@ -81,6 +96,9 @@ class EjemplarOut(BaseModel):
     signatura: str | None = None
     tipo_ejemplar: str | None = None
     soporte: str | None = None
+    ubicacion: UbicacionOut | None = Field(
+        default=None, description="Ubicacion disponible de la sucursal o biblioteca"
+    )
 
 
 class ObraOut(BaseModel):

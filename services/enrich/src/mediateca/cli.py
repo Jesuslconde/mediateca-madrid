@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import func, select
 
+from mediateca.catalog.directory import DirectoryClient, refresh_sucursales
 from mediateca.catalog.harvester import Harvester, OpacClient
 from mediateca.catalog.indexer import MeiliIndexer
 from mediateca.catalog.jobs import (
@@ -71,6 +72,37 @@ def migrate_command() -> None:
             {"v": SCHEMA_VERSION},
         )
     console.print("[green]Migraciones aplicadas[/green]")
+
+
+@app.command("refresh-branches")
+def refresh_branches_command(
+    delay: float = typer.Option(
+        settings.crawl_delay, "--delay", min=0.0, help="Segundos entre peticiones"
+    ),
+    limit: int | None = typer.Option(None, "--limit", min=1, help="Fichas maximas"),
+    max_pages: int | None = typer.Option(
+        None, "--max-pages", min=1, help="Paginas de listado maximas"
+    ),
+) -> None:
+    """Actualiza direcciones y coordenadas de las sucursales desde el directorio."""
+    configure_logging()
+    with session_scope() as session, DirectoryClient(delay=delay) as client:
+        stats = refresh_sucursales(
+            session, client, limit=limit, max_pages=max_pages
+        )
+
+    table = Table(title="Actualizacion de sucursales")
+    table.add_column("Metrica")
+    table.add_column("Valor", justify="right")
+    table.add_row("Fichas leidas", str(stats.records))
+    table.add_row("Con SUBC", str(stats.with_subc))
+    table.add_row("Con codigo postal", str(stats.with_postal_code))
+    table.add_row("Con coordenadas", str(stats.with_coordinates))
+    table.add_row("Sucursales emparejadas", str(stats.branches_matched))
+    table.add_row("Bibliotecas actualizadas", str(stats.libraries_updated))
+    table.add_row("Bibliotecas moviles", str(stats.mobile))
+    table.add_row("Omitidas", str(stats.omitted))
+    console.print(table)
 
 
 @app.command("harvest")
