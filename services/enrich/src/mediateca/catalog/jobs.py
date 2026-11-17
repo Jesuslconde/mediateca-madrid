@@ -12,10 +12,11 @@ from mediateca_shared.constants import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_MAX_ATTEMPTS,
     FINAL_STATUSES,
+    JOB_CONFLICT_PAIRS,
     JOB_TYPES,
 )
 from mediateca_shared.models import Edicion, HarvestJob
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from mediateca.core.config import settings
@@ -92,6 +93,34 @@ def create_job(
 
 class JobAlreadyActive(RuntimeError):
     pass
+
+
+def active_job_types(session: Session) -> set[str]:
+    """Tipos de trabajo que estan ejecutandose ahora mismo."""
+    return set(
+        session.scalars(
+            select(HarvestJob.job_type).where(HarvestJob.status == "running")
+        )
+    )
+
+
+def conflicting_job_types(job_type: str) -> set[str]:
+    """Tipos que no pueden compartir worker con ``job_type``."""
+    conflicting = {job_type}
+    for left, right in JOB_CONFLICT_PAIRS:
+        if left == job_type:
+            conflicting.add(right)
+        elif right == job_type:
+            conflicting.add(left)
+    return conflicting
+
+
+def blocked_job_types(session: Session) -> set[str]:
+    """Tipos que no se pueden reclamar mientras haya trabajos en ejecucion."""
+    blocked: set[str] = set()
+    for job_type in active_job_types(session):
+        blocked.update(conflicting_job_types(job_type))
+    return blocked
 
 
 def has_active_job(session: Session, job_type: str) -> bool:
@@ -216,13 +245,29 @@ def enqueue_branches_job(
     return enqueue_job(session, "branches", stats=stats)
 
 
+CLAIM_LOCK_SQL = (
+    "SELECT pg_advisory_xact_lock(hashtext('mediateca:harvest_jobs:claim'))"
+)
+
+
+def _acquire_claim_lock(session: Session) -> None:
+    """Serializa el reclamo para que no se cuelen trabajos incompatibles."""
+    bind = session.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        session.execute(text(CLAIM_LOCK_SQL))
+
+
 def claim_job(
     session: Session,
     *,
     job_types: tuple[str, ...] | list[str] | None = None,
     now: datetime | None = None,
 ) -> HarvestJob | None:
+    _acquire_claim_lock(session)
+    blocked = blocked_job_types(session)
     stmt = select(HarvestJob).where(HarvestJob.status == "pending")
+    if blocked:
+        stmt = stmt.where(~HarvestJob.job_type.in_(blocked))
     if job_types:
         stmt = stmt.where(HarvestJob.job_type.in_(list(job_types)))
     stmt = stmt.order_by(HarvestJob.created_at, HarvestJob.id).limit(1)

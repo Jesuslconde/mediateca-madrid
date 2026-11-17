@@ -127,10 +127,27 @@ La cola admite un trabajo de tipo `branches` que recorre el Directorio de
 Bibliotecas de la Comunidad de Madrid y actualiza direccion, codigo postal y
 coordenadas de las sucursales. Se lanza unicamente a mano desde `Tareas`
 (`/tareas`), con `mediateca enqueue-branches` o `make branches-enqueue`; el
-scheduler nunca lo encola. La tarea precarga los codigos de `Biblioteca` y
-`Sucursal` existentes, omite las fichas de codigos desconocidos y no crea
-bibliotecas ni sucursales nuevas. El comando directo `refresh-branches` conserva
-el comportamiento completo anterior.
+scheduler nunca lo encola. La tarea precarga los codigos de `Biblioteca`
+existentes, omite las fichas de bibliotecas desconocidas y crea o actualiza las
+sucursales de las bibliotecas conocidas; nunca crea bibliotecas nuevas. El
+comando directo `refresh-branches` conserva el comportamiento completo anterior.
+
+## Concurrencia del worker
+
+El worker arranca hasta `MEDIATECA_WORKER_CONCURRENCY` hilos, con un maximo de
+cinco (uno por tipo de trabajo). El dashboard guarda el valor en `app_config` y
+prevalece sobre el entorno; se aplica al reiniciar el worker. El comando
+`mediateca worker --concurrency N` permite una sobreescritura puntual.
+
+Cada hilo reclama trabajos de forma atomica con `FOR UPDATE SKIP LOCKED`. En
+PostgreSQL el reclamo se serializa con `pg_advisory_xact_lock`, de modo que dos
+hilos o contenedores no pueden reclamar a la vez trabajos incompatibles. El lock
+solo cubre el reclamo; la ejecucion sigue siendo paralela.
+
+No se permite el mismo tipo dos veces ni las parejas con dependencia:
+`discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` y `tmdb`/`index`.
+`branches` puede convivir con cualquier trabajo. Un trabajo incompatible se queda
+en `pending` y se ejecuta cuando termina el que lo bloquea.
 
 ## Cursor, reintentos y errores
 
@@ -300,5 +317,7 @@ escriben logs JSON con `job_id`, `job_type`, `titn`, `doc`, `result`,
   esquema o reparaciones.
 - `mediateca ingest-status`: muestra trabajos, cobertura, metricas y salud del
   worker.
-- El worker procesa los trabajos `discover` y `enrich` de `harvest_jobs` con el
-  mismo checkpoint y reanudacion.
+- `mediateca worker --concurrency N`: arranca el worker con N tareas paralelas;
+  sin el flag usa la concurrencia guardada en el dashboard o el entorno.
+- El worker procesa los trabajos `discover`, `enrich`, `index`, `tmdb` y
+  `branches` de `harvest_jobs` con el mismo checkpoint y reanudacion.

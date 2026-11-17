@@ -481,3 +481,70 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert seen == {"limit": 2, "max_pages": 1}
     assert "Fichas leidas" in result.output
+
+
+def test_cli_worker_usa_la_concurrencia_guardada(monkeypatch) -> None:
+    from mediateca.core.config_store import WORKER_CONCURRENCY_KEY, set_config_value
+
+    session = _session()
+    set_config_value(session, WORKER_CONCURRENCY_KEY, "3")
+    session.commit()
+    threads: list[dict] = []
+
+    class FakeThread:
+        def __init__(self, *, target, kwargs, daemon) -> None:  # noqa: ANN001
+            threads.append({"target": target, "kwargs": kwargs, "daemon": daemon})
+
+        def start(self) -> None:
+            pass
+
+        def join(self) -> None:
+            pass
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+    monkeypatch.setattr(cli_module.threading, "Thread", FakeThread)
+
+    result = CliRunner().invoke(cli_module.app, ["worker"])
+
+    assert result.exit_code == 0, result.output
+    assert len(threads) == 3
+    assert "concurrencia=3" in result.output
+
+
+def test_cli_worker_permite_sobreescribir_la_concurrencia(monkeypatch) -> None:
+    from mediateca.core.config_store import WORKER_CONCURRENCY_KEY, set_config_value
+
+    session = _session()
+    set_config_value(session, WORKER_CONCURRENCY_KEY, "2")
+    session.commit()
+    threads: list[dict] = []
+
+    class FakeThread:
+        def __init__(self, *, target, kwargs, daemon) -> None:  # noqa: ANN001
+            threads.append({"target": target, "kwargs": kwargs, "daemon": daemon})
+
+        def start(self) -> None:
+            pass
+
+        def join(self) -> None:
+            pass
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+    monkeypatch.setattr(cli_module.threading, "Thread", FakeThread)
+
+    result = CliRunner().invoke(cli_module.app, ["worker", "--concurrency", "4"])
+
+    assert result.exit_code == 0, result.output
+    assert len(threads) == 4
+    assert "concurrencia=4" in result.output
+    assert "origen=cli" in result.output

@@ -33,6 +33,13 @@ Todas las credenciales y URLs MUST configurarse mediante variables de entorno y 
 - **THEN** la API, la ingesta y el indexador usan la nueva clave
 - **AND** no se requiere modificar código
 
+#### Scenario: Concurrencia del worker
+
+- **WHEN** se configura `MEDIATECA_WORKER_CONCURRENCY` entre 1 y 5
+- **THEN** el worker arranca ese número de hilos de reclamo
+- **AND** el valor guardado desde el dashboard prevalece sobre el entorno
+- **AND** el cambio se aplica al reiniciar el worker
+
 ### Requirement: Inicialización de base de datos
 
 La imagen `mediateca-batch` MUST ofrecer comandos idempotentes para crear el esquema y el índice. La API SHALL NOT crear ni migrar el esquema y SHALL validar que la versión compartida es compatible al arrancar. El servicio `init` MUST ejecutarse antes que la API y el portal.

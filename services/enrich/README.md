@@ -9,7 +9,7 @@ cp .env.example .env
 make up
 ```
 
-El worker procesa `harvest_jobs`; el scheduler solo planifica. La API y el portal se despliegan desde el mismo stack.
+El worker procesa `harvest_jobs`; el scheduler solo planifica. La API y el portal se despliegan desde el mismo stack. El worker puede ejecutar varias tareas compatibles a la vez: la concurrencia se configura con `MEDIATECA_WORKER_CONCURRENCY` (1-5) o desde `Configuracion` del dashboard y se aplica al reiniciar. Nunca coinciden dos trabajos del mismo tipo ni las parejas con dependencia `discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` y `tmdb`/`index`; `branches` puede convivir con todos.
 
 ## Comandos
 
@@ -97,8 +97,8 @@ La vista web se divide en cuatro paginas con un menu lateral comun:
   estado TMDB, desaparicion, texto, soporte, biblioteca, año, idioma y país.
 - `Tareas` (`/tareas`): tabla de trabajos recientes y acciones de descubrimiento,
   enriquecimiento, indexacion y actualizacion de metadatos TMDB.
-- `Configuracion` (`/configuracion`): programacion, URL de FlareSolverr y token
-  de TMDB.
+- `Configuracion` (`/configuracion`): programacion, concurrencia del worker, URL
+  de FlareSolverr y token de TMDB.
 
 El estado OPAC de una edicion puede ser `pending` (sin ficha), `enriched` (ficha
 guardada) o `failed` (ultimo intento fallido). El estado TMDB puede ser `pending`

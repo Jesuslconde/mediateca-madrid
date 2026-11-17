@@ -8,7 +8,7 @@ from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
-from mediateca_shared.models import Biblioteca, Sucursal
+from mediateca_shared.models import Biblioteca
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -278,16 +278,14 @@ def refresh_sucursales(
 ) -> RefreshStats:
     """Actualiza las sucursales desde el directorio y devuelve la cobertura.
 
-    Con ``only_known=True`` solo se actualizan bibliotecas y sucursales que ya
-    existen en el catalogo; las fichas desconocidas se omiten y nunca se crean
-    registros nuevos.
+    Con ``only_known=True`` solo se procesan fichas de bibliotecas que ya
+    existen en el catalogo. Se crean o actualizan sus sucursales, pero nunca se
+    crean bibliotecas nuevas: las fichas de bibliotecas desconocidas se omiten.
     """
     stats = RefreshStats()
     known_libraries: set[str] | None = None
-    known_branches: set[str] | None = None
     if only_known:
         known_libraries = set(session.scalars(select(Biblioteca.codigo)))
-        known_branches = set(session.scalars(select(Sucursal.codigo)))
 
     for parsed in client.iter_records(limit=limit, max_pages=max_pages):
         stats.records += 1
@@ -306,13 +304,6 @@ def refresh_sucursales(
         if (
             known_libraries is not None
             and parsed.biblioteca_codigo not in known_libraries
-        ):
-            stats.omitted += 1
-            continue
-        if (
-            known_branches is not None
-            and parsed.sucursal_codigo is not None
-            and parsed.sucursal_codigo not in known_branches
         ):
             stats.omitted += 1
             continue

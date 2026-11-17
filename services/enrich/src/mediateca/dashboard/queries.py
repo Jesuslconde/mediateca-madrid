@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from mediateca_shared.constants import JOB_STATUSES, JOB_TYPES
+from mediateca_shared.constants import (
+    JOB_STATUSES,
+    JOB_TYPES,
+    MAX_WORKER_CONCURRENCY,
+    MIN_WORKER_CONCURRENCY,
+)
 from mediateca_shared.models import HarvestJob
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,9 +20,12 @@ from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
     ConfigValidationError,
+    effective_worker_concurrency,
     get_config_value,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
+    normalize_worker_concurrency,
+    saved_worker_concurrency,
 )
 
 
@@ -45,6 +53,16 @@ class TmdbConfig:
     source: str
     masked_token: str | None
     active: bool
+
+
+@dataclass(slots=True)
+class WorkerConfig:
+    saved_concurrency: int | None
+    env_concurrency: int
+    effective_concurrency: int
+    source: str
+    min_concurrency: int
+    max_concurrency: int
 
 
 def _normalize_or_none(value: str | None) -> str | None:
@@ -127,6 +145,26 @@ def tmdb_config(session: Session) -> TmdbConfig:
         source="ninguno",
         masked_token=None,
         active=False,
+    )
+
+
+def worker_config(session: Session) -> WorkerConfig:
+    try:
+        env_concurrency = normalize_worker_concurrency(settings.worker_concurrency)
+    except ConfigValidationError:
+        env_concurrency = None
+    if env_concurrency is None:
+        env_concurrency = MIN_WORKER_CONCURRENCY
+
+    saved = saved_worker_concurrency(session)
+    effective = effective_worker_concurrency(session)
+    return WorkerConfig(
+        saved_concurrency=saved,
+        env_concurrency=env_concurrency,
+        effective_concurrency=effective,
+        source="dashboard" if saved is not None else "entorno",
+        min_concurrency=MIN_WORKER_CONCURRENCY,
+        max_concurrency=MAX_WORKER_CONCURRENCY,
     )
 
 

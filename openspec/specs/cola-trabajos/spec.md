@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Ejecutar trabajos de ingesta largos y reanudables fuera del scheduler, con una cola persistente en PostgreSQL y un worker que procesa un trabajo cada vez.
+Ejecutar trabajos de ingesta largos y reanudables fuera del scheduler, con una cola persistente en PostgreSQL y un worker que procesa varios trabajos compatibles a la vez.
 
 ## Requirements
 
@@ -64,15 +64,44 @@ Los trabajos fallidos MUST reintentarse hasta `max_attempts` con backoff exponen
 - **THEN** vuelve a `pending` con un intento más
 - **AND** el siguiente intento espera un tiempo mayor
 
-### Requirement: Concurrencia controlada
+### Requirement: Concurrencia configurable
 
-El sistema SHALL limitar la concurrencia a un trabajo de ingesta a la vez por defecto, configurable mediante variables de entorno.
+El sistema SHALL permitir ejecutar varios trabajos a la vez, con un máximo de cinco (uno por tipo), configurable entre 1 y 5 por variable de entorno, CLI o dashboard. El dashboard SHALL guardar el valor en `app_config` y SHALL prevalecer sobre el entorno; el worker SHALL aplicarlo al arrancar.
 
-#### Scenario: Un solo trabajo pesado
+#### Scenario: Tareas compatibles
 
-- **WHEN** hay un descubrimiento en ejecución
-- **THEN** el worker no inicia otro descubrimiento o enriquecimiento
-- **AND** los trabajos de indexación pueden esperar a que termine el lote
+- **WHEN** hay un `discover` en ejecución y se encola `branches`
+- **THEN** `branches` se reclama y ejecuta en paralelo
+- **AND** cada trabajo mantiene su propio heartbeat y checkpoint
+
+#### Scenario: Concurrencia configurable
+
+- **WHEN** se configura una concurrencia de 3
+- **THEN** el worker arranca tres hilos de reclamo
+- **AND** nunca supera las reglas de exclusión por tipo y dependencia
+
+#### Scenario: Configuración desde el dashboard
+
+- **WHEN** el operador guarda la concurrencia en el dashboard
+- **THEN** el valor queda en `app_config`
+- **AND** se aplica cuando el worker se reinicia
+
+### Requirement: Exclusión por tipo y dependencia
+
+El sistema MUST NOT ejecutar dos trabajos del mismo tipo ni las parejas con dependencia `discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` ni `tmdb`/`index`. `branches` SHALL ser compatible con todos. El reclamo SHALL serializarse en PostgreSQL para respetar las reglas entre hilos y contenedores.
+
+#### Scenario: Dependencia activa
+
+- **WHEN** hay un `discover` en ejecución y se encola `enrich`
+- **THEN** `enrich` permanece `pending`
+- **AND** se ejecuta cuando termina el `discover`
+
+#### Scenario: Mismo tipo activo
+
+- **WHEN** hay un `enrich` en ejecución y existe otro `enrich` pendiente
+- **THEN** el worker no reclama el segundo
+- **AND** lo deja esperando al primero
+
 
 ### Requirement: Deduplicación de trabajos
 
@@ -178,7 +207,7 @@ El sistema MUST NOT encolar trabajos de tipo `tmdb` desde el scheduler. El traba
 
 ### Requirement: Recarga de bibliotecas solo manual
 
-El sistema MUST NOT encolar trabajos de tipo `branches` desde el scheduler. El trabajo `branches` SHALL crearse solo por una acción explícita del operador desde el dashboard o la CLI y SHALL actualizar únicamente bibliotecas y sucursales que ya existan en el catálogo.
+El sistema MUST NOT encolar trabajos de tipo `branches` desde el scheduler. El trabajo `branches` SHALL crearse solo por una acción explícita del operador desde el dashboard o la CLI y SHALL procesar únicamente bibliotecas que ya existan en el catálogo, creando o actualizando sus sucursales sin crear bibliotecas nuevas.
 
 #### Scenario: Scheduler sin recarga de bibliotecas
 
@@ -190,5 +219,6 @@ El sistema MUST NOT encolar trabajos de tipo `branches` desde el scheduler. El t
 
 - **WHEN** el operador lanza una recarga de bibliotecas
 - **THEN** se crea un trabajo `branches` en estado `pending`
-- **AND** el trabajo omite las fichas de bibliotecas o sucursales que no existan previamente
-- **AND** no crea bibliotecas ni sucursales nuevas
+- **AND** el trabajo omite las fichas de bibliotecas que no existan previamente
+- **AND** crea o actualiza las sucursales de las bibliotecas conocidas
+- **AND** no crea bibliotecas nuevas

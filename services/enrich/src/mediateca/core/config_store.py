@@ -3,6 +3,10 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit, urlunsplit
 
+from mediateca_shared.constants import (
+    MAX_WORKER_CONCURRENCY,
+    MIN_WORKER_CONCURRENCY,
+)
 from sqlalchemy import delete, inspect, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +18,7 @@ logger = get_logger(__name__)
 
 FLARESOLVERR_URL_KEY = "flaresolverr_url"
 TMDB_API_TOKEN_KEY = "tmdb_api_token"
+WORKER_CONCURRENCY_KEY = "worker_concurrency"
 MAX_URL_LENGTH = 2000
 MIN_TOKEN_LENGTH = 10
 MAX_TOKEN_LENGTH = 512
@@ -114,6 +119,27 @@ def set_config_value(session: Session, key: str, value: str | None) -> None:
     session.flush()
 
 
+def normalize_worker_concurrency(value: str | int | None) -> int | None:
+    """Valida el numero de tareas paralelas del worker."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = int(text)
+    except (TypeError, ValueError) as exc:
+        raise ConfigValidationError(
+            "La concurrencia del worker debe ser un numero entero"
+        ) from exc
+    if not MIN_WORKER_CONCURRENCY <= parsed <= MAX_WORKER_CONCURRENCY:
+        raise ConfigValidationError(
+            f"La concurrencia del worker debe estar entre "
+            f"{MIN_WORKER_CONCURRENCY} y {MAX_WORKER_CONCURRENCY}"
+        )
+    return parsed
+
+
 def _normalize_saved(value: str) -> str | None:
     try:
         return normalize_flaresolverr_url(value)
@@ -128,6 +154,36 @@ def _normalize_saved_tmdb_token(value: str) -> str | None:
     except ConfigValidationError:
         logger.warning("El token de TMDB persistido no es valido; se ignora")
         return None
+
+
+def _normalize_saved_worker_concurrency(value: str) -> int | None:
+    try:
+        return normalize_worker_concurrency(value)
+    except ConfigValidationError:
+        logger.warning("La concurrencia del worker persistida no es valida; se ignora")
+        return None
+
+
+def saved_worker_concurrency(session: Session) -> int | None:
+    saved = get_config_value(session, WORKER_CONCURRENCY_KEY)
+    if saved is None:
+        return None
+    return _normalize_saved_worker_concurrency(saved)
+
+
+def effective_worker_concurrency(session: Session) -> int:
+    saved = saved_worker_concurrency(session)
+    if saved is not None:
+        return saved
+
+    try:
+        configured = normalize_worker_concurrency(settings.worker_concurrency)
+    except ConfigValidationError:
+        logger.warning(
+            "La concurrencia del worker del entorno no es valida; se usa 1"
+        )
+        configured = None
+    return configured if configured is not None else MIN_WORKER_CONCURRENCY
 
 
 def effective_tmdb_api_token(session: Session) -> str | None:

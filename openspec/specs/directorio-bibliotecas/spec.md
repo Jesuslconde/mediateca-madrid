@@ -106,10 +106,11 @@ El sistema SHALL ofrecer un comando de actualización manual e idempotente del d
 
 #### Scenario: Recarga de bibliotecas conocidas
 
-- **WHEN** se ejecuta la tarea `branches` sobre un catálogo con bibliotecas y sucursales existentes
-- **THEN** solo se actualizan las bibliotecas y sucursales ya conocidas
-- **AND** las fichas de códigos desconocidos se contabilizan como omitidas
-- **AND** no se crean bibliotecas ni sucursales nuevas
+- **WHEN** se ejecuta la tarea `branches` sobre un catálogo con bibliotecas existentes
+- **THEN** solo se procesan las fichas de bibliotecas ya conocidas
+- **AND** se crean o actualizan sus sucursales con la dirección y el código postal disponibles
+- **AND** las fichas de bibliotecas desconocidas se contabilizan como omitidas
+- **AND** no se crean bibliotecas nuevas
 
 #### Scenario: Sucursal ausente
 

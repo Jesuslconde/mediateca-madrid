@@ -281,7 +281,7 @@ class _FakeDirectoryClient:
         yield from self.records
 
 
-def test_refresh_sucursales_solo_conocidas_no_crea_nuevas() -> None:
+def test_refresh_sucursales_solo_conocidas_crea_sus_sucursales() -> None:
     session = _session()
     biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
     sucursal = Sucursal(
@@ -299,7 +299,7 @@ def test_refresh_sucursales_solo_conocidas_no_crea_nuevas() -> None:
         direccion="Nueva dirección, 1",
         codigo_postal="28801",
     )
-    sucursal_desconocida = replace(conocida, sucursal_codigo="BMALC9")
+    sucursal_nueva = replace(conocida, sucursal_codigo="BMALC9")
     biblioteca_nivel = ParsedSucursal(
         biblioteca_codigo="RBMALC",
         sucursal_codigo=None,
@@ -312,17 +312,23 @@ def test_refresh_sucursales_solo_conocidas_no_crea_nuevas() -> None:
     stats = refresh_sucursales(
         session,
         _FakeDirectoryClient(
-            [conocida, sucursal_desconocida, biblioteca_nivel, biblioteca_desconocida]
+            [conocida, sucursal_nueva, biblioteca_nivel, biblioteca_desconocida]
         ),
         only_known=True,
     )
     session.commit()
 
     assert stats.records == 4
-    assert stats.branches_matched == 1
+    assert stats.branches_matched == 2
     assert stats.libraries_updated == 1
-    assert stats.omitted == 2
-    assert session.scalar(select(func.count(Sucursal.id))) == 1
+    assert stats.omitted == 1
+    assert session.scalar(select(func.count(Biblioteca.id))) == 1
+    assert session.scalar(select(func.count(Sucursal.id))) == 2
+    creada = session.scalars(
+        select(Sucursal).where(Sucursal.codigo == "BMALC9")
+    ).one()
+    assert creada.direccion == "Nueva dirección, 1"
+    assert creada.biblioteca.codigo == "RBMALC"
     assert sucursal.direccion == "Nueva dirección, 1"
     assert biblioteca.direccion == "Plaza de San Julián, 1"
 

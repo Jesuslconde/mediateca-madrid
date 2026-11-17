@@ -31,7 +31,7 @@
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="branches">
         <button type="submit" {% if active_jobs['branches'] or not is_admin %}disabled{% endif %}>Recargar direcciones de bibliotecas</button>
-        <span class="muted">Solo actualiza bibliotecas y sucursales ya conocidas</span>
+        <span class="muted">Actualiza bibliotecas conocidas y sus sucursales</span>
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
@@ -41,7 +41,7 @@
         <button type="submit" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>
       </form>
     </div>
-    <p class="muted">Los trabajos se ejecutan de uno en uno en el worker. No se encola un trabajo si ya hay otro del mismo tipo activo.</p>
+    <p class="muted">El worker ejecuta hasta {{ worker_concurrency }} tareas compatibles a la vez. Nunca se ejecutan dos del mismo tipo ni combinaciones con dependencia (discover/enrich, enrich/tmdb, enrich/index y tmdb/index). Si un trabajo choca, queda en cola hasta que termine el que lo bloquea.</p>
   </section>
 
   <section>

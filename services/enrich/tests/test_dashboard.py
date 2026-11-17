@@ -25,6 +25,7 @@ from mediateca.core.config import Settings, settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
+    WORKER_CONCURRENCY_KEY,
     effective_tmdb_api_token,
     get_config_value,
     set_config_value,
@@ -40,6 +41,7 @@ from mediateca.dashboard.queries import (
     job_type_counts,
     recent_jobs,
     tmdb_config,
+    worker_config,
     worker_health,
 )
 
@@ -421,6 +423,7 @@ def test_dashboard_muestra_configuracion_y_metricas(monkeypatch, tmp_path) -> No
     assert configuracion.status_code == 200
     html = configuracion.text
     assert 'action="/config/flaresolverr"' in html
+    assert 'action="/config/worker"' in html
     assert 'value="http://db:8191"' in html
     assert "activa" in html
     assert "dashboard" in html
@@ -582,6 +585,94 @@ def test_post_programacion_guarda_los_intervalos(monkeypatch, tmp_path) -> None:
     assert schedule.enrich_batch_size == 1000
     assert schedule.index_interval_hours == 48
     assert schedule.captcha_pause_minutes == 15
+
+
+def test_dashboard_muestra_la_concurrencia_del_worker(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_concurrency", 2)
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.get("/configuracion")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert "Concurrencia efectiva" in response.text
+    assert "action=\"/config/worker\"" in response.text
+    assert "Maximo: 5" in response.text
+    assert worker_config(session).effective_concurrency == 2
+
+
+def test_post_guarda_la_concurrencia_del_worker(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/worker",
+            data={"concurrency": "3"},
+            follow_redirects=False,
+        )
+        configuracion = client.get("/configuracion")
+        saved = get_config_value(session, WORKER_CONCURRENCY_KEY)
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/configuracion")
+    assert saved == "3"
+    assert worker_config(session).effective_concurrency == 3
+    assert 'value="3"' in configuracion.text
+
+
+def test_post_limpia_la_concurrencia_y_usa_el_entorno(monkeypatch, tmp_path) -> None:
+    session = _session()
+    set_config_value(session, WORKER_CONCURRENCY_KEY, "4")
+    session.commit()
+    monkeypatch.setattr(settings, "worker_concurrency", 2)
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/worker",
+            data={"concurrency": ""},
+            follow_redirects=False,
+        )
+        saved = get_config_value(session, WORKER_CONCURRENCY_KEY)
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert saved is None
+    assert worker_config(session).effective_concurrency == 2
+
+
+def test_post_concurrencia_invalida_no_modifica(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/worker",
+            data={"concurrency": "0"},
+            follow_redirects=False,
+        )
+        saved = get_config_value(session, WORKER_CONCURRENCY_KEY)
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/configuracion?error=")
+    assert saved is None
+    assert "entre 1 y 5" in unquote_plus(response.headers["location"])
 
 
 def test_post_job_encola_descubrimiento(monkeypatch, tmp_path) -> None:

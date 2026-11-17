@@ -11,12 +11,16 @@ from mediateca.core.config import Settings, settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
+    WORKER_CONCURRENCY_KEY,
     ConfigValidationError,
     effective_flaresolverr_url,
     effective_tmdb_api_token,
+    effective_worker_concurrency,
     get_config_value,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
+    normalize_worker_concurrency,
+    saved_worker_concurrency,
     set_config_value,
 )
 from mediateca.core.db import Base
@@ -209,3 +213,52 @@ def test_env_example_documenta_las_variables_de_tmdb() -> None:
     assert "MEDIATECA_TMDB_DELAY=0.25" in content
     assert "MEDIATECA_TMDB_TIMEOUT=10" in content
     assert "MEDIATECA_TMDB_MAX_RETRIES=3" in content
+    assert "MEDIATECA_WORKER_CONCURRENCY=1" in content
+
+
+def test_normaliza_concurrencia_del_worker() -> None:
+    assert normalize_worker_concurrency("3") == 3
+    assert normalize_worker_concurrency(1) == 1
+    assert normalize_worker_concurrency("") is None
+    assert normalize_worker_concurrency(None) is None
+
+
+@pytest.mark.parametrize("value", ["0", "6", "-1", "muchos"])
+def test_rechaza_concurrencia_invalida(value: str) -> None:
+    with pytest.raises(ConfigValidationError):
+        normalize_worker_concurrency(value)
+
+
+def test_la_concurrencia_guardada_prevalece_sobre_el_entorno(monkeypatch) -> None:
+    session, _ = _session()
+    monkeypatch.setattr(settings, "worker_concurrency", 2)
+
+    assert effective_worker_concurrency(session) == 2
+
+    set_config_value(session, WORKER_CONCURRENCY_KEY, "4")
+    session.commit()
+    assert saved_worker_concurrency(session) == 4
+    assert effective_worker_concurrency(session) == 4
+
+    set_config_value(session, WORKER_CONCURRENCY_KEY, None)
+    session.commit()
+    assert saved_worker_concurrency(session) is None
+    assert effective_worker_concurrency(session) == 2
+
+
+def test_ignora_concurrencia_persistida_invalida(monkeypatch) -> None:
+    session, _ = _session()
+    monkeypatch.setattr(settings, "worker_concurrency", 2)
+
+    set_config_value(session, WORKER_CONCURRENCY_KEY, "99")
+    session.commit()
+
+    assert saved_worker_concurrency(session) is None
+    assert effective_worker_concurrency(session) == 2
+
+
+def test_concurrencia_de_entorno_invalida_usa_uno(monkeypatch) -> None:
+    session, _ = _session()
+    monkeypatch.setattr(settings, "worker_concurrency", 0)
+
+    assert effective_worker_concurrency(session) == 1

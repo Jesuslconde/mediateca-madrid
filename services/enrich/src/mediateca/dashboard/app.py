@@ -30,10 +30,13 @@ from mediateca.core.config import settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
+    WORKER_CONCURRENCY_KEY,
     ConfigValidationError,
     effective_tmdb_api_token,
+    effective_worker_concurrency,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
+    normalize_worker_concurrency,
     set_config_value,
 )
 from mediateca.core.db import get_session_factory
@@ -61,6 +64,7 @@ from .queries import (
     job_type_counts,
     recent_jobs,
     tmdb_config,
+    worker_config,
     worker_health,
 )
 
@@ -179,6 +183,7 @@ def _tareas_context(request: Request, session: Session) -> dict[str, Any]:
             "active_jobs": {
                 job_type: has_active_job(session, job_type) for job_type in JOB_TYPES
             },
+            "worker_concurrency": effective_worker_concurrency(session),
         }
     )
     return context
@@ -194,6 +199,7 @@ def _configuracion_context(request: Request, session: Session) -> dict[str, Any]
             "pending_titns": count_pending_titns(session),
             "flaresolverr": flaresolverr_config(session),
             "tmdb": tmdb_config(session),
+            "worker": worker_config(session),
         }
     )
     return context
@@ -411,6 +417,38 @@ async def save_schedule_config(
             error="No se pudo guardar la programacion de ingesta",
         )
     return _redirect_with(next_path, message="Programacion guardada")
+
+
+@app.post("/config/worker")
+async def save_worker_config(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_next((values.get("next") or [""])[0], "/configuracion")
+    if not _has_write_access(request):
+        return _admin_error(next_path)
+    raw = (values.get("concurrency") or [""])[0]
+    try:
+        normalized = normalize_worker_concurrency(raw)
+        if normalized is None:
+            set_config_value(session, WORKER_CONCURRENCY_KEY, None)
+            message = "Concurrencia eliminada; se usara la del entorno"
+        else:
+            set_config_value(session, WORKER_CONCURRENCY_KEY, str(normalized))
+            message = f"Concurrencia guardada: {normalized}"
+        session.commit()
+    except ConfigValidationError as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo guardar la concurrencia del worker")
+        return _redirect_with(
+            next_path,
+            error="No se pudo guardar la concurrencia del worker",
+        )
+    return _redirect_with(next_path, message=message)
 
 
 @app.post("/jobs")

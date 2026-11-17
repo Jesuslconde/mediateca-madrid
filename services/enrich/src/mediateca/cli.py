@@ -6,6 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import typer
+from mediateca_shared.constants import MAX_WORKER_CONCURRENCY
 from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob
 from mediateca_shared.version import SCHEMA_VERSION
 from rich.console import Console
@@ -31,7 +32,10 @@ from mediateca.catalog.parser import parse_file
 from mediateca.catalog.scheduler import enqueue_due_jobs, run_scheduler
 from mediateca.catalog.title_backfill import backfill_titles
 from mediateca.core.config import settings
-from mediateca.core.config_store import effective_flaresolverr_url
+from mediateca.core.config_store import (
+    effective_flaresolverr_url,
+    effective_worker_concurrency,
+)
 from mediateca.core.db import get_engine, get_session_factory, init_db, session_scope
 from mediateca.core.logging import configure_logging, get_logger
 
@@ -460,6 +464,13 @@ def worker_command(
     heartbeat: float = typer.Option(
         settings.worker_heartbeat_seconds, "--heartbeat", min=0.0
     ),
+    concurrency: int | None = typer.Option(
+        None,
+        "--concurrency",
+        min=1,
+        max=MAX_WORKER_CONCURRENCY,
+        help="Tareas paralelas; si se omite, usa la configuracion del dashboard",
+    ),
 ) -> None:
     """Reclama y ejecuta trabajos de la cola de ingesta."""
     configure_logging()
@@ -481,9 +492,19 @@ def worker_command(
             )
         return
 
+    if concurrency is None:
+        with session_scope() as session:
+            effective = effective_worker_concurrency(session)
+        origin = "configuracion"
+    else:
+        effective = concurrency
+        origin = "cli"
+    effective = max(1, min(effective, MAX_WORKER_CONCURRENCY))
+
     factory = get_session_factory()
-    concurrency = max(1, settings.worker_concurrency)
-    console.print(f"[green]Worker iniciado[/green] concurrencia={concurrency}")
+    console.print(
+        f"[green]Worker iniciado[/green] concurrencia={effective} origen={origin}"
+    )
     threads = [
         threading.Thread(
             target=run_worker,
@@ -496,7 +517,7 @@ def worker_command(
             },
             daemon=True,
         )
-        for _ in range(concurrency)
+        for _ in range(effective)
     ]
     for thread in threads:
         thread.start()

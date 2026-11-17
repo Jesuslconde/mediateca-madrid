@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from mediateca_shared.constants import JOB_CONFLICT_PAIRS
 from mediateca_shared.models import Edicion, HarvestJob
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects import postgresql
@@ -12,7 +13,10 @@ from sqlalchemy.pool import StaticPool
 from mediateca.catalog.harvester import CaptchaRequired
 from mediateca.catalog.jobs import (
     _enrich_handler,
+    active_job_types,
+    blocked_job_types,
     claim_job,
+    conflicting_job_types,
     coverage,
     create_job,
     create_stub,
@@ -84,6 +88,75 @@ def test_un_trabajo_reclamado_no_se_reclama_dos_veces() -> None:
 
     assert first is not None
     assert second is None
+
+
+def test_no_reclama_dos_trabajos_del_mismo_tipo() -> None:
+    session = _session()
+    running = create_job(session, "discover")
+    pending = create_job(session, "discover")
+    session.commit()
+
+    claimed = claim_job(session)
+    session.commit()
+
+    assert claimed is not None
+    assert claimed.id == running.id
+    assert claim_job(session) is None
+    assert pending.status == "pending"
+
+
+@pytest.mark.parametrize(("running_type", "blocked_type"), JOB_CONFLICT_PAIRS)
+def test_no_reclama_tipos_con_dependencia(
+    running_type: str, blocked_type: str
+) -> None:
+    session = _session()
+    running = create_job(session, running_type)
+    session.commit()
+    claim_job(session)
+    session.commit()
+
+    blocked = create_job(session, blocked_type)
+    compatible = create_job(session, "branches")
+    session.commit()
+
+    claimed = claim_job(session)
+    session.commit()
+
+    assert claimed is not None
+    assert claimed.id == compatible.id
+    assert blocked.status == "pending"
+    assert running.status == "running"
+
+
+def test_permite_tipos_compatibles_y_bloquea_sus_dependencias() -> None:
+    session = _session()
+    discover = create_job(session, "discover")
+    tmdb = create_job(session, "tmdb")
+    index = create_job(session, "index")
+    branches = create_job(session, "branches")
+    session.commit()
+
+    first = claim_job(session)
+    session.commit()
+    assert first is not None and first.id == discover.id
+    assert active_job_types(session) == {"discover"}
+    assert blocked_job_types(session) == {"discover", "enrich"}
+
+    second = claim_job(session)
+    session.commit()
+    assert second is not None and second.id == tmdb.id
+    assert active_job_types(session) == {"discover", "tmdb"}
+    assert blocked_job_types(session) == {"discover", "enrich", "tmdb", "index"}
+
+    third = claim_job(session)
+    session.commit()
+    assert third is not None and third.id == branches.id
+    assert index.status == "pending"
+
+
+def test_conflicting_job_types_incluye_el_propio_tipo() -> None:
+    assert conflicting_job_types("branches") == {"branches"}
+    assert conflicting_job_types("enrich") == {"enrich", "discover", "tmdb", "index"}
 
 
 def test_heartbeat_actualiza_marca_temporal() -> None:
@@ -441,6 +514,12 @@ def test_reclamo_usa_skip_locked_en_postgresql() -> None:
     sql = str(stmt.compile(dialect=postgresql.dialect()))
 
     assert "FOR UPDATE SKIP LOCKED" in sql
+
+
+def test_el_reclamo_serializa_con_advisory_lock() -> None:
+    from mediateca.catalog.jobs import CLAIM_LOCK_SQL
+
+    assert "pg_advisory_xact_lock" in CLAIM_LOCK_SQL
 
 
 def test_worker_indexa_el_lote_al_terminar(monkeypatch) -> None:

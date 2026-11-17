@@ -52,6 +52,29 @@
   </section>
 
   <section>
+    <h2>Worker</h2>
+    <p>
+      Concurrencia efectiva:
+      <strong>{{ worker.effective_concurrency }}</strong>
+      | Origen: {{ worker.source }}
+      | Entorno: {{ worker.env_concurrency }}
+      | Maximo: {{ worker.max_concurrency }}
+    </p>
+    {% if is_admin %}
+      <form method="post" action="/config/worker">
+        <input type="hidden" name="next" value="/configuracion">
+        <label>Tareas paralelas
+          <input type="number" name="concurrency" value="{{ worker.saved_concurrency or worker.env_concurrency }}" min="{{ worker.min_concurrency }}" max="{{ worker.max_concurrency }}">
+        </label>
+        <button type="submit">Guardar concurrencia</button>
+      </form>
+    {% else %}
+      <p class="muted">Desbloquea la administracion para modificar la concurrencia del worker.</p>
+    {% endif %}
+    <p class="muted">El worker aplica el valor al arrancar. Deja el campo vacio para usar la variable de entorno. Nunca se ejecutan dos trabajos del mismo tipo ni combinaciones con dependencia: discover/enrich, enrich/tmdb, enrich/index y tmdb/index.</p>
+  </section>
+
+  <section>
     <h2>Configuracion de FlareSolverr</h2>
     <p>
       Estado:

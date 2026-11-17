@@ -228,7 +228,7 @@ El sistema MUST responder con un estado de error comprensible cuando la base de 
 
 ### Requirement: Tareas bajo demanda
 
-El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo. La actualización TMDB SHALL permitir elegir el lote y reactualizar también las ediciones ya sincronizadas, y MUST rechazarse si no hay token de TMDB configurado. La recarga de bibliotecas SHALL actualizar solo bibliotecas y sucursales ya conocidas.
+El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento completo, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas, y SHALL rechazar la acción si ya existe un trabajo activo del mismo tipo. La actualización TMDB SHALL permitir elegir el lote y reactualizar también las ediciones ya sincronizadas, y MUST rechazarse si no hay token de TMDB configurado. La recarga de bibliotecas SHALL procesar solo bibliotecas ya conocidas, actualizando sus direcciones y creando o actualizando sus sucursales sin crear bibliotecas nuevas.
 
 #### Scenario: Buscar novedades
 
@@ -252,8 +252,8 @@ El dashboard MUST permitir encolar descubrimiento incremental, descubrimiento co
 
 - **WHEN** el operador pulsa "Recargar direcciones de bibliotecas"
 - **THEN** se encola un trabajo `branches`
-- **AND** el trabajo solo actualiza bibliotecas y sucursales ya conocidas
-- **AND** las fichas desconocidas se omiten sin crear registros nuevos
+- **AND** el trabajo procesa solo bibliotecas ya conocidas y crea o actualiza sus sucursales
+- **AND** las fichas de bibliotecas desconocidas se omiten sin crear bibliotecas nuevas
 
 #### Scenario: Actualización TMDB sin token
 
@@ -345,7 +345,7 @@ La página de Inicio MUST mostrar únicamente la salud del worker, el resumen de
 
 ### Requirement: Página de Tareas
 
-La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura.
+La página de Tareas MUST mostrar los trabajos recientes y las acciones de descubrimiento, enriquecimiento, indexación, actualización de metadatos TMDB y recarga de direcciones de bibliotecas. SHALL conservar las reglas de encolado, la desactivación de acciones con un trabajo activo y la protección de escritura. SHALL mostrar la concurrencia efectiva del worker y explicar las reglas de exclusión por tipo y dependencia.
 
 #### Scenario: Visualización de trabajos
 
@@ -358,6 +358,12 @@ La página de Tareas MUST mostrar los trabajos recientes y las acciones de descu
 - **WHEN** el operador pulsa una acción de descubrimiento, enriquecimiento, indexación, actualización TMDB o recarga de bibliotecas
 - **THEN** se encola el trabajo con las mismas reglas que en la vista anterior
 - **AND** las acciones con un trabajo activo del mismo tipo siguen deshabilitadas
+
+#### Scenario: Acción incompatible con otra activa
+
+- **WHEN** el operador encola un trabajo incompatible con otro que está en ejecución
+- **THEN** el trabajo queda `pending`
+- **AND** se ejecuta cuando termina el que lo bloquea
 
 #### Scenario: Redirección con mensaje
 
@@ -373,13 +379,25 @@ La página de Tareas MUST mostrar los trabajos recientes y las acciones de descu
 
 ### Requirement: Página de Configuración
 
-La página de Configuración MUST agrupar la programación, la configuración de FlareSolverr y la configuración del token de TMDB. Cada sección SHALL conservar su contrato vigente de validación, precedencia, máscara y protección de escritura.
+La página de Configuración MUST agrupar la programación, la concurrencia del worker, la configuración de FlareSolverr y la configuración del token de TMDB. Cada sección SHALL conservar su contrato vigente de validación, precedencia, máscara y protección de escritura. La concurrencia SHALL validarse entre 1 y 5 y guardarse en `app_config` con precedencia sobre el entorno.
 
 #### Scenario: Secciones de configuración
 
 - **WHEN** el operador abre `/configuracion`
-- **THEN** ve la programación, la URL efectiva de FlareSolverr y el estado del token de TMDB
+- **THEN** ve la programación, la concurrencia efectiva del worker, la URL efectiva de FlareSolverr y el estado del token de TMDB
 - **AND** ve los formularios correspondientes si tiene acceso de administración
+
+#### Scenario: Configurar la concurrencia
+
+- **WHEN** el operador guarda una concurrencia de 3
+- **THEN** el valor queda en `app_config`
+- **AND** el dashboard indica que el worker debe reiniciarse para aplicarlo
+
+#### Scenario: Concurrencia fuera de rango
+
+- **WHEN** el operador guarda un valor menor que 1 o mayor que 5
+- **THEN** no se modifica la configuración
+- **AND** ve un mensaje de error comprensible
 
 #### Scenario: Guardado y mensajes
 

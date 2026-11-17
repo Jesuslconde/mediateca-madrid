@@ -63,7 +63,7 @@ Las pruebas se ejecutan en las imagenes correspondientes, de modo que API e inge
 
 `make branches` actualiza direcciones, codigos postales y coordenadas de las sucursales desde el Directorio de Bibliotecas de la Comunidad de Madrid. El comando es idempotente, no borra sucursales ausentes y no geocodifica direcciones: si una ficha no trae coordenadas, el portal usa el centroide de su codigo postal. Para una prueba limitada: `make branches branches_limit=20`.
 
-La misma actualizacion puede encolarse como tarea manual con `make branches-enqueue` (o `python -m mediateca enqueue-branches`) y desde el boton "Recargar direcciones de bibliotecas" del dashboard. Esa tarea solo actualiza bibliotecas y sucursales que ya existen en el catalogo; las fichas desconocidas se omiten y no se crean registros nuevos. El scheduler no la ejecuta automaticamente.
+La misma actualizacion puede encolarse como tarea manual con `make branches-enqueue` (o `python -m mediateca enqueue-branches`) y desde el boton "Recargar direcciones de bibliotecas" del dashboard. Esa tarea solo procesa bibliotecas que ya existen en el catalogo: actualiza sus direcciones y crea o actualiza sus sucursales. Las fichas de bibliotecas desconocidas se omiten y no se crean bibliotecas nuevas. El scheduler no la ejecuta automaticamente.
 
 En la ficha de un registro se puede elegir un codigo postal para ordenar las bibliotecas por cercania. Sin seleccion, el orden es alfabetico. La eleccion se guarda en `localStorage`; no se solicita geolocalizacion del navegador. Las distancias son aproximadas.
 
@@ -73,6 +73,12 @@ Los 304 codigos postales de la provincia de Madrid se generan con:
 python3 scripts/generate_codigos_postales.py
 python3 -c "import json; d=json.load(open('apps/web/lib/codigos-postales-madrid.json')); print(len(d['codigos']))"
 ```
+
+## Concurrencia del worker
+
+El worker puede ejecutar hasta 5 tareas compatibles a la vez. El numero se configura con `MEDIATECA_WORKER_CONCURRENCY` (1-5), con `python -m mediateca worker --concurrency N` o desde `Configuracion` del dashboard. El valor guardado en el dashboard prevalece sobre el entorno y se aplica al reiniciar el worker.
+
+Nunca se ejecutan dos trabajos del mismo tipo ni combinaciones con dependencia: `discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` y `tmdb`/`index`. `branches` es compatible con todos. Si un trabajo incompatible esta activo, el nuevo queda `pending` y espera; no se rechaza. El reclamo se serializa en PostgreSQL con `pg_advisory_xact_lock`, de modo que dos contenedores worker tampoco pueden saltarse estas reglas.
 
 ## Imagenes
 
