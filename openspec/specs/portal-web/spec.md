@@ -17,14 +17,21 @@ El portal MUST mostrar un buscador principal y accesos rápidos a los filtros `S
 
 ### Requirement: Resultados y facetas
 
-La página de resultados MUST mostrar título, año, soportes, géneros, países de origen y bibliotecas tenedoras, y SHALL incluir filtros laterales combinables por soporte, género, idioma, país de origen, año y biblioteca. SHALL NOT ofrecer un filtro por disponibilidad.
+La página de resultados MUST mostrar título, año, soportes, géneros, países de origen y bibliotecas tenedoras, y SHALL incluir filtros laterales combinables por soporte, género, idioma, país de origen, año y biblioteca o sucursal. SHALL NOT ofrecer un filtro por disponibilidad. El selector de ubicación SHALL agrupar las sucursales bajo su biblioteca matriz, SHALL permitir buscar por nombre visible y SHALL enviar un código estable en el parámetro `biblioteca`.
 
 #### Scenario: Combinar filtros
 
-- **WHEN** el usuario marca `DVD` y una biblioteca
+- **WHEN** el usuario marca `DVD` y una biblioteca o sucursal
 - **THEN** la lista se actualiza con los registros que cumplen ambos filtros
 - **AND** se conserva el término de búsqueda
 - **AND** no aparece ninguna opción «Solo disponible»
+
+#### Scenario: Filtrar por sucursal
+
+- **WHEN** el usuario escribe `Luis Martín Santos` en el selector de ubicación
+- **THEN** aparece la sucursal agrupada bajo `MADRID. Bibliotecas Públicas`
+- **AND** al seleccionarla se envía su código estable
+- **AND** el filtro activo muestra el nombre visible de la sucursal
 
 #### Scenario: Filtrar por país de origen
 

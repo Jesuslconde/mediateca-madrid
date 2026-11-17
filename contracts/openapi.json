@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.2.0"
+    "version": "0.4.0"
   },
   "paths": {
     "/api/search": {
@@ -271,6 +271,31 @@
                   },
                   "type": "array",
                   "title": "Response List Libraries Api Libraries Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations": {
+      "get": {
+        "tags": [
+          "bibliotecas"
+        ],
+        "summary": "List Locations",
+        "operationId": "list_locations_api_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LocationOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Locations Api Locations Get"
                 }
               }
             }
@@ -546,6 +571,59 @@
           "ejemplares"
         ],
         "title": "LibraryOut"
+      },
+      "LocationOut": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "biblioteca",
+              "sucursal"
+            ],
+            "title": "Tipo"
+          },
+          "biblioteca_codigo": {
+            "type": "string",
+            "title": "Biblioteca Codigo"
+          },
+          "biblioteca_nombre": {
+            "type": "string",
+            "title": "Biblioteca Nombre"
+          },
+          "municipio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Municipio"
+          },
+          "ejemplares": {
+            "type": "integer",
+            "title": "Ejemplares"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "nombre",
+          "tipo",
+          "biblioteca_codigo",
+          "biblioteca_nombre",
+          "ejemplares"
+        ],
+        "title": "LocationOut"
       },
       "ObraOut": {
         "properties": {

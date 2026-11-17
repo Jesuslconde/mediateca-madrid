@@ -36,6 +36,12 @@ def test_build_document_incluye_bibliotecas_sin_disponibilidad(dvd_fixture) -> N
 
     assert document["ejemplares"] == 2
     assert len(document["bibliotecas"]) == 2
+    assert "b:RBMALC" in document["ubicaciones"]
+    assert "s:BMALC1" in document["ubicaciones"]
+    assert "b:RBMALCO" in document["ubicaciones"]
+    assert "s:BMALCO1" in document["ubicaciones"]
+    assert "B.P.M. Cardenal Cisneros" in document["ubicaciones_texto"]
+    assert "Biblioteca José Hierro" in document["ubicaciones_texto"]
     assert "disponible" not in document
     assert "estado" not in document
 
@@ -162,6 +168,20 @@ def test_faceta_y_filtro_de_paises_origen() -> None:
     assert 'paises_origen = "ES"' in filters
     assert 'paises_origen = "FR"' in filters
     assert " OR " in filters
+
+
+def test_filtro_de_ubicacion_por_codigo_y_por_nombre() -> None:
+    assert "ubicaciones" in FILTERABLE_ATTRIBUTES
+    assert "ubicaciones_texto" in FILTERABLE_ATTRIBUTES
+
+    por_codigo = build_filters(biblioteca="s:BMALC1")
+    assert por_codigo == 'ubicaciones = "s:BMALC1"'
+
+    por_nombre = build_filters(biblioteca="B.P.M. Cardenal Cisneros")
+    assert por_nombre == (
+        '(bibliotecas = "B.P.M. Cardenal Cisneros" OR '
+        'ubicaciones_texto = "B.P.M. Cardenal Cisneros")'
+    )
 
 
 def test_index_reset_reconstruye_paises_origen(dvd_fixture) -> None:

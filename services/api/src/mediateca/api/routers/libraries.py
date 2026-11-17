@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections import Counter
 
 from fastapi import APIRouter, Depends
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Sucursal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mediateca.api.deps import get_db
-from mediateca.api.schemas import LibraryOut, StatsResponse
+from mediateca.api.schemas import LibraryOut, LocationOut, StatsResponse
 
 router = APIRouter(tags=["bibliotecas"])
 
@@ -35,6 +35,73 @@ def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
         )
         for row in session.execute(stmt)
     ]
+
+
+@router.get("/locations", response_model=list[LocationOut])
+def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
+    libraries_stmt = (
+        select(
+            Biblioteca.codigo,
+            Biblioteca.nombre,
+            Biblioteca.municipio,
+            func.count(Ejemplar.id).label("ejemplares"),
+        )
+        .outerjoin(Ejemplar, Ejemplar.biblioteca_id == Biblioteca.id)
+        .group_by(Biblioteca.id)
+    )
+    branches_stmt = (
+        select(
+            Biblioteca.codigo.label("biblioteca_codigo"),
+            Biblioteca.nombre.label("biblioteca_nombre"),
+            Ejemplar.sucursal_codigo.label("sucursal_codigo"),
+            func.max(Ejemplar.sucursal_nombre).label("sucursal_nombre"),
+            func.max(Sucursal.municipio).label("sucursal_municipio"),
+            func.max(Biblioteca.municipio).label("biblioteca_municipio"),
+            func.count(Ejemplar.id).label("ejemplares"),
+        )
+        .join(Biblioteca, Biblioteca.id == Ejemplar.biblioteca_id)
+        .outerjoin(Sucursal, Sucursal.codigo == Ejemplar.sucursal_codigo)
+        .where(Ejemplar.sucursal_codigo.is_not(None))
+        .group_by(
+            Biblioteca.id,
+            Biblioteca.codigo,
+            Biblioteca.nombre,
+            Ejemplar.sucursal_codigo,
+        )
+    )
+
+    locations = [
+        LocationOut(
+            codigo=f"b:{row.codigo}",
+            nombre=row.nombre,
+            tipo="biblioteca",
+            biblioteca_codigo=row.codigo,
+            biblioteca_nombre=row.nombre,
+            municipio=row.municipio,
+            ejemplares=int(row.ejemplares),
+        )
+        for row in session.execute(libraries_stmt)
+    ]
+    locations.extend(
+        LocationOut(
+            codigo=f"s:{row.sucursal_codigo}",
+            nombre=row.sucursal_nombre or row.sucursal_codigo,
+            tipo="sucursal",
+            biblioteca_codigo=row.biblioteca_codigo,
+            biblioteca_nombre=row.biblioteca_nombre,
+            municipio=row.sucursal_municipio or row.biblioteca_municipio,
+            ejemplares=int(row.ejemplares),
+        )
+        for row in session.execute(branches_stmt)
+    )
+    locations.sort(
+        key=lambda location: (
+            location.biblioteca_nombre.casefold(),
+            0 if location.tipo == "biblioteca" else 1,
+            location.nombre.casefold(),
+        )
+    )
+    return locations
 
 
 @router.get("/stats", response_model=StatsResponse)

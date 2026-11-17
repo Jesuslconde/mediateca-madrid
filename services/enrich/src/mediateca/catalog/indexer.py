@@ -27,6 +27,8 @@ FILTERABLE_ATTRIBUTES = [
     "pais",
     "paises_origen",
     "bibliotecas",
+    "ubicaciones",
+    "ubicaciones_texto",
     "edad_recomendada",
     "duracion_min",
     "detail_complete",
@@ -85,6 +87,18 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
     bibliotecas = sorted(
         {ejemplar.biblioteca.nombre for ejemplar in edicion.ejemplares}
     )
+    ubicaciones: set[str] = set()
+    ubicaciones_texto: set[str] = set()
+    for ejemplar in edicion.ejemplares:
+        biblioteca = ejemplar.biblioteca
+        if biblioteca is None:
+            continue
+        ubicaciones.add(f"b:{biblioteca.codigo}")
+        ubicaciones_texto.add(biblioteca.nombre)
+        if ejemplar.sucursal_codigo:
+            ubicaciones.add(f"s:{ejemplar.sucursal_codigo}")
+            if ejemplar.sucursal_nombre:
+                ubicaciones_texto.add(ejemplar.sucursal_nombre)
     materias = [relacion.materia.termino for relacion in edicion.materias]
 
     return {
@@ -114,6 +128,8 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
         "actores": actores,
         "guionistas": guionistas,
         "bibliotecas": bibliotecas,
+        "ubicaciones": sorted(ubicaciones),
+        "ubicaciones_texto": sorted(ubicaciones_texto),
         "ejemplares": len(edicion.ejemplares),
         "detail_complete": edicion.detail_fetched_at is not None,
         "is_stub": edicion.detail_fetched_at is None or bool(edicion.is_stub),
@@ -153,7 +169,11 @@ def build_filters(
             + ")"
         )
     if biblioteca:
-        filters.append(f"bibliotecas = {_quote(biblioteca)}")
+        if biblioteca.startswith(("b:", "s:")):
+            filters.append(f"ubicaciones = {_quote(biblioteca)}")
+        else:
+            quoted = _quote(biblioteca)
+            filters.append(f"(bibliotecas = {quoted} OR ubicaciones_texto = {quoted})")
     if anio_desde is not None:
         filters.append(f"anio >= {int(anio_desde)}")
     if anio_hasta is not None:

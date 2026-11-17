@@ -7,7 +7,7 @@ import { RecordCard } from "@/components/RecordCard";
 import { SearchBar } from "@/components/SearchBar";
 import { SearchSkeleton } from "@/components/SearchSkeleton";
 import { SortSelect } from "@/components/SortSelect";
-import { getLibraries, searchRecords } from "@/lib/api";
+import { getLocations, searchRecords } from "@/lib/api";
 import { countryLabel } from "@/lib/labels";
 import { parseSort, type SortValue } from "@/lib/sort";
 import {
@@ -57,15 +57,6 @@ export default async function SearchPage({
   const page = Math.max(1, Number(first(sp.page) ?? "1") || 1);
   const sort = parseSort(first(sp.sort));
 
-  const activeFilters = [
-    ...supports.map((support) => `Soporte: ${support}`),
-    genero ? `Género: ${genero}` : null,
-    ...countries.map((country) => `País: ${countryLabel(country) ?? country}`),
-    biblioteca ? `Biblioteca: ${biblioteca}` : null,
-    idioma ? `Idioma: ${idioma}` : null,
-    anioDesde || anioHasta ? `Año: ${anioDesde ?? "..."}–${anioHasta ?? "..."}` : null,
-  ].filter(Boolean) as string[];
-
   const searchQuery = buildSearchQuery(sp, { volver: undefined });
   const volver = `/buscar${searchQuery ? `?${searchQuery}` : ""}`;
   const suspenseKey = [
@@ -101,19 +92,6 @@ export default async function SearchPage({
         </Suspense>
       </header>
 
-      {activeFilters.length ? (
-        <div className="flex flex-wrap gap-2">
-          {activeFilters.map((filter) => (
-            <span
-              key={filter}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600"
-            >
-              {filter}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
       <Suspense key={suspenseKey} fallback={<SearchSkeleton />}>
         <SearchBody
           sp={sp}
@@ -148,7 +126,7 @@ async function SearchBody({
   sort,
   volver,
 }: SearchBodyProps) {
-  const [result, libraries] = await Promise.all([
+  const [result, locations] = await Promise.all([
     searchRecords({
       q: query || undefined,
       soporte: supports.length ? supports : undefined,
@@ -162,25 +140,58 @@ async function SearchBody({
       limit: 20,
       sort,
     }).catch(() => null),
-    getLibraries().catch(() => []),
+    getLocations().catch(() => []),
   ]);
 
-  return (
-    <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="lg:sticky lg:top-6 lg:self-start">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-          <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">
-            Filtros
-          </h2>
-          <FacetFilters
-            params={sp}
-            facets={result?.facets ?? {}}
-            libraries={libraries}
-          />
-        </div>
-      </aside>
+  const selectedLocation = locations.find(
+    (location) => location.codigo === biblioteca,
+  );
+  const bibliotecaLabel = selectedLocation
+    ? selectedLocation.tipo === "biblioteca"
+      ? selectedLocation.nombre
+      : `${selectedLocation.biblioteca_nombre} — ${selectedLocation.nombre}`
+    : biblioteca;
+  const activeFilters = [
+    ...supports.map((support) => `Soporte: ${support}`),
+    genero ? `Género: ${genero}` : null,
+    ...countries.map((country) => `País: ${countryLabel(country) ?? country}`),
+    bibliotecaLabel ? `Biblioteca: ${bibliotecaLabel}` : null,
+    idioma ? `Idioma: ${idioma}` : null,
+    anioDesde || anioHasta
+      ? `Año: ${anioDesde ?? "..."}–${anioHasta ?? "..."}`
+      : null,
+  ].filter(Boolean) as string[];
 
-      <section className="min-w-0 space-y-4">
+  return (
+    <div className="space-y-4">
+      {activeFilters.length ? (
+        <div className="flex flex-wrap gap-2">
+          {activeFilters.map((filter) => (
+            <span
+              key={filter}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600"
+            >
+              {filter}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+            <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">
+              Filtros
+            </h2>
+            <FacetFilters
+              params={sp}
+              facets={result?.facets ?? {}}
+              locations={locations}
+            />
+          </div>
+        </aside>
+
+        <section className="min-w-0 space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <p className="text-sm text-slate-500">
             {result
@@ -248,7 +259,8 @@ async function SearchBody({
             </PaginationLink>
           </nav>
         ) : null}
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

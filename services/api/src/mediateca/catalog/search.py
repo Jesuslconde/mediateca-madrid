@@ -42,7 +42,11 @@ def build_filters(
             + ")"
         )
     if biblioteca:
-        filters.append(f"bibliotecas = {_quote(biblioteca)}")
+        if biblioteca.startswith(("b:", "s:")):
+            filters.append(f"ubicaciones = {_quote(biblioteca)}")
+        else:
+            quoted = _quote(biblioteca)
+            filters.append(f"(bibliotecas = {quoted} OR ubicaciones_texto = {quoted})")
     if anio_desde is not None:
         filters.append(f"anio >= {int(anio_desde)}")
     if anio_hasta is not None:

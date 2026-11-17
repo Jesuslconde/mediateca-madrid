@@ -141,7 +141,8 @@ def test_search_filtra_por_biblioteca_sin_idioma() -> None:
     assert index.options is not None
     assert index.options["filter"] == (
         "detail_complete = true AND "
-        'bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina"'
+        '(bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina" OR '
+        'ubicaciones_texto = "Biblioteca Regional de Madrid Joaquín Leguina")'
     )
 
 
@@ -164,7 +165,44 @@ def test_search_combina_biblioteca_e_idioma() -> None:
     assert index.options is not None
     assert index.options["filter"] == (
         'detail_complete = true AND idioma = "es" AND '
-        'bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina"'
+        '(bibliotecas = "Biblioteca Regional de Madrid Joaquín Leguina" OR '
+        'ubicaciones_texto = "Biblioteca Regional de Madrid Joaquín Leguina")'
+    )
+
+
+def test_search_filtra_por_codigo_de_ubicacion() -> None:
+    search, index = _catalog_search()
+    app.dependency_overrides[get_indexer] = lambda: search
+    try:
+        client = TestClient(app)
+        response = client.get("/api/search", params={"biblioteca": "s:BMALC1"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert index.options is not None
+    assert index.options["filter"] == (
+        'detail_complete = true AND ubicaciones = "s:BMALC1"'
+    )
+
+
+def test_search_filtra_por_nombre_de_sucursal() -> None:
+    search, index = _catalog_search()
+    app.dependency_overrides[get_indexer] = lambda: search
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/api/search", params={"biblioteca": "B.P.M. Cardenal Cisneros"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert index.options is not None
+    assert index.options["filter"] == (
+        'detail_complete = true AND '
+        '(bibliotecas = "B.P.M. Cardenal Cisneros" OR '
+        'ubicaciones_texto = "B.P.M. Cardenal Cisneros")'
     )
 
 
@@ -365,6 +403,74 @@ def _get_record_with_session(session):
         return client.get("/api/records/2101557")
     finally:
         app.dependency_overrides.clear()
+
+
+def test_locations_incluye_biblioteca_y_sucursal() -> None:
+    session = _record_with_location()
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).get("/api/locations")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    locations = {item["codigo"]: item for item in response.json()}
+    assert set(locations) == {"b:RBMALC", "s:BMALC1"}
+
+    biblioteca = locations["b:RBMALC"]
+    assert biblioteca["tipo"] == "biblioteca"
+    assert biblioteca["nombre"] == "Bibliotecas Municipales Alcalá"
+    assert biblioteca["biblioteca_codigo"] == "RBMALC"
+    assert biblioteca["ejemplares"] == 1
+
+    sucursal = locations["s:BMALC1"]
+    assert sucursal["tipo"] == "sucursal"
+    assert sucursal["nombre"] == "Cardenal Cisneros"
+    assert sucursal["biblioteca_codigo"] == "RBMALC"
+    assert sucursal["biblioteca_nombre"] == "Bibliotecas Municipales Alcalá"
+    assert sucursal["ejemplares"] == 1
+
+
+def test_locations_sin_sucursal_solo_devuelve_biblioteca() -> None:
+    session = _record_with_location(with_sucursal=False)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).get("/api/locations")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [item["codigo"] for item in response.json()] == ["b:RBMALC"]
+
+
+def test_locations_incluye_sucursal_sin_fila_en_sucursales() -> None:
+    session = _sqlite_session()
+    biblioteca = Biblioteca(
+        codigo="BPM",
+        nombre="MADRID. Bibliotecas Públicas",
+        municipio="Madrid",
+    )
+    edicion = Edicion(titn="1948243", titulo="Dolor y gloria")
+    ejemplar = Ejemplar(
+        edicion=edicion,
+        biblioteca=biblioteca,
+        external_key="k1",
+        sucursal_codigo="BP20",
+        sucursal_nombre="VILLA DE VALLECAS. BP Luis Martín Santos",
+    )
+    session.add_all([biblioteca, edicion, ejemplar])
+    session.commit()
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).get("/api/locations")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    locations = {item["codigo"]: item for item in response.json()}
+    assert locations["s:BP20"]["nombre"] == "VILLA DE VALLECAS. BP Luis Martín Santos"
+    assert locations["s:BP20"]["biblioteca_codigo"] == "BPM"
+    assert locations["s:BP20"]["municipio"] == "Madrid"
 
 
 def test_record_incluye_ubicacion_de_sucursal() -> None:

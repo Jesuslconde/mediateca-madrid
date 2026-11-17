@@ -49,6 +49,17 @@ La API SHALL exponer la lista de bibliotecas con su número de ejemplares y esta
 - **THEN** recibe las bibliotecas conocidas con su municipio y número de ejemplares
 - **AND** no recibe contadores de ejemplares disponibles
 
+### Requirement: Ubicaciones filtrables
+
+La API SHALL exponer `GET /api/locations` con las redes y sucursales que tienen ejemplares. Cada ubicación SHALL incluir un código estable con prefijo (`b:` para biblioteca, `s:` para sucursal), nombre visible, tipo, biblioteca matriz, municipio y número de ejemplares.
+
+#### Scenario: Listado de ubicaciones
+
+- **WHEN** el cliente solicita `/api/locations`
+- **THEN** recibe una entrada `b:<biblioteca_codigo>` por cada red
+- **AND** recibe una entrada `s:<sucursal_codigo>` por cada sucursal con ejemplares
+- **AND** cada sucursal incluye el código y nombre de su biblioteca matriz
+
 ### Requirement: Salud del servicio
 
 La API MUST exponer `GET /health` y SHALL comprobar la conexión con PostgreSQL y Meilisearch.

@@ -186,6 +186,13 @@ es filtrable y se devuelve como faceta. Los TITN procesados por un lote se
 indexan de forma incremental; tras un cambio de esquema o al anadir el campo a un
 indice existente se ejecuta `mediateca index --reset` para reconstruirlo.
 
+Cada documento conserva `bibliotecas` con los nombres de las redes y anade
+`ubicaciones` (codigos `b:<biblioteca>` y `s:<sucursal>`) y `ubicaciones_texto`
+(nombres visibles). Ambos campos nuevos son filtrables: el portal usa el codigo
+estable para el selector agrupado y acepta el nombre como respaldo. Tras
+desplegar este cambio hay que ejecutar `make index` para poblar los campos en los
+documentos existentes.
+
 Si un lote falla antes de terminar, el worker indexa igualmente los `TITN` que ya
 habia procesado. Ademas, el scheduler encola una reindexacion de reconciliacion
 cada `index_interval_hours` (168 por defecto) para reparar cualquier divergencia

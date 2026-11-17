@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -142,6 +142,16 @@ class RecordDetail(BaseModel):
 class LibraryOut(BaseModel):
     codigo: str
     nombre: str
+    municipio: str | None = None
+    ejemplares: int
+
+
+class LocationOut(BaseModel):
+    codigo: str
+    nombre: str
+    tipo: Literal["biblioteca", "sucursal"]
+    biblioteca_codigo: str
+    biblioteca_nombre: str
     municipio: str | None = None
     ejemplares: int
 

@@ -67,6 +67,8 @@ La misma actualizacion puede encolarse como tarea manual con `make branches-enqu
 
 En la ficha de un registro se puede elegir un codigo postal para ordenar las bibliotecas por cercania. Sin seleccion, el orden es alfabetico. La eleccion se guarda en `localStorage`; no se solicita geolocalizacion del navegador. Las distancias son aproximadas.
 
+El filtro lateral de resultados permite elegir una red de bibliotecas o una sucursal concreta. El selector agrupa las sucursales bajo su biblioteca matriz y se puede buscar por el nombre visible; internamente envia un codigo estable (`b:` para red, `s:` para sucursal). Las URLs antiguas con el nombre de la red siguen funcionando, y un nombre de sucursal tambien se acepta como fallback. Tras cambiar los campos de indice hay que ejecutar `make index`.
+
 Los 304 codigos postales de la provincia de Madrid se generan con:
 
 ```bash

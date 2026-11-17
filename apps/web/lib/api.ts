@@ -7,6 +7,7 @@ type Schemas = components["schemas"];
 export type SearchHit = Schemas["SearchHit"];
 export type SearchResponse = Schemas["SearchResponse"];
 export type Library = Schemas["LibraryOut"];
+export type Location = Schemas["LocationOut"];
 export type Stats = Schemas["StatsResponse"];
 export type Persona = Schemas["PersonaOut"];
 export type Enlace = Schemas["EnlaceOut"];
@@ -69,6 +70,10 @@ export function getRecord(titn: string): Promise<RecordDetail> {
 
 export function getLibraries(): Promise<Library[]> {
   return apiFetch<Library[]>("/api/libraries");
+}
+
+export function getLocations(): Promise<Location[]> {
+  return apiFetch<Location[]>("/api/locations");
 }
 
 export function getStats(): Promise<Stats> {

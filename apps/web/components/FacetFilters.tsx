@@ -2,7 +2,7 @@ import Form from "next/form";
 import Link from "next/link";
 
 import { LibrarySelect } from "@/components/LibrarySelect";
-import type { Library } from "@/lib/api";
+import type { Location } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
 import { buildSearchQuery, first, toArray, type RawSearchParams } from "@/lib/url";
 
@@ -22,11 +22,11 @@ function sortedEntries(
 export function FacetFilters({
   params,
   facets,
-  libraries,
+  locations,
 }: {
   params: RawSearchParams;
   facets: Record<string, Record<string, number>>;
-  libraries: Library[];
+  locations: Location[];
 }) {
   const selectedSupports = toArray(params.soporte);
   const selectedGenero = first(params.genero);
@@ -54,19 +54,6 @@ export function FacetFilters({
       countryEntries.unshift([country, 0]);
     }
   }
-  const libraryOptions = selectedBiblioteca
-    ? libraries.some((library) => library.nombre === selectedBiblioteca)
-      ? libraries
-      : [
-          ...libraries,
-          {
-            codigo: "",
-            nombre: selectedBiblioteca,
-            municipio: null,
-            ejemplares: 0,
-          },
-        ]
-    : libraries;
 
   return (
     <Form action="/buscar" className="space-y-6">
@@ -142,10 +129,10 @@ export function FacetFilters({
 
       <section>
         <label htmlFor="biblioteca" className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-          Biblioteca
+          Biblioteca o sucursal
         </label>
         <LibrarySelect
-          libraries={libraryOptions}
+          locations={locations}
           defaultValue={selectedBiblioteca ?? ""}
         />
       </section>

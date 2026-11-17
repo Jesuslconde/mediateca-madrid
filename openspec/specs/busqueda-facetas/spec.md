@@ -7,14 +7,25 @@ Ofrecer una búsqueda rápida y tolerante a errores sobre el catálogo de vídeo
 
 ### Requirement: Documento de índice
 
-El indexador MUST construir un documento por edición con título, título uniforme, sinopsis, personas y roles, géneros, materias, soportes, año, idioma, país, duración, edad recomendada, EAN, bibliotecas tenedoras y número de ejemplares. El documento SHALL NOT incluir ningún campo de disponibilidad de préstamo.
+El indexador MUST construir un documento por edición con título, título uniforme, sinopsis, personas y roles, géneros, materias, soportes, año, idioma, país, duración, edad recomendada, EAN, bibliotecas tenedoras, ubicaciones filtrables y número de ejemplares. El documento SHALL NOT incluir ningún campo de disponibilidad de préstamo.
 
 #### Scenario: Edición indexada
 
 - **WHEN** se indexa una edición con ejemplares en DVD
 - **THEN** el documento contiene `soportes: ["DVD"]`
-- **AND** contiene las bibliotecas tenedoras y el número de ejemplares
+- **AND** contiene las bibliotecas tenedoras, las ubicaciones filtrables y el número de ejemplares
 - **AND** no contiene ningún campo de disponibilidad
+
+### Requirement: Ubicaciones filtrables en el índice
+
+El documento SHALL conservar los nombres de las redes en `bibliotecas` y SHALL incluir `ubicaciones` con códigos estables (`b:` para biblioteca, `s:` para sucursal) y `ubicaciones_texto` con los nombres visibles.
+
+#### Scenario: Edición con sucursal
+
+- **WHEN** se indexa una edición con un ejemplar en una sucursal
+- **THEN** `ubicaciones` contiene el código de la red y el de la sucursal
+- **AND** `ubicaciones_texto` contiene ambos nombres visibles
+- **AND** `bibliotecas` sigue conteniendo solo el nombre de la red
 
 ### Requirement: Documento de índice con países de origen
 
@@ -64,9 +75,15 @@ El sistema SHALL combinar filtros de soporte, género, rango de años, idioma, p
 
 #### Scenario: DVD disponibles en una biblioteca
 
-- **WHEN** el usuario filtra por `soporte=DVD` y `biblioteca=B.P.M. Cardenal Cisneros`
-- **THEN** solo se devuelven ediciones con al menos un ejemplar DVD en esa biblioteca
+- **WHEN** el usuario filtra por `soporte=DVD` y `biblioteca=s:BMALC1`
+- **THEN** solo se devuelven ediciones con al menos un ejemplar DVD en esa sucursal
 - **AND** no se ofrece ningún filtro por disponibilidad
+
+#### Scenario: Filtro por nombre de biblioteca o sucursal
+
+- **WHEN** el usuario filtra por `biblioteca=B.P.M. Cardenal Cisneros`
+- **THEN** se buscan coincidencias en `bibliotecas` y en `ubicaciones_texto`
+- **AND** el filtro se combina con la consulta textual y el resto de filtros activos
 
 #### Scenario: Filtro por país de origen
 
