@@ -3,4 +3,4 @@
 from mediateca_shared.version import SCHEMA_VERSION
 
 __all__ = ["SCHEMA_VERSION"]
-__version__ = "0.4.1"
+__version__ = "0.5.1"

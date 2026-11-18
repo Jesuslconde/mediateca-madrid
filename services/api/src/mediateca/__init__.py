@@ -1,3 +1,3 @@
 """Mediateca Madrid: catalogo alternativo de videos y DVD/Blu-ray."""
 
-__version__ = "0.4.1"
+__version__ = "0.5.1"
