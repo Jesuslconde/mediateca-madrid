@@ -24,6 +24,7 @@ export type SearchParamsInput = {
   idioma?: string;
   paises_origen?: string[];
   biblioteca?: string;
+  fuente?: string;
   page?: number;
   limit?: number;
   sort?: string;
@@ -64,8 +65,8 @@ export function searchRecords(params: SearchParamsInput): Promise<SearchResponse
   return apiFetch<SearchResponse>("/api/search", params as Record<string, unknown>);
 }
 
-export function getRecord(titn: string): Promise<RecordDetail> {
-  return apiFetch<RecordDetail>(`/api/records/${encodeURIComponent(titn)}`);
+export function getRecord(recordId: string): Promise<RecordDetail> {
+  return apiFetch<RecordDetail>(`/api/records/${encodeURIComponent(recordId)}`);
 }
 
 export function getLibraries(): Promise<Library[]> {

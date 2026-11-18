@@ -61,7 +61,7 @@ def test_cli_discover_crea_stubs(
     monkeypatch.setattr(
         cli_module,
         "Harvester",
-        lambda session, client: Harvester(session, client=client),
+        lambda session, **kwargs: Harvester(session, **kwargs),
     )
 
     result = CliRunner().invoke(
@@ -458,7 +458,7 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
 
     seen: dict[str, int | None] = {}
 
-    def fake_refresh(session_arg, client, *, limit=None, max_pages=None):
+    def fake_refresh(session_arg, client, *, fuente=None, limit=None, max_pages=None):
         seen["limit"] = limit
         seen["max_pages"] = max_pages
         return RefreshStats(

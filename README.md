@@ -44,6 +44,7 @@ make ps
 make init
 make migrate
 make harvest q=cine pages=2 limit=20
+make harvest q=cine pages=2 limit=20 fuente=madrid
 make branches
 make branches-enqueue
 make index
@@ -140,21 +141,24 @@ Cuando cambie el modelo:
 |---|---|---|
 | GET | `/health` | Estado de PostgreSQL y Meilisearch |
 | GET | `/api/search` | Busqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
-| GET | `/api/records/{titn}` | Ficha completa con ejemplares, paises de origen y `ubicacion` por ejemplar |
+| GET | `/api/records/{record_id}` | Ficha completa con fuente, ejemplares, paises de origen y `ubicacion` por ejemplar; un `TITN` suelto se resuelve como Madrid |
 | GET | `/api/libraries` | Bibliotecas con numero de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
 | POST | `/api/lists` | Crea una lista de favoritos y devuelve su token |
 | GET | `/api/lists/{token}` | Lista con sus titulos y el estado de cada ficha |
 | POST | `/api/lists/{token}/items` | Anade una edicion a la lista (idempotente) |
-| DELETE | `/api/lists/{token}/items/{titn}` | Quita una edicion de la lista |
+| DELETE | `/api/lists/{token}/items/{record_id}` | Quita una edicion de la lista; acepta tambien un `TITN` suelto |
 | PATCH | `/api/lists/{token}` | Renombra la lista |
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
+curl "http://localhost:8000/api/records/madrid:2101557"
 curl "http://localhost:8000/api/records/2101557"
 ```
 
-Cada ejemplar de `/api/records/{titn}` puede incluir:
+La ficha devuelve `record_id`, `fuente` y `fuente_nombre`. La identidad global es `<fuente>:<titn>`; la compatibilidad con `TITN` suelto se mantiene resolviendo a `madrid:<titn>`.
+
+Cada ejemplar de `/api/records/{record_id}` puede incluir:
 
 ```json
 "ubicacion": {
@@ -166,6 +170,19 @@ Cada ejemplar de `/api/records/{titn}` puede incluir:
 ```
 
 Si la sucursal no tiene coordenadas pero tiene codigo postal, `latitud` y `longitud` son `null`; el portal resuelve el centroide del codigo postal. Si no hay datos de ubicacion, `ubicacion` es `null`.
+
+## Fuentes y reindexado
+
+Las fuentes OPAC viven en la tabla `fuentes` y Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`. Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
+
+Tras aplicar la migracion de identidad (`SCHEMA_VERSION=7`) hay que reconstruir el indice:
+
+```bash
+make migrate
+make index-reset
+```
+
+En un despliegue normal el servicio `init` detecta el salto de version y ejecuta el reindexado con `--reset`.
 
 ## Contratos
 

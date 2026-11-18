@@ -5,7 +5,7 @@ import { LibrariesTable } from "@/components/LibrariesTable";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SupportBadge } from "@/components/SupportBadge";
 import { getRecord, type Persona } from "@/lib/api";
-import { getActiveList, savedTitns } from "@/lib/active-list";
+import { getActiveList, savedRecordIds } from "@/lib/active-list";
 import { countryLabel, languageLabel } from "@/lib/labels";
 import { first, type RawSearchParams } from "@/lib/url";
 
@@ -65,17 +65,17 @@ export default async function RecordPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ titn: string }>;
+  params: Promise<{ recordId: string }>;
   searchParams: Promise<RawSearchParams>;
 }) {
-  const { titn } = await params;
+  const { recordId } = await params;
   const sp = await searchParams;
   const volver = safeVolver(first(sp.volver));
-  const record = await getRecord(titn).catch(() => null);
+  const record = await getRecord(recordId).catch(() => null);
   if (!record) notFound();
 
   const activeList = await getActiveList().catch(() => null);
-  const saved = savedTitns(activeList).has(record.titn);
+  const saved = savedRecordIds(activeList).has(record.record_id);
 
   const people = groupPeople(record.personas);
   const countries = (record.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
@@ -123,7 +123,7 @@ export default async function RecordPage({
                 {[record.publicacion, record.anio].filter(Boolean).join(" · ")}
               </p>
               <div className="mt-4">
-                <FavoriteButton titn={record.titn} saved={saved} compact={false} />
+                <FavoriteButton recordId={record.record_id} saved={saved} compact={false} />
               </div>
               {record.tmdb_url ? (
                 <a
@@ -138,7 +138,10 @@ export default async function RecordPage({
             </div>
           </div>
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right text-xs text-slate-500">
-            <p className="font-mono">TITN {record.titn}</p>
+            <p className="font-semibold text-slate-700">
+              {record.fuente_nombre || record.fuente}
+            </p>
+            <p className="mt-1 font-mono">TITN {record.titn}</p>
             {record.ean ? <p className="mt-1 font-mono">EAN {record.ean}</p> : null}
           </div>
         </div>
@@ -259,8 +262,8 @@ export default async function RecordPage({
 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-xs leading-5 text-slate-500">
             <p>
-              Datos procedentes del catálogo público de las Bibliotecas de la Comunidad de
-              Madrid. La disponibilidad puede cambiar; confirma en el OPAC oficial antes de
+              Datos procedentes de {record.fuente_nombre || record.fuente}. La
+              disponibilidad puede cambiar; confirma en el OPAC oficial antes de
               desplazarte.
             </p>
             {record.source_url ? (

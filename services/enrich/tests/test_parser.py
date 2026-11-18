@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from mediateca.catalog.parser import parse_detail, parse_file, parse_search_results
 
 
@@ -161,3 +163,18 @@ def test_parse_search_usa_titulo_visible_sin_responsabilidad() -> None:
         "Imágenes y justicia : el Derecho a través del cine",
         "Alfredo el Grande",
     ]
+
+
+def test_parser_absysnet_con_ruta_abnetcl() -> None:
+    base = Path(__file__).resolve().parents[1] / "fixtures" / "abnetcl"
+    listing = parse_search_results((base / "search_results.html").read_text(encoding="utf-8"))
+    assert [item.titn for item in listing] == ["2101557", "2107423", "2109999"]
+    assert all("/abnetcl.cgi/" in (item.source_url or "") for item in listing)
+
+    detail = parse_detail(
+        (base / "detail_dvd.html").read_text(encoding="utf-8"),
+        "https://opac.example/abnetcl.cgi/SESION/NT1?TITN=2101557",
+    )
+    assert detail.titn == "2101557"
+    assert detail.titulo
+    assert detail.ejemplares

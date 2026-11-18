@@ -8,7 +8,8 @@ from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
-from mediateca_shared.models import Biblioteca
+from mediateca_shared.fuentes import FuenteProfile
+from mediateca_shared.models import Biblioteca, Fuente
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -30,6 +31,10 @@ TIPO_RE = re.compile(r"Tipo biblioteca:\s*([^\n]+)")
 
 
 class _TransientDirectoryError(httpx.HTTPError):
+    pass
+
+
+class DirectoryUnavailable(RuntimeError):
     pass
 
 
@@ -199,6 +204,20 @@ class DirectoryClient:
         )
         self._last_request_at: float | None = None
 
+    @classmethod
+    def from_fuente(cls, fuente: Fuente, **kwargs) -> DirectoryClient:
+        profile = FuenteProfile.from_model(fuente)
+        path = (profile.options or {}).get("directory_path")
+        if not path:
+            raise DirectoryUnavailable(
+                f"La fuente {fuente.codigo} no tiene directorio configurado"
+            )
+        return cls(
+            base_url=profile.base_url.rstrip("/") + str(path),
+            delay=profile.delay,
+            **kwargs,
+        )
+
     def __enter__(self) -> DirectoryClient:
         return self
 
@@ -272,6 +291,7 @@ def refresh_sucursales(
     session: Session,
     client: DirectoryClient,
     *,
+    fuente: Fuente,
     limit: int | None = None,
     max_pages: int | None = None,
     only_known: bool = False,
@@ -285,7 +305,11 @@ def refresh_sucursales(
     stats = RefreshStats()
     known_libraries: set[str] | None = None
     if only_known:
-        known_libraries = set(session.scalars(select(Biblioteca.codigo)))
+        known_libraries = set(
+            session.scalars(
+                select(Biblioteca.codigo).where(Biblioteca.fuente_id == fuente.id)
+            )
+        )
 
     for parsed in client.iter_records(limit=limit, max_pages=max_pages):
         stats.records += 1
@@ -309,7 +333,10 @@ def refresh_sucursales(
             continue
 
         biblioteca = session.scalars(
-            select(Biblioteca).where(Biblioteca.codigo == parsed.biblioteca_codigo)
+            select(Biblioteca).where(
+                Biblioteca.fuente_id == fuente.id,
+                Biblioteca.codigo == parsed.biblioteca_codigo,
+            )
         ).first()
         if biblioteca is None:
             stats.omitted += 1

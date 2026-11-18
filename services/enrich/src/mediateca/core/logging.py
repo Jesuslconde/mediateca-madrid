@@ -10,6 +10,8 @@ from mediateca.core.config import settings
 STRUCTURED_FIELDS = (
     "job_id",
     "job_type",
+    "fuente",
+    "record_id",
     "titn",
     "doc",
     "result",

@@ -4,6 +4,7 @@ import math
 from collections.abc import Iterable
 from typing import Any
 
+from mediateca_shared.identity import normalize_location_code, normalize_record_id
 from mediateca_shared.models import (
     Edicion,
     EdicionMateria,
@@ -16,9 +17,19 @@ from sqlalchemy.orm import Session, selectinload
 from mediateca.core.config import settings
 from mediateca.core.search import get_index, get_meili_client
 
-FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "paises_origen", "bibliotecas"]
+FACET_FIELDS = [
+    "soportes",
+    "generos",
+    "anio",
+    "idioma",
+    "paises_origen",
+    "bibliotecas",
+    "fuente",
+]
 
 FILTERABLE_ATTRIBUTES = [
+    "record_id",
+    "fuente",
     "soportes",
     "soporte_principal",
     "generos",
@@ -87,22 +98,28 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
     bibliotecas = sorted(
         {ejemplar.biblioteca.nombre for ejemplar in edicion.ejemplares}
     )
+    fuente = edicion.fuente
+    fuente_codigo = fuente.codigo if fuente is not None else "madrid"
+    fuente_nombre = fuente.nombre if fuente is not None else None
     ubicaciones: set[str] = set()
     ubicaciones_texto: set[str] = set()
     for ejemplar in edicion.ejemplares:
         biblioteca = ejemplar.biblioteca
         if biblioteca is None:
             continue
-        ubicaciones.add(f"b:{biblioteca.codigo}")
+        ubicaciones.add(f"b:{fuente_codigo}:{biblioteca.codigo}")
         ubicaciones_texto.add(biblioteca.nombre)
         if ejemplar.sucursal_codigo:
-            ubicaciones.add(f"s:{ejemplar.sucursal_codigo}")
+            ubicaciones.add(f"s:{fuente_codigo}:{ejemplar.sucursal_codigo}")
             if ejemplar.sucursal_nombre:
                 ubicaciones_texto.add(ejemplar.sucursal_nombre)
     materias = [relacion.materia.termino for relacion in edicion.materias]
 
     return {
-        "id": edicion.titn,
+        "id": edicion.record_id,
+        "record_id": edicion.record_id,
+        "fuente": fuente_codigo,
+        "fuente_nombre": fuente_nombre,
         "titn": edicion.titn,
         "titulo": edicion.titulo,
         "titulo_uniforme": edicion.titulo_uniforme,
@@ -151,8 +168,12 @@ def build_filters(
     idioma: str | None = None,
     paises_origen: list[str] | None = None,
     biblioteca: str | None = None,
+    fuente: str | None = None,
 ) -> str | None:
     filters: list[str] = []
+
+    if fuente:
+        filters.append(f"fuente = {_quote(fuente)}")
 
     if soportes:
         filters.append(
@@ -170,7 +191,9 @@ def build_filters(
         )
     if biblioteca:
         if biblioteca.startswith(("b:", "s:")):
-            filters.append(f"ubicaciones = {_quote(biblioteca)}")
+            filters.append(
+                f"ubicaciones = {_quote(normalize_location_code(biblioteca))}"
+            )
         else:
             quoted = _quote(biblioteca)
             filters.append(f"(bibliotecas = {quoted} OR ubicaciones_texto = {quoted})")
@@ -230,12 +253,27 @@ class MeiliIndexer:
         task = self.index.delete_all_documents()
         self._wait(task)
 
-    def index_editions(self, session: Session, *, reset: bool = False) -> int:
+    def index_editions(
+        self,
+        session: Session,
+        *,
+        reset: bool = False,
+        fuente_id: int | None = None,
+    ) -> int:
         self.ensure_index()
         if reset:
             self.delete_all()
 
+        if fuente_id is not None:
+            documents = [
+                build_document(edicion)
+                for edicion in iter_documents(session, fuente_id=fuente_id)
+            ]
+            self._add_batch(documents)
+            return len(documents)
+
         stmt = select(Edicion).options(
+            selectinload(Edicion.fuente),
             selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
             selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
             selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
@@ -252,18 +290,25 @@ class MeiliIndexer:
         self._add_batch(batch)
         return total
 
-    def index_titns(self, session: Session, titns: Iterable[str]) -> int:
+    def index_titns(
+        self, session: Session, record_ids: Iterable[str]
+    ) -> int:
         """Indexa solo las ediciones indicadas, en lotes de 200."""
         self.ensure_index()
-        unique = list(dict.fromkeys(titn for titn in titns if titn))
+        unique = list(
+            dict.fromkeys(
+                normalize_record_id(value) for value in record_ids if value
+            )
+        )
 
         total = 0
         for start in range(0, len(unique), 200):
             chunk = unique[start : start + 200]
             stmt = (
                 select(Edicion)
-                .where(Edicion.titn.in_(chunk))
+                .where(Edicion.record_id.in_(chunk))
                 .options(
+                    selectinload(Edicion.fuente),
                     selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
                     selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
                     selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
@@ -285,6 +330,7 @@ class MeiliIndexer:
         idioma: str | None = None,
         paises_origen: list[str] | None = None,
         biblioteca: str | None = None,
+        fuente: str | None = None,
         sort: str | None = None,
         page: int = 1,
         limit: int = 20,
@@ -297,6 +343,7 @@ class MeiliIndexer:
             idioma=idioma,
             paises_origen=paises_origen,
             biblioteca=biblioteca,
+            fuente=fuente,
         )
         options: dict[str, Any] = {
             "page": max(1, page),
@@ -329,11 +376,16 @@ class MeiliIndexer:
         return self.client.health()
 
 
-def iter_documents(session: Session) -> Iterable[dict[str, Any]]:
+def iter_documents(
+    session: Session, *, fuente_id: int | None = None
+) -> Iterable[dict[str, Any]]:
     stmt = select(Edicion).options(
+        selectinload(Edicion.fuente),
         selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
         selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
         selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
     )
+    if fuente_id is not None:
+        stmt = stmt.where(Edicion.fuente_id == fuente_id)
     for edicion in session.scalars(stmt).yield_per(200):
         yield build_document(edicion)

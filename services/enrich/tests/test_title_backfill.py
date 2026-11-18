@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Obra
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Obra
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -20,7 +20,16 @@ def _session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    session.add(fuente)
+    session.commit()
+    session.info["fuente"] = fuente
+    return session
+
+
+def _fuente(session):
+    return session.info["fuente"]
 
 
 def _edicion(
@@ -34,6 +43,8 @@ def _edicion(
     obra = Obra(titulo_uniforme=titulo_uniforme or titulo, anio=2024)
     session.add(obra)
     edicion = Edicion(
+        fuente_id=_fuente(session).id,
+        record_id=f"madrid:{titn}",
         titn=titn,
         titulo=titulo,
         titulo_uniforme=titulo_uniforme,
@@ -41,11 +52,16 @@ def _edicion(
         marc=marc or {},
     )
     session.add(edicion)
-    biblioteca = Biblioteca(codigo=f"B{titn}", nombre="Biblioteca de prueba")
+    biblioteca = Biblioteca(
+        fuente_id=_fuente(session).id,
+        codigo=f"B{titn}",
+        nombre="Biblioteca de prueba",
+    )
     session.add(biblioteca)
     session.flush()
     session.add(
         Ejemplar(
+            fuente_id=_fuente(session).id,
             edicion_id=edicion.id,
             biblioteca_id=biblioteca.id,
             external_key=f"E{titn}",

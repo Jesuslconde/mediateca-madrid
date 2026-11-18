@@ -68,7 +68,7 @@ export function ListaView({ lista, token }: { lista: Lista; token: string }) {
         <ul className="space-y-3">
           {lista.items.map((item) => (
             <li
-              key={item.titn}
+              key={item.record_id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card transition hover:border-slate-300"
             >
               <div className="flex gap-4">
@@ -88,7 +88,7 @@ export function ListaView({ lista, token }: { lista: Lista; token: string }) {
                     <div className="min-w-0">
                       {item.disponible ? (
                         <Link
-                          href={`/registro/${item.titn}`}
+                          href={`/registro/${encodeURIComponent(item.record_id)}`}
                           className="text-base font-bold leading-tight text-ink underline-offset-4 hover:text-accent hover:underline"
                         >
                           {item.titulo}
@@ -104,6 +104,9 @@ export function ListaView({ lista, token }: { lista: Lista; token: string }) {
                         </span>
                       ) : null}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {item.fuente}
+                        </span>
                         {item.anio ? (
                           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                             {item.anio}
@@ -117,7 +120,7 @@ export function ListaView({ lista, token }: { lista: Lista; token: string }) {
 
                     <form action={removeItemAction}>
                       <input type="hidden" name="token" value={token} />
-                      <input type="hidden" name="titn" value={item.titn} />
+                      <input type="hidden" name="record_id" value={item.record_id} />
                       <button
                         type="submit"
                         className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:border-rose-200 hover:text-accent"
@@ -130,7 +133,7 @@ export function ListaView({ lista, token }: { lista: Lista; token: string }) {
                   <div className="mt-3 flex flex-wrap gap-3 text-xs">
                     {item.disponible ? (
                       <Link
-                        href={`/registro/${item.titn}`}
+                        href={`/registro/${encodeURIComponent(item.record_id)}`}
                         className="font-medium text-slate-600 underline-offset-4 hover:text-ink hover:underline"
                       >
                         Ver ficha

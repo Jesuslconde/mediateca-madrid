@@ -8,7 +8,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { SearchSkeleton } from "@/components/SearchSkeleton";
 import { SortSelect } from "@/components/SortSelect";
 import { getLocations, searchRecords } from "@/lib/api";
-import { getActiveList, savedTitns } from "@/lib/active-list";
+import { getActiveList, savedRecordIds } from "@/lib/active-list";
 import { countryLabel } from "@/lib/labels";
 import { parseSort, type SortValue } from "@/lib/sort";
 import {
@@ -34,6 +34,7 @@ type SearchBodyProps = {
   idioma?: string;
   countries: string[];
   biblioteca?: string;
+  fuente?: string;
   anioDesde?: number;
   anioHasta?: number;
   page: number;
@@ -53,6 +54,7 @@ export default async function SearchPage({
   const idioma = first(sp.idioma);
   const countries = toArray(sp.paises_origen);
   const biblioteca = first(sp.biblioteca);
+  const fuente = first(sp.fuente);
   const anioDesde = parseYear(first(sp.anio_desde));
   const anioHasta = parseYear(first(sp.anio_hasta));
   const page = Math.max(1, Number(first(sp.page) ?? "1") || 1);
@@ -67,6 +69,7 @@ export default async function SearchPage({
     idioma ?? "",
     countries.join(","),
     biblioteca ?? "",
+    fuente ?? "",
     anioDesde ?? "",
     anioHasta ?? "",
     page,
@@ -102,6 +105,7 @@ export default async function SearchPage({
           idioma={idioma}
           countries={countries}
           biblioteca={biblioteca}
+          fuente={fuente}
           anioDesde={anioDesde}
           anioHasta={anioHasta}
           page={page}
@@ -121,6 +125,7 @@ async function SearchBody({
   idioma,
   countries,
   biblioteca,
+  fuente,
   anioDesde,
   anioHasta,
   page,
@@ -135,6 +140,7 @@ async function SearchBody({
       idioma,
       paises_origen: countries.length ? countries : undefined,
       biblioteca,
+      fuente,
       anio_desde: anioDesde,
       anio_hasta: anioHasta,
       page,
@@ -144,7 +150,7 @@ async function SearchBody({
     getLocations().catch(() => []),
     getActiveList().catch(() => null),
   ]);
-  const saved = savedTitns(activeList);
+  const saved = savedRecordIds(activeList);
 
   const selectedLocation = locations.find(
     (location) => location.codigo === biblioteca,
@@ -159,6 +165,7 @@ async function SearchBody({
     genero ? `Género: ${genero}` : null,
     ...countries.map((country) => `País: ${countryLabel(country) ?? country}`),
     bibliotecaLabel ? `Biblioteca: ${bibliotecaLabel}` : null,
+    fuente ? `Fuente: ${fuente}` : null,
     idioma ? `Idioma: ${idioma}` : null,
     anioDesde || anioHasta
       ? `Año: ${anioDesde ?? "..."}–${anioHasta ?? "..."}`
@@ -236,7 +243,7 @@ async function SearchBody({
                 key={hit.id}
                 hit={hit}
                 volver={volver}
-                saved={saved.has(hit.titn)}
+                saved={saved.has(hit.record_id ?? hit.titn)}
               />
             ))}
           </div>

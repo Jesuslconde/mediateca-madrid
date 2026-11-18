@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 from mediateca_shared.db import Base
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Sucursal
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Sucursal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -175,14 +175,14 @@ def test_search_filtra_por_codigo_de_ubicacion() -> None:
     app.dependency_overrides[get_indexer] = lambda: search
     try:
         client = TestClient(app)
-        response = client.get("/api/search", params={"biblioteca": "s:BMALC1"})
+        response = client.get("/api/search", params={"biblioteca": "s:madrid:BMALC1"})
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert index.options is not None
     assert index.options["filter"] == (
-        'detail_complete = true AND ubicaciones = "s:BMALC1"'
+        'detail_complete = true AND ubicaciones = "s:madrid:BMALC1"'
     )
 
 
@@ -283,6 +283,7 @@ def _edicion(
     tmdb_url: str | None = None,
 ) -> Edicion:
     edicion = Edicion(
+        record_id="madrid:2101557",
         titn="2101557",
         titulo="Abejas",
         paises_origen=paises_origen,
@@ -351,7 +352,16 @@ def _sqlite_session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    session.add(fuente)
+    session.commit()
+    session.info["fuente"] = fuente
+    return session
+
+
+def _fuente(session):
+    return session.info["fuente"]
 
 
 def _record_with_location(
@@ -362,6 +372,7 @@ def _record_with_location(
 ):
     session = _sqlite_session()
     biblioteca = Biblioteca(
+        fuente_id=_fuente(session).id,
         codigo="RBMALC",
         nombre="Bibliotecas Municipales Alcalá",
         municipio="Alcalá de Henares",
@@ -369,11 +380,17 @@ def _record_with_location(
         latitud=40.48156 if biblioteca_coords else None,
         longitud=-3.36521 if biblioteca_coords else None,
     )
-    edicion = Edicion(titn="2101557", titulo="Abejas")
+    edicion = Edicion(
+        fuente_id=_fuente(session).id,
+        record_id="madrid:2101557",
+        titn="2101557",
+        titulo="Abejas",
+    )
     session.add_all([biblioteca, edicion])
     if with_sucursal:
         session.add(
             Sucursal(
+                fuente_id=_fuente(session).id,
                 biblioteca=biblioteca,
                 codigo="BMALC1",
                 nombre="Cardenal Cisneros",
@@ -385,6 +402,7 @@ def _record_with_location(
         )
     session.add(
         Ejemplar(
+            fuente_id=_fuente(session).id,
             edicion=edicion,
             biblioteca=biblioteca,
             external_key="k1",
@@ -415,15 +433,15 @@ def test_locations_incluye_biblioteca_y_sucursal() -> None:
 
     assert response.status_code == 200
     locations = {item["codigo"]: item for item in response.json()}
-    assert set(locations) == {"b:RBMALC", "s:BMALC1"}
+    assert set(locations) == {"b:madrid:RBMALC", "s:madrid:BMALC1"}
 
-    biblioteca = locations["b:RBMALC"]
+    biblioteca = locations["b:madrid:RBMALC"]
     assert biblioteca["tipo"] == "biblioteca"
     assert biblioteca["nombre"] == "Bibliotecas Municipales Alcalá"
     assert biblioteca["biblioteca_codigo"] == "RBMALC"
     assert biblioteca["ejemplares"] == 1
 
-    sucursal = locations["s:BMALC1"]
+    sucursal = locations["s:madrid:BMALC1"]
     assert sucursal["tipo"] == "sucursal"
     assert sucursal["nombre"] == "Cardenal Cisneros"
     assert sucursal["biblioteca_codigo"] == "RBMALC"
@@ -440,18 +458,25 @@ def test_locations_sin_sucursal_solo_devuelve_biblioteca() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert [item["codigo"] for item in response.json()] == ["b:RBMALC"]
+    assert [item["codigo"] for item in response.json()] == ["b:madrid:RBMALC"]
 
 
 def test_locations_incluye_sucursal_sin_fila_en_sucursales() -> None:
     session = _sqlite_session()
     biblioteca = Biblioteca(
+        fuente_id=_fuente(session).id,
         codigo="BPM",
         nombre="MADRID. Bibliotecas Públicas",
         municipio="Madrid",
     )
-    edicion = Edicion(titn="1948243", titulo="Dolor y gloria")
+    edicion = Edicion(
+        fuente_id=_fuente(session).id,
+        record_id="madrid:1948243",
+        titn="1948243",
+        titulo="Dolor y gloria",
+    )
     ejemplar = Ejemplar(
+        fuente_id=_fuente(session).id,
         edicion=edicion,
         biblioteca=biblioteca,
         external_key="k1",
@@ -468,9 +493,9 @@ def test_locations_incluye_sucursal_sin_fila_en_sucursales() -> None:
 
     assert response.status_code == 200
     locations = {item["codigo"]: item for item in response.json()}
-    assert locations["s:BP20"]["nombre"] == "VILLA DE VALLECAS. BP Luis Martín Santos"
-    assert locations["s:BP20"]["biblioteca_codigo"] == "BPM"
-    assert locations["s:BP20"]["municipio"] == "Madrid"
+    assert locations["s:madrid:BP20"]["nombre"] == "VILLA DE VALLECAS. BP Luis Martín Santos"
+    assert locations["s:madrid:BP20"]["biblioteca_codigo"] == "BPM"
+    assert locations["s:madrid:BP20"]["municipio"] == "Madrid"
 
 
 def test_record_incluye_ubicacion_de_sucursal() -> None:

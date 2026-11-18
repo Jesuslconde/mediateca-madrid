@@ -48,6 +48,14 @@
       <label>Idioma <input type="text" name="idioma" value="{{ filter.idioma or '' }}"></label>
       <label>País <input type="text" name="pais" value="{{ filter.pais or '' }}"></label>
       <label>Biblioteca <input type="text" name="biblioteca" value="{{ filter.biblioteca or '' }}"></label>
+      <label>Fuente
+        <select name="fuente">
+          <option value="">Todas</option>
+          {% for fuente in fuentes %}
+            <option value="{{ fuente.codigo }}" {% if filter.fuente == fuente.codigo %}selected{% endif %}>{{ fuente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <button type="submit">Filtrar</button>
       <a href="/catalogo" class="muted">Limpiar</a>
     </form>
@@ -63,6 +71,7 @@
       <table>
         <thead>
           <tr>
+            <th>Fuente</th>
             <th>TITN</th>
             <th>Título</th>
             <th>Año</th>
@@ -82,6 +91,7 @@
         <tbody>
           {% for edicion in rows %}
             <tr>
+              <td>{{ edicion.fuente.codigo if edicion.fuente else '—' }}</td>
               <td>{{ edicion.titn }}</td>
               <td>{{ edicion.titulo }}</td>
               <td>{{ edicion.anio if edicion.anio is not none else '—' }}</td>

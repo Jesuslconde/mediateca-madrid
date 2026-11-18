@@ -4,13 +4,15 @@ from dataclasses import replace
 from pathlib import Path
 
 import httpx
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Sucursal
+import pytest
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Sucursal
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from mediateca.catalog.directory import (
     DirectoryClient,
+    DirectoryUnavailable,
     ParsedSucursal,
     parse_directory_list,
     parse_directory_positions,
@@ -37,7 +39,16 @@ def _session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    session.add(fuente)
+    session.commit()
+    session.info["fuente"] = fuente
+    return session
+
+
+def _fuente(session):
+    return session.info["fuente"]
 
 
 def test_parsea_listado_y_paginacion() -> None:
@@ -195,7 +206,7 @@ def test_cliente_reintenta_error_temporal() -> None:
 
 def test_upsert_sucursal_es_idempotente_y_no_pisa_coordenadas() -> None:
     session = _session()
-    biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
+    biblioteca = Biblioteca(fuente_id=_fuente(session).id, codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
     session.add(biblioteca)
     session.commit()
 
@@ -216,8 +227,9 @@ def test_upsert_sucursal_es_idempotente_y_no_pisa_coordenadas() -> None:
 
 def test_ejemplar_resuelve_sucursal_por_codigo() -> None:
     session = _session()
-    biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
+    biblioteca = Biblioteca(fuente_id=_fuente(session).id, codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
     sucursal = Sucursal(
+        fuente_id=_fuente(session).id,
         biblioteca=biblioteca,
         codigo="BMALC1",
         nombre="Cardenal Cisneros",
@@ -225,8 +237,14 @@ def test_ejemplar_resuelve_sucursal_por_codigo() -> None:
         latitud=40.480773,
         longitud=-3.362149,
     )
-    edicion = Edicion(titn="2101557", titulo="Abejas")
+    edicion = Edicion(
+        fuente_id=_fuente(session).id,
+        record_id="madrid:2101557",
+        titn="2101557",
+        titulo="Abejas",
+    )
     ejemplar = Ejemplar(
+        fuente_id=_fuente(session).id,
         edicion=edicion,
         biblioteca=biblioteca,
         external_key="k1",
@@ -249,7 +267,7 @@ def test_ejemplar_resuelve_sucursal_por_codigo() -> None:
 
 def test_update_biblioteca_location() -> None:
     session = _session()
-    biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
+    biblioteca = Biblioteca(fuente_id=_fuente(session).id, codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
     session.add(biblioteca)
     session.commit()
 
@@ -283,8 +301,9 @@ class _FakeDirectoryClient:
 
 def test_refresh_sucursales_solo_conocidas_crea_sus_sucursales() -> None:
     session = _session()
-    biblioteca = Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
+    biblioteca = Biblioteca(fuente_id=_fuente(session).id, codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá")
     sucursal = Sucursal(
+        fuente_id=_fuente(session).id,
         biblioteca=biblioteca,
         codigo="BMALC1",
         nombre="Cardenal Cisneros",
@@ -314,6 +333,7 @@ def test_refresh_sucursales_solo_conocidas_crea_sus_sucursales() -> None:
         _FakeDirectoryClient(
             [conocida, sucursal_nueva, biblioteca_nivel, biblioteca_desconocida]
         ),
+        fuente=_fuente(session),
         only_known=True,
     )
     session.commit()
@@ -335,7 +355,7 @@ def test_refresh_sucursales_solo_conocidas_crea_sus_sucursales() -> None:
 
 def test_refresh_sucursales_y_cobertura() -> None:
     session = _session()
-    session.add(Biblioteca(codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá"))
+    session.add(Biblioteca(fuente_id=_fuente(session).id, codigo="RBMALC", nombre="Bibliotecas Municipales Alcalá"))
     session.commit()
 
     known = parse_directory_record(_fixture("record_with_coords.html"))
@@ -344,7 +364,11 @@ def test_refresh_sucursales_y_cobertura() -> None:
     unknown = replace(known, biblioteca_codigo="DESCONOCIDA")
     records = [known, library_level, unknown, None]
 
-    stats = refresh_sucursales(session, _FakeDirectoryClient(records))  # type: ignore[arg-type]
+    stats = refresh_sucursales(
+        session,
+        _FakeDirectoryClient(records),  # type: ignore[arg-type]
+        fuente=_fuente(session),
+    )
     session.commit()
 
     assert stats.records == 4
@@ -355,3 +379,20 @@ def test_refresh_sucursales_y_cobertura() -> None:
     assert stats.libraries_updated == 1
     assert stats.omitted == 2
     assert session.scalar(select(func.count(Sucursal.id))) == 1
+
+
+def test_fuente_sin_directorio_informa_sin_fallar() -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    fuente = Fuente(
+        codigo="sin-directorio",
+        nombre="Sin directorio",
+        base_url="https://opac.example",
+        options={},
+    )
+    session.add(fuente)
+    session.commit()
+
+    with pytest.raises(DirectoryUnavailable):
+        DirectoryClient.from_fuente(fuente)

@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/records/{titn}": {
+    "/api/records/{record_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,7 +29,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Record */
-        get: operations["get_record_api_records__titn__get"];
+        get: operations["get_record_api_records__record_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -141,7 +141,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/lists/{token}/items/{titn}": {
+    "/api/lists/{token}/items/{record_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -152,7 +152,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Remove Item */
-        delete: operations["remove_item_api_lists__token__items__titn__delete"];
+        delete: operations["remove_item_api_lists__token__items__record_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -251,6 +251,8 @@ export interface components {
         };
         /** LibraryOut */
         LibraryOut: {
+            /** Fuente */
+            fuente: string;
             /** Codigo */
             codigo: string;
             /** Nombre */
@@ -267,11 +269,17 @@ export interface components {
         };
         /** ListaItemIn */
         ListaItemIn: {
+            /** Record Id */
+            record_id?: string | null;
             /** Titn */
-            titn: string;
+            titn?: string | null;
         };
         /** ListaItemOut */
         ListaItemOut: {
+            /** Record Id */
+            record_id: string;
+            /** Fuente */
+            fuente: string;
             /** Titn */
             titn: string;
             /** Titulo */
@@ -327,6 +335,8 @@ export interface components {
         };
         /** LocationOut */
         LocationOut: {
+            /** Fuente */
+            fuente: string;
             /** Codigo */
             codigo: string;
             /** Nombre */
@@ -365,6 +375,12 @@ export interface components {
         };
         /** RecordDetail */
         RecordDetail: {
+            /** Record Id */
+            record_id: string;
+            /** Fuente */
+            fuente: string;
+            /** Fuente Nombre */
+            fuente_nombre?: string | null;
             /** Titn */
             titn: string;
             /** Titulo */
@@ -454,6 +470,12 @@ export interface components {
         SearchHit: {
             /** Id */
             id: string;
+            /** Record Id */
+            record_id?: string | null;
+            /** Fuente */
+            fuente?: string | null;
+            /** Fuente Nombre */
+            fuente_nombre?: string | null;
             /** Titn */
             titn: string;
             /** Titulo */
@@ -631,6 +653,7 @@ export interface operations {
                 /** @description Puede repetirse: codigos ISO 3166-1 alfa-2 en mayusculas */
                 paises_origen?: string[] | null;
                 biblioteca?: string | null;
+                fuente?: string | null;
                 page?: number;
                 limit?: number;
                 sort?: string;
@@ -661,12 +684,12 @@ export interface operations {
             };
         };
     };
-    get_record_api_records__titn__get: {
+    get_record_api_records__record_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                titn: string;
+                record_id: string;
             };
             cookie?: never;
         };
@@ -884,13 +907,13 @@ export interface operations {
             };
         };
     };
-    remove_item_api_lists__token__items__titn__delete: {
+    remove_item_api_lists__token__items__record_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 token: string;
-                titn: string;
+                record_id: string;
             };
             cookie?: never;
         };

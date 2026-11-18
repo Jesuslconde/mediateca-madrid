@@ -4,8 +4,9 @@ q ?= cine
 pages ?= 1
 limit ?= 20
 branches_limit ?=
+fuente ?= madrid
 
-.PHONY: help up down build logs ps init migrate harvest branches branches-enqueue index dashboard dashboard-logs worker-logs test test-shared test-api test-enrich lint fmt shell psql openapi web-types contracts check-schema bump bump-release release clean
+.PHONY: help up down build logs ps init migrate harvest branches branches-enqueue index index-reset dashboard dashboard-logs worker-logs test test-shared test-api test-enrich test-migrations lint fmt shell psql openapi web-types contracts check-schema bump bump-release release clean
 
 help: ## Mostrar la ayuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -32,16 +33,19 @@ migrate: ## Aplicar migraciones idempotentes
 	docker compose run --rm --no-deps worker python -m mediateca migrate
 
 harvest: ## Recolectar del OPAC: make harvest q=cine pages=2 limit=20
-	docker compose run --rm worker python -m mediateca harvest --query "$(q)" --max-pages $(pages) $(if $(limit),--limit $(limit),)
+	docker compose run --rm worker python -m mediateca harvest --fuente "$(fuente)" --query "$(q)" --max-pages $(pages) $(if $(limit),--limit $(limit),)
 
 branches: ## Actualizar sucursales desde el directorio: make branches branches_limit=20
-	docker compose run --rm worker python -m mediateca refresh-branches $(if $(branches_limit),--limit $(branches_limit),)
+	docker compose run --rm worker python -m mediateca refresh-branches --fuente "$(fuente)" $(if $(branches_limit),--limit $(branches_limit),)
 
 branches-enqueue: ## Encolar la recarga de bibliotecas ya conocidas
-	docker compose run --rm worker python -m mediateca enqueue-branches
+	docker compose run --rm worker python -m mediateca enqueue-branches --fuente "$(fuente)"
 
 index: ## Indexar todas las ediciones
 	docker compose run --rm worker python -m mediateca index
+
+index-reset: ## Vaciar y reconstruir el indice
+	docker compose run --rm worker python -m mediateca index --reset
 
 dashboard: ## Levantar el dashboard de estado
 	docker compose up -d dashboard
@@ -62,6 +66,10 @@ test-api: ## Ejecutar las pruebas de la API
 
 test-enrich: ## Ejecutar las pruebas de ingesta
 	docker compose run --rm --no-deps worker pytest -q
+
+test-migrations: ## Probar las migraciones dos veces sobre PostgreSQL
+	docker compose up -d db
+	docker compose run --rm --no-deps -e MEDIATECA_TEST_DATABASE_URL=postgresql+psycopg://$${POSTGRES_USER:-mediateca}:$${POSTGRES_PASSWORD:-mediateca}@db:5432/$${POSTGRES_DB:-mediateca} worker pytest tests/test_migrations.py -q
 
 lint: ## Ejecutar ruff en API e ingesta
 	docker compose run --rm --no-deps -w /app/api api /opt/venv/bin/ruff check src tests

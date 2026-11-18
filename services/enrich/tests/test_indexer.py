@@ -36,10 +36,10 @@ def test_build_document_incluye_bibliotecas_sin_disponibilidad(dvd_fixture) -> N
 
     assert document["ejemplares"] == 2
     assert len(document["bibliotecas"]) == 2
-    assert "b:RBMALC" in document["ubicaciones"]
-    assert "s:BMALC1" in document["ubicaciones"]
-    assert "b:RBMALCO" in document["ubicaciones"]
-    assert "s:BMALCO1" in document["ubicaciones"]
+    assert "b:madrid:RBMALC" in document["ubicaciones"]
+    assert "s:madrid:BMALC1" in document["ubicaciones"]
+    assert "b:madrid:RBMALCO" in document["ubicaciones"]
+    assert "s:madrid:BMALCO1" in document["ubicaciones"]
     assert "B.P.M. Cardenal Cisneros" in document["ubicaciones_texto"]
     assert "Biblioteca José Hierro" in document["ubicaciones_texto"]
     assert "disponible" not in document
@@ -103,8 +103,8 @@ def test_index_titns_solo_actualiza_los_titn_indicados(dvd_fixture) -> None:
     assert first == 1
     assert second == 2
     assert missing == 0
-    assert index.batches == [["1"], ["2", "2101557"]]
-    assert set(index.documents) == {"1", "2", "2101557"}
+    assert index.batches == [["madrid:1"], ["madrid:2", "madrid:2101557"]]
+    assert set(index.documents) == {"madrid:1", "madrid:2", "madrid:2101557"}
 
 
 def test_index_titns_envia_lotes_de_200() -> None:
@@ -174,8 +174,8 @@ def test_filtro_de_ubicacion_por_codigo_y_por_nombre() -> None:
     assert "ubicaciones" in FILTERABLE_ATTRIBUTES
     assert "ubicaciones_texto" in FILTERABLE_ATTRIBUTES
 
-    por_codigo = build_filters(biblioteca="s:BMALC1")
-    assert por_codigo == 'ubicaciones = "s:BMALC1"'
+    por_codigo = build_filters(biblioteca="s:madrid:BMALC1")
+    assert por_codigo == 'ubicaciones = "s:madrid:BMALC1"'
 
     por_nombre = build_filters(biblioteca="B.P.M. Cardenal Cisneros")
     assert por_nombre == (
@@ -196,4 +196,4 @@ def test_index_reset_reconstruye_paises_origen(dvd_fixture) -> None:
 
     assert total == 1
     assert "antiguo" not in index.documents
-    assert index.documents[edicion.titn]["paises_origen"] == ["ES"]
+    assert index.documents[edicion.record_id]["paises_origen"] == ["ES"]

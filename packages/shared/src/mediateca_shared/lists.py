@@ -43,7 +43,7 @@ class ListaItem(Base):
         ForeignKey("listas.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    titn: Mapped[str] = mapped_column(String(32), primary_key=True)
+    record_id: Mapped[str] = mapped_column(String(160), primary_key=True)
     titulo_snapshot: Mapped[str] = mapped_column(String(1000))
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

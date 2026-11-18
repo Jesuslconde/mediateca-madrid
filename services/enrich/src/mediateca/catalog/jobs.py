@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -15,10 +15,11 @@ from mediateca_shared.constants import (
     JOB_CONFLICT_PAIRS,
     JOB_TYPES,
 )
-from mediateca_shared.models import Edicion, HarvestJob
+from mediateca_shared.models import Edicion, Fuente, HarvestJob
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from mediateca.catalog.fuentes import FuenteDisabled, require_enabled_fuente
 from mediateca.core.config import settings
 from mediateca.core.config_store import effective_flaresolverr_url, effective_tmdb_api_token
 from mediateca.core.logging import get_logger
@@ -38,6 +39,7 @@ class IngestCoverage:
     trabajos_en_ejecucion: int
     trabajos_completados: int
     trabajos_fallidos: int
+    por_fuente: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -51,6 +53,7 @@ class IngestMetrics:
     failed: int
     pending: int
     average_ms: float | None
+    por_fuente: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -68,6 +71,7 @@ def create_job(
     session: Session,
     job_type: str,
     *,
+    fuente: Fuente | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     cursor_doc: int | None = None,
     cursor_titn: str | None = None,
@@ -77,14 +81,22 @@ def create_job(
     if job_type not in JOB_TYPES:
         raise ValueError(f"Tipo de trabajo no valido: {job_type}")
 
+    if fuente is None and job_type != "index":
+        fuente = _source_or_madrid(session, None)
+    if fuente is not None and not fuente.enabled:
+        raise FuenteDisabled(f"La fuente {fuente.codigo} esta deshabilitada")
+    job_stats = dict(stats or {})
+    if fuente is not None:
+        job_stats.setdefault("fuente", fuente.codigo)
     job = HarvestJob(
         job_type=job_type,
+        fuente_id=fuente.id if fuente is not None else None,
         status="pending",
         batch_size=batch_size,
         cursor_doc=cursor_doc,
         cursor_titn=cursor_titn,
         max_attempts=max_attempts,
-        stats=stats or {},
+        stats=job_stats,
     )
     session.add(job)
     session.flush()
@@ -95,13 +107,14 @@ class JobAlreadyActive(RuntimeError):
     pass
 
 
-def active_job_types(session: Session) -> set[str]:
+def active_job_types(
+    session: Session, *, fuente_id: int | None = None
+) -> set[str]:
     """Tipos de trabajo que estan ejecutandose ahora mismo."""
-    return set(
-        session.scalars(
-            select(HarvestJob.job_type).where(HarvestJob.status == "running")
-        )
-    )
+    stmt = select(HarvestJob.job_type).where(HarvestJob.status == "running")
+    if fuente_id is not None:
+        stmt = stmt.where(HarvestJob.fuente_id == fuente_id)
+    return set(session.scalars(stmt))
 
 
 def conflicting_job_types(job_type: str) -> set[str]:
@@ -115,28 +128,44 @@ def conflicting_job_types(job_type: str) -> set[str]:
     return conflicting
 
 
-def blocked_job_types(session: Session) -> set[str]:
-    """Tipos que no se pueden reclamar mientras haya trabajos en ejecucion."""
+def _running_jobs(session: Session) -> list[HarvestJob]:
+    return list(
+        session.scalars(
+            select(HarvestJob).where(HarvestJob.status == "running")
+        )
+    )
+
+
+def blocked_job_types(
+    session: Session, *, fuente_id: int | None = None
+) -> set[str]:
+    """Tipos que no se pueden reclamar para una fuente."""
     blocked: set[str] = set()
-    for job_type in active_job_types(session):
-        blocked.update(conflicting_job_types(job_type))
+    for job in _running_jobs(session):
+        if job.job_type == "index" and job.fuente_id is None:
+            return set(JOB_TYPES)
+        if fuente_id is None or job.fuente_id == fuente_id:
+            blocked.update(conflicting_job_types(job.job_type))
     return blocked
 
 
-def has_active_job(session: Session, job_type: str) -> bool:
-    total = session.scalar(
-        select(func.count(HarvestJob.id)).where(
-            HarvestJob.job_type == job_type,
-            HarvestJob.status.in_(("pending", "running")),
-        )
+def has_active_job(
+    session: Session, job_type: str, *, fuente_id: int | None = None
+) -> bool:
+    stmt = select(func.count(HarvestJob.id)).where(
+        HarvestJob.job_type == job_type,
+        HarvestJob.status.in_(("pending", "running")),
     )
-    return bool(total)
+    if fuente_id is not None:
+        stmt = stmt.where(HarvestJob.fuente_id == fuente_id)
+    return bool(session.scalar(stmt))
 
 
 def enqueue_job(
     session: Session,
     job_type: str,
     *,
+    fuente: Fuente | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     cursor_doc: int | None = None,
     cursor_titn: str | None = None,
@@ -146,13 +175,16 @@ def enqueue_job(
 ) -> HarvestJob:
     if job_type not in JOB_TYPES:
         raise ValueError(f"Tipo de trabajo no valido: {job_type}")
-    if dedupe and has_active_job(session, job_type):
+    fuente_id = fuente.id if fuente is not None else None
+    if dedupe and has_active_job(session, job_type, fuente_id=fuente_id):
+        suffix = f" para la fuente '{fuente.codigo}'" if fuente is not None else ""
         raise JobAlreadyActive(
-            f"Ya hay un trabajo de tipo '{job_type}' pendiente o en ejecucion"
+            f"Ya hay un trabajo de tipo '{job_type}' pendiente o en ejecucion{suffix}"
         )
     job = create_job(
         session,
         job_type,
+        fuente=fuente,
         batch_size=batch_size,
         cursor_doc=cursor_doc,
         cursor_titn=cursor_titn,
@@ -163,19 +195,29 @@ def enqueue_job(
     return job
 
 
+def _source_or_madrid(session: Session, fuente: Fuente | None) -> Fuente:
+    if fuente is not None:
+        return fuente
+    from mediateca.catalog.fuentes import ensure_default_fuente
+
+    return ensure_default_fuente(session)
+
+
 def enqueue_discover_job(
     session: Session,
     *,
+    fuente: Fuente | None = None,
     mode: str = "incremental",
     batch_size: int = DEFAULT_BATCH_SIZE,
     reason: str = "manual",
 ) -> HarvestJob:
     if mode not in {"incremental", "full"}:
         raise ValueError("El modo de descubrimiento debe ser incremental o full")
+    source = _source_or_madrid(session, fuente)
     cursor_doc: int | None = None
     cursor_titn: str | None = None
     if mode == "incremental":
-        last = last_completed_discover(session)
+        last = last_completed_discover(session, fuente_id=source.id)
         if last is None or (last.cursor_doc is None and last.cursor_titn is None):
             mode = "full"
         else:
@@ -184,6 +226,7 @@ def enqueue_discover_job(
     return enqueue_job(
         session,
         "discover",
+        fuente=source,
         batch_size=batch_size,
         cursor_doc=cursor_doc,
         cursor_titn=cursor_titn,
@@ -194,6 +237,7 @@ def enqueue_discover_job(
 def enqueue_enrich_job(
     session: Session,
     *,
+    fuente: Fuente | None = None,
     since: datetime | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     reason: str = "manual",
@@ -205,19 +249,31 @@ def enqueue_enrich_job(
     return enqueue_job(
         session,
         "enrich",
+        fuente=_source_or_madrid(session, fuente),
         batch_size=batch_size,
         cursor_titn=cursor_titn,
         stats=stats,
     )
 
 
-def enqueue_index_job(session: Session) -> HarvestJob:
-    return enqueue_job(session, "index")
+def enqueue_index_job(
+    session: Session, *, fuente: Fuente | None = None, global_: bool = False
+) -> HarvestJob:
+    if global_:
+        return enqueue_job(session, "index", stats={"global": True, "reason": "manual"})
+    source = _source_or_madrid(session, fuente)
+    return enqueue_job(
+        session,
+        "index",
+        fuente=source,
+        stats={"reason": "manual", "fuente": source.codigo},
+    )
 
 
 def enqueue_tmdb_job(
     session: Session,
     *,
+    fuente: Fuente | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     refresh: bool = False,
     reason: str = "manual",
@@ -225,6 +281,7 @@ def enqueue_tmdb_job(
     return enqueue_job(
         session,
         "tmdb",
+        fuente=_source_or_madrid(session, fuente),
         batch_size=batch_size,
         stats={"reason": reason, "refresh": refresh},
     )
@@ -233,6 +290,7 @@ def enqueue_tmdb_job(
 def enqueue_branches_job(
     session: Session,
     *,
+    fuente: Fuente | None = None,
     delay: float | None = None,
     max_pages: int | None = None,
     reason: str = "manual",
@@ -242,7 +300,9 @@ def enqueue_branches_job(
         stats["delay"] = delay
     if max_pages is not None:
         stats["max_pages"] = max_pages
-    return enqueue_job(session, "branches", stats=stats)
+    return enqueue_job(
+        session, "branches", fuente=_source_or_madrid(session, fuente), stats=stats
+    )
 
 
 CLAIM_LOCK_SQL = (
@@ -264,21 +324,45 @@ def claim_job(
     now: datetime | None = None,
 ) -> HarvestJob | None:
     _acquire_claim_lock(session)
-    blocked = blocked_job_types(session)
+    running = _running_jobs(session)
+    if any(job.job_type == "index" and job.fuente_id is None for job in running):
+        return None
+
     stmt = select(HarvestJob).where(HarvestJob.status == "pending")
-    if blocked:
-        stmt = stmt.where(~HarvestJob.job_type.in_(blocked))
     if job_types:
         stmt = stmt.where(HarvestJob.job_type.in_(list(job_types)))
-    stmt = stmt.order_by(HarvestJob.created_at, HarvestJob.id).limit(1)
+    stmt = stmt.order_by(HarvestJob.created_at, HarvestJob.id).limit(100)
 
     bind = session.get_bind()
     if bind is not None and bind.dialect.name == "postgresql":
         stmt = stmt.with_for_update(skip_locked=True)
 
-    job = session.scalars(stmt).first()
+    job = None
+    for candidate in session.scalars(stmt):
+        if candidate.fuente_id is None:
+            if candidate.job_type == "index" and not running:
+                job = candidate
+                break
+            continue
+        blocked = set()
+        for active in running:
+            if active.fuente_id == candidate.fuente_id:
+                blocked.update(conflicting_job_types(active.job_type))
+        if candidate.job_type not in blocked:
+            job = candidate
+            break
     if job is None:
         return None
+
+    if job.fuente_id is not None:
+        fuente = session.get(Fuente, job.fuente_id)
+        now_value = now or _now()
+        paused_until = fuente.paused_until if fuente is not None else None
+        if paused_until is not None:
+            if paused_until.tzinfo is None:
+                paused_until = paused_until.replace(tzinfo=UTC)
+            if paused_until > now_value:
+                return None
 
     timestamp = now or _now()
     job.status = "running"
@@ -399,12 +483,21 @@ def create_stub(
     session: Session,
     titn: str,
     *,
+    fuente: Fuente | None = None,
     seen_at: datetime | None = None,
 ) -> Edicion:
+    from mediateca_shared.identity import compose_record_id
+
+    source = _source_or_madrid(session, fuente)
     timestamp = seen_at or _now()
-    edicion = session.scalars(select(Edicion).where(Edicion.titn == titn)).first()
+    record_id = compose_record_id(source.codigo, titn)
+    edicion = session.scalars(
+        select(Edicion).where(Edicion.record_id == record_id)
+    ).first()
     if edicion is None:
         edicion = Edicion(
+            fuente_id=source.id,
+            record_id=record_id,
             titn=titn,
             titulo=titn,
             is_stub=True,
@@ -475,6 +568,54 @@ def coverage(session: Session) -> IngestCoverage:
         ).all()
     )
 
+    por_fuente: dict[str, dict[str, int]] = {}
+    for fuente in session.scalars(select(Fuente).order_by(Fuente.codigo)):
+        source_filter = Edicion.fuente_id == fuente.id
+        por_fuente[fuente.codigo] = {
+            "ediciones": int(
+                session.scalar(
+                    select(func.count(Edicion.id)).where(source_filter)
+                )
+                or 0
+            ),
+            "descubiertas": int(
+                session.scalar(
+                    select(func.count(Edicion.id)).where(
+                        source_filter, Edicion.discovery_seen_at.is_not(None)
+                    )
+                )
+                or 0
+            ),
+            "enriquecidas": int(
+                session.scalar(
+                    select(func.count(Edicion.id)).where(
+                        source_filter, Edicion.detail_fetched_at.is_not(None)
+                    )
+                )
+                or 0
+            ),
+            "pendientes": int(
+                session.scalar(
+                    select(func.count(Edicion.id)).where(
+                        source_filter,
+                        or_(
+                            Edicion.is_stub.is_(True),
+                            Edicion.detail_fetched_at.is_(None),
+                        ),
+                    )
+                )
+                or 0
+            ),
+            "fallidas": int(
+                session.scalar(
+                    select(func.count(Edicion.id)).where(
+                        source_filter, Edicion.missing_at.is_not(None)
+                    )
+                )
+                or 0
+            ),
+        }
+
     return IngestCoverage(
         ediciones=ediciones,
         descubiertas=descubiertas,
@@ -485,6 +626,7 @@ def coverage(session: Session) -> IngestCoverage:
         trabajos_en_ejecucion=int(jobs_by_status.get("running", 0)),
         trabajos_completados=int(jobs_by_status.get("completed", 0)),
         trabajos_fallidos=int(jobs_by_status.get("failed", 0)),
+        por_fuente=por_fuente,
     )
 
 
@@ -524,6 +666,39 @@ def ingest_metrics(
             total_ms += elapsed
             timed_processed += job_processed
 
+    by_source: dict[str, dict[str, int]] = {}
+    for fuente in session.scalars(select(Fuente).order_by(Fuente.codigo)):
+        source_jobs = list(
+            session.scalars(
+                select(HarvestJob).where(HarvestJob.fuente_id == fuente.id)
+            )
+        )
+        source_metrics = {
+            "processed": 0,
+            "errors": 0,
+            "captchas": 0,
+            "captchas_solved": 0,
+            "captchas_failed": 0,
+            "session_renewals": 0,
+            "failed": 0,
+        }
+        for job in source_jobs:
+            stats = job.stats or {}
+            source_metrics["processed"] += int(stats.get("processed", 0) or 0)
+            source_metrics["errors"] += int(stats.get("errors", 0) or 0)
+            source_metrics["captchas"] += int(stats.get("captchas", 0) or 0)
+            source_metrics["captchas_solved"] += int(
+                stats.get("captchas_solved", 0) or 0
+            )
+            source_metrics["captchas_failed"] += int(
+                stats.get("captchas_failed", 0) or 0
+            )
+            source_metrics["session_renewals"] += int(
+                stats.get("session_renewals", 0) or 0
+            )
+            source_metrics["failed"] += len(stats.get("failed") or [])
+        by_source[fuente.codigo] = source_metrics
+
     return IngestMetrics(
         processed=processed,
         errors=errors,
@@ -534,6 +709,7 @@ def ingest_metrics(
         failed=failed,
         pending=cover.pendientes,
         average_ms=round(total_ms / timed_processed, 2) if timed_processed else None,
+        por_fuente=by_source,
     )
 
 
@@ -593,8 +769,10 @@ def maybe_chain_enrich(session: Session, job: HarvestJob) -> None:
     processed = int(stats.get("processed", 0) or 0)
     cursor = stats.get("cursor_titn")
 
-    pending_total = count_pending_titns(session)
-    pending_after_cursor = count_pending_titns(session, after_titn=cursor)
+    pending_total = count_pending_titns(session, fuente_id=job.fuente_id)
+    pending_after_cursor = count_pending_titns(
+        session, fuente_id=job.fuente_id, after_titn=cursor
+    )
 
     next_cursor: str | None = None
     if not settings.enrich_drain_enabled or settings.enrich_drain_max_chain <= 0:
@@ -614,8 +792,10 @@ def maybe_chain_enrich(session: Session, job: HarvestJob) -> None:
     drained = False
     if stop_reason in ("chain_forward", "chain_wrap"):
         try:
+            fuente = session.get(Fuente, job.fuente_id) if job.fuente_id else None
             enqueued = enqueue_enrich_job(
                 session,
+                fuente=fuente,
                 since=None,
                 batch_size=job.batch_size or DEFAULT_BATCH_SIZE,
                 cursor_titn=next_cursor,
@@ -647,6 +827,27 @@ def maybe_chain_enrich(session: Session, job: HarvestJob) -> None:
 
 
 JobHandler = Callable[[Session, HarvestJob], dict[str, Any] | None]
+
+
+def _opac_client(fuente: Fuente, **kwargs):
+    from mediateca.catalog.harvester import OpacClient
+
+    factory = getattr(OpacClient, "from_fuente", None)
+    if callable(factory):
+        return factory(fuente, **kwargs)
+    try:
+        return OpacClient(**kwargs)
+    except TypeError:
+        return OpacClient()
+
+
+def _make_harvester(session: Session, **kwargs):
+    from mediateca.catalog.harvester import Harvester
+
+    try:
+        return Harvester(session, **kwargs)
+    except TypeError:
+        return Harvester(session)
 
 
 def _pending_index_titns(job: HarvestJob) -> list[str]:
@@ -687,7 +888,9 @@ def _flush_pending_index(session: Session, job: HarvestJob) -> None:
 def _index_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
     from mediateca.catalog.indexer import MeiliIndexer
 
-    total = MeiliIndexer().index_editions(session, reset=False)
+    total = MeiliIndexer().index_editions(
+        session, reset=False, fuente_id=job.fuente_id
+    )
     return {"indexed": total}
 
 
@@ -699,8 +902,10 @@ def _enqueue_enrich_after_discover(
     since = job.started_at or job.created_at
     schedule = load_schedule_settings(session)
     try:
+        fuente = session.get(Fuente, job.fuente_id) if job.fuente_id else None
         enqueued = enqueue_enrich_job(
             session,
+            fuente=fuente,
             since=since,
             batch_size=schedule.enrich_batch_size,
             reason="after_discover",
@@ -745,11 +950,16 @@ def _index_processed_after_failure(
 
 
 def _discover_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
-    from mediateca.catalog.harvester import Harvester, OpacClient
 
     _flush_pending_index(session, job)
-    with OpacClient(flaresolverr_url=effective_flaresolverr_url(session)) as client:
-        harvester = Harvester(session, client=client)
+    fuente = require_enabled_fuente(
+        session, session.get(Fuente, job.fuente_id).codigo if job.fuente_id else None
+    )
+    with _opac_client(
+        fuente, flaresolverr_url=effective_flaresolverr_url(session)
+    ) as client:
+        harvester = _make_harvester(session, client=client)
+        harvester.fuente = fuente
         try:
             stats = harvester.harvest_discovery(job=job)
         except Exception:
@@ -768,17 +978,20 @@ def build_tmdb_client(session: Session, *, delay: float | None = None):
 
 
 def _enrich_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
-    from mediateca.catalog.harvester import Harvester, OpacClient
 
     _flush_pending_index(session, job)
     tmdb_client = build_tmdb_client(session)
+    fuente = require_enabled_fuente(
+        session, session.get(Fuente, job.fuente_id).codigo if job.fuente_id else None
+    )
     try:
-        with OpacClient(flaresolverr_url=effective_flaresolverr_url(session)) as client:
-            harvester = Harvester(
-                session,
-                client=client,
-                tmdb_client=tmdb_client,
+        with _opac_client(
+            fuente, flaresolverr_url=effective_flaresolverr_url(session)
+        ) as client:
+            harvester = _make_harvester(
+                session, client=client, tmdb_client=tmdb_client
             )
+            harvester.fuente = fuente
             try:
                 stats = harvester.harvest_enrichment(job=job)
             except Exception:
@@ -792,20 +1005,23 @@ def _enrich_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
 
 
 def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
-    from mediateca.catalog.harvester import Harvester, OpacClient
     from mediateca.catalog.tmdb import TmdbError
 
     _flush_pending_index(session, job)
     tmdb_client = build_tmdb_client(session)
     if tmdb_client is None:
         raise TmdbError("No hay token de TMDB configurado")
+    fuente = require_enabled_fuente(
+        session, session.get(Fuente, job.fuente_id).codigo if job.fuente_id else None
+    )
     try:
-        with OpacClient(flaresolverr_url=effective_flaresolverr_url(session)) as client:
-            harvester = Harvester(
-                session,
-                client=client,
-                tmdb_client=tmdb_client,
+        with _opac_client(
+            fuente, flaresolverr_url=effective_flaresolverr_url(session)
+        ) as client:
+            harvester = _make_harvester(
+                session, client=client, tmdb_client=tmdb_client
             )
+            harvester.fuente = fuente
             stats = harvester.harvest_tmdb_enrichment(
                 limit=job.batch_size or DEFAULT_BATCH_SIZE,
                 delay=settings.tmdb_delay,
@@ -818,7 +1034,11 @@ def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
 
 
 def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
-    from mediateca.catalog.directory import DirectoryClient, refresh_sucursales
+    from mediateca.catalog.directory import (
+        DirectoryClient,
+        DirectoryUnavailable,
+        refresh_sucursales,
+    )
 
     stats = dict(job.stats or {})
     delay = stats.get("delay")
@@ -826,10 +1046,30 @@ def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
         delay = settings.crawl_delay
     max_pages = stats.get("max_pages")
 
-    with DirectoryClient(delay=float(delay)) as client:
+    fuente = require_enabled_fuente(
+        session, session.get(Fuente, job.fuente_id).codigo if job.fuente_id else None
+    )
+    try:
+        factory = getattr(DirectoryClient, "from_fuente", None)
+        if callable(factory):
+            client = factory(fuente)
+        else:
+            try:
+                client = DirectoryClient(delay=float(delay))
+            except TypeError:
+                client = DirectoryClient()
+    except DirectoryUnavailable as exc:
+        logger.info("Directorio no disponible", extra={"fuente": fuente.codigo})
+        return {
+            "fuente": fuente.codigo,
+            "directory": False,
+            "message": str(exc),
+        }
+    with client:
         result = refresh_sucursales(
             session,
             client,
+            fuente=fuente,
             max_pages=int(max_pages) if max_pages is not None else None,
             only_known=True,
         )
@@ -915,7 +1155,12 @@ def worker_tick(
     started_monotonic = time.monotonic()
     logger.info(
         "Trabajo reclamado",
-        extra={"job_id": job.id, "job_type": job.job_type, "result": "running"},
+        extra={
+            "job_id": job.id,
+            "job_type": job.job_type,
+            "fuente": job.stats.get("fuente") if job.stats else None,
+            "result": "running",
+        },
     )
     session.commit()
 
@@ -959,10 +1204,14 @@ def worker_tick(
         if _is_captcha_error(exc):
             failed_job.attempts = max(0, (failed_job.attempts or 1) - 1)
             requeue_job(session, failed_job, error=str(exc))
-            session.commit()
             pause_minutes = max(
                 1, load_schedule_settings(session).captcha_pause_minutes
             )
+            if failed_job.fuente_id is not None:
+                fuente = session.get(Fuente, failed_job.fuente_id)
+                if fuente is not None:
+                    fuente.paused_until = _now() + timedelta(minutes=pause_minutes)
+            session.commit()
             logger.warning(
                 "Captcha detectado; pausando la ingesta",
                 extra={

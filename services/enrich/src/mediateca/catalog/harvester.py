@@ -9,7 +9,9 @@ from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
-from mediateca_shared.models import Edicion, HarvestJob, HarvestRun
+from mediateca_shared.fuentes import FuenteProfile
+from mediateca_shared.identity import compose_record_id
+from mediateca_shared.models import Edicion, Fuente, HarvestJob, HarvestRun
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,7 @@ from mediateca.catalog.flaresolverr import (
     FlareSolverrCookie,
     FlareSolverrError,
 )
+from mediateca.catalog.fuentes import ensure_default_fuente
 from mediateca.catalog.jobs import create_job, finish_job, update_cursor
 from mediateca.catalog.parser import parse_detail, parse_search_results
 from mediateca.catalog.repository import (
@@ -100,9 +103,18 @@ class OpacClient:
         flaresolverr_url: str | None = None,
         flaresolverr_max_timeout_ms: int | None = None,
         flaresolverr_client: FlareSolverrClient | None = None,
+        session_pattern: str | None = None,
+        format_field: str | None = None,
+        format_value: str | None = None,
+        subcat: str | None = None,
     ) -> None:
         self.base_url = (base_url or settings.opac_base_url).rstrip("/")
         self.path = path or settings.opac_path
+        self.session_pattern = session_pattern or SESSION_RE.pattern
+        self.session_re = re.compile(self.session_pattern)
+        self.format_field = format_field or "select03"
+        self.format_value = format_value or "6"
+        self.subcat = subcat or "/"
         self.timeout = timeout or settings.crawl_timeout
         self.delay = delay if delay is not None else settings.crawl_delay
         self.max_retries = max_retries or settings.crawl_max_retries
@@ -128,6 +140,21 @@ class OpacClient:
         )
         self.flaresolverr_client = flaresolverr_client
         self._flaresolverr: FlareSolverrClient | None = flaresolverr_client
+
+    @classmethod
+    def from_fuente(cls, fuente: Fuente, **kwargs) -> OpacClient:
+        profile = FuenteProfile.from_model(fuente)
+        options = profile.options or {}
+        return cls(
+            base_url=profile.base_url,
+            path=profile.opac_path,
+            delay=profile.delay,
+            session_pattern=profile.session_pattern,
+            format_field=profile.format_field,
+            format_value=profile.format_value,
+            subcat=options.get("subcat"),
+            **kwargs,
+        )
 
     def close(self) -> None:
         self.client.close()
@@ -156,12 +183,12 @@ class OpacClient:
 
     def _extract_session(self, response: httpx.Response) -> str | None:
         for candidate in (str(response.url), response.text):
-            match = SESSION_RE.search(candidate)
+            match = self.session_re.search(candidate)
             if match:
                 return match.group(1)
         match = re.search(r"URL=([^\"']+)", response.text)
         if match:
-            redirected = SESSION_RE.search(match.group(1))
+            redirected = self.session_re.search(match.group(1))
             if redirected:
                 return redirected.group(1)
         return None
@@ -192,7 +219,13 @@ class OpacClient:
     def _rebind_session(self, url: str) -> str:
         if not self.session_id:
             return url
-        return SESSION_RE.sub(f"/abnetopac/{self.session_id}", url, count=1)
+        return self.session_re.sub(
+            lambda match: match.group(0).replace(
+                match.group(1), self.session_id or "", 1
+            ),
+            url,
+            count=1,
+        )
 
     def _check_response(
         self, response: httpx.Response, *, count_captcha: bool = True
@@ -389,8 +422,8 @@ class OpacClient:
             "xindbt": "",
             "xexact": "",
             "xsqf01": query,
-            "select03": "6",
-            "subcat": "/",
+            self.format_field: self.format_value,
+            "subcat": self.subcat,
         }
         response = self._request("POST", self._url(1), data=data)
         return self._parse_results(response, query)
@@ -468,11 +501,13 @@ class Harvester:
         self,
         session: Session,
         *,
+        fuente: Fuente | None = None,
         client: OpacClient | None = None,
         tmdb_client: TmdbClient | None = None,
     ) -> None:
         self.session = session
-        self.client = client or OpacClient()
+        self.fuente = fuente or ensure_default_fuente(session)
+        self.client = client or OpacClient.from_fuente(self.fuente)
         self.tmdb_client = tmdb_client
         self.processed_titns: list[str] = []
         self.tmdb_matched = 0
@@ -481,7 +516,7 @@ class Harvester:
         self.tmdb_skipped = 0
 
     def _save(self, parsed):
-        edicion = upsert_edicion(self.session, parsed)
+        edicion = upsert_edicion(self.session, parsed, fuente=self.fuente)
         self.session.commit()
         return edicion
 
@@ -558,7 +593,12 @@ class Harvester:
         delay: float | None = None,
     ) -> dict[str, int]:
         delay = self.client.delay if delay is None else delay
-        run = HarvestRun(kind="harvest", query=query, status="running")
+        run = HarvestRun(
+            kind="harvest",
+            query=query,
+            status="running",
+            stats={"fuente": self.fuente.codigo},
+        )
         self.session.add(run)
         self.session.commit()
 
@@ -650,6 +690,7 @@ class Harvester:
             job = create_job(
                 self.session,
                 "enrich",
+                fuente=self.fuente,
                 batch_size=limit,
                 cursor_titn=cursor_titn,
             )
@@ -676,11 +717,13 @@ class Harvester:
         try:
             pending = select_pending_titns(
                 self.session,
+                fuente_id=self.fuente.id,
                 limit=limit,
                 after_titn=cursor_titn,
                 since=since,
             )
-            for titn in pending:
+            for record_id in pending:
+                titn = record_id.split(":", 1)[-1]
                 started = time.monotonic()
                 try:
                     self._enrich_titn(titn, delay=delay)
@@ -688,8 +731,8 @@ class Harvester:
                     raise
                 except Exception as exc:  # noqa: BLE001
                     errors += 1
-                    failed.append(titn)
-                    record_enrich_failure(self.session, titn, str(exc))
+                    failed.append(record_id)
+                    record_enrich_failure(self.session, record_id, str(exc))
                     logger.exception(
                         "Ficha fallida tras reintentos",
                         extra={
@@ -705,7 +748,7 @@ class Harvester:
                     )
                 else:
                     processed += 1
-                    processed_titns.append(titn)
+                    processed_titns.append(record_id)
                     logger.info(
                         "Ficha enriquecida",
                         extra={
@@ -726,6 +769,7 @@ class Harvester:
                     job,
                     cursor_titn=last_titn,
                     stats={
+                        "fuente": self.fuente.codigo,
                         "selected": len(pending),
                         "processed": processed,
                         "errors": errors,
@@ -740,6 +784,7 @@ class Harvester:
                 time.sleep(delay)
 
             stats = {
+                "fuente": self.fuente.codigo,
                 "selected": len(pending),
                 "processed": processed,
                 "errors": errors,
@@ -782,7 +827,10 @@ class Harvester:
         if refresh:
             stmt = (
                 select(Edicion)
-                .where(Edicion.detail_fetched_at.is_not(None))
+                .where(
+                    Edicion.fuente_id == self.fuente.id,
+                    Edicion.detail_fetched_at.is_not(None),
+                )
                 .order_by(
                     Edicion.tmdb_enriched_at.asc().nulls_last(),
                     Edicion.titn,
@@ -793,6 +841,7 @@ class Harvester:
             stmt = (
                 select(Edicion)
                 .where(
+                    Edicion.fuente_id == self.fuente.id,
                     Edicion.detail_fetched_at.is_not(None),
                     or_(
                         Edicion.tmdb_enriched_at.is_(None),
@@ -823,6 +872,7 @@ class Harvester:
             "matched": self.tmdb_matched,
             "unmatched": self.tmdb_unmatched,
             "errors": self.tmdb_errors,
+            "fuente": self.fuente.codigo,
             "failed": failed,
             "processed_titns": processed_titns,
             "refresh": refresh,
@@ -844,6 +894,7 @@ class Harvester:
             job = create_job(
                 self.session,
                 "discover",
+                fuente=self.fuente,
                 cursor_doc=cursor_doc,
                 cursor_titn=cursor_titn,
             )
@@ -895,7 +946,7 @@ class Harvester:
                     started = time.monotonic()
                     try:
                         with self.session.begin_nested():
-                            upsert_stub(self.session, parsed)
+                            upsert_stub(self.session, parsed, fuente=self.fuente)
                     except Exception as exc:  # noqa: BLE001
                         errors += 1
                         logger.exception(
@@ -915,8 +966,9 @@ class Harvester:
                         continue
 
                     processed += 1
-                    self.processed_titns.append(parsed.titn)
-                    seen.add(parsed.titn)
+                    record_id = compose_record_id(self.fuente.codigo, parsed.titn)
+                    self.processed_titns.append(record_id)
+                    seen.add(record_id)
                     last_titn = parsed.titn
                     if parsed.doc is not None:
                         last_doc = parsed.doc
@@ -957,10 +1009,14 @@ class Harvester:
 
             if full_run and processed > 0:
                 missing = mark_absent_since(
-                    self.session, seen, since=started_at
+                    self.session,
+                    seen,
+                    fuente_id=self.fuente.id,
+                    since=started_at,
                 )
 
             stats = {
+                "fuente": self.fuente.codigo,
                 "processed": processed,
                 "pages": pages,
                 "errors": errors,

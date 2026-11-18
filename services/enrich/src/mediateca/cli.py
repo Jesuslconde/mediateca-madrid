@@ -8,13 +8,14 @@ from pathlib import Path
 import typer
 from mediateca_shared.constants import MAX_WORKER_CONCURRENCY
 from mediateca_shared.lists import Lista
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, HarvestJob
 from mediateca_shared.version import SCHEMA_VERSION
 from rich.console import Console
 from rich.table import Table
 from sqlalchemy import delete, func, select
 
-from mediateca.catalog.directory import DirectoryClient, refresh_sucursales
+from mediateca.catalog.directory import DirectoryClient, DirectoryUnavailable, refresh_sucursales
+from mediateca.catalog.fuentes import get_fuente, require_enabled_fuente, seed_default_fuente
 from mediateca.catalog.harvester import Harvester, OpacClient
 from mediateca.catalog.indexer import MeiliIndexer
 from mediateca.catalog.jobs import (
@@ -40,6 +41,27 @@ from mediateca.core.config_store import (
 from mediateca.core.db import get_engine, get_session_factory, init_db, session_scope
 from mediateca.core.logging import configure_logging, get_logger
 
+
+def _opac_client(fuente, **kwargs):
+    factory = getattr(OpacClient, "from_fuente", None)
+    if callable(factory):
+        return factory(fuente, **kwargs)
+    try:
+        return OpacClient(**kwargs)
+    except TypeError:
+        return OpacClient()
+
+
+def _directory_client(fuente, **kwargs):
+    factory = getattr(DirectoryClient, "from_fuente", None)
+    if callable(factory):
+        return factory(fuente, **kwargs)
+    try:
+        return DirectoryClient(**kwargs)
+    except TypeError:
+        return DirectoryClient()
+
+
 app = typer.Typer(
     name="mediateca",
     help="Catalogo alternativo de videos y DVD/Blu-ray de Madrid.",
@@ -61,16 +83,15 @@ def init_db_command() -> None:
     console.print("[green]Base de datos e indice inicializados[/green]")
 
 
-@app.command("migrate")
-def migrate_command() -> None:
-    """Aplica las migraciones SQL idempotentes."""
-    configure_logging()
+def _apply_migrations() -> None:
     scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
     migrations = sorted(scripts_dir.glob("migrate_*.sql"))
     if not migrations:
         console.print(f"[red]No se encontraron migraciones en {scripts_dir}[/red]")
         raise typer.Exit(code=1)
     with get_engine().begin() as conn:
+        Fuente.__table__.create(bind=conn, checkfirst=True)
+        seed_default_fuente(conn)
         for migration in migrations:
             conn.exec_driver_sql(migration.read_text(encoding="utf-8"))
             console.print(f"[green]Migracion aplicada:[/green] {migration.name}")
@@ -79,7 +100,47 @@ def migrate_command() -> None:
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
             {"v": SCHEMA_VERSION},
         )
+
+
+def _current_schema_version() -> str | None:
+    try:
+        with get_engine().connect() as conn:
+            row = conn.exec_driver_sql(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).first()
+    except Exception:  # noqa: BLE001
+        return None
+    return str(row[0]) if row is not None else None
+
+
+@app.command("migrate")
+def migrate_command() -> None:
+    """Aplica las migraciones SQL idempotentes."""
+    configure_logging()
+    _apply_migrations()
     console.print("[green]Migraciones aplicadas[/green]")
+
+
+@app.command("init")
+def init_command() -> None:
+    """Inicializa la base, aplica migraciones y reconstruye el indice si cambia la version."""
+    configure_logging()
+    previous = _current_schema_version()
+    init_db()
+    try:
+        MeiliIndexer().ensure_index()
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[yellow]No se pudo inicializar Meilisearch: {exc}[/yellow]")
+    _apply_migrations()
+    with session_scope() as session:
+        session.execute(delete(Lista).where(Lista.expires_at < func.now()))
+    reset = previous is None or int(previous) < int(SCHEMA_VERSION)
+    with session_scope() as session:
+        total = MeiliIndexer().index_editions(session, reset=reset)
+    console.print(
+        f"[green]Inicializacion completada:[/green] {total} ediciones indexadas "
+        f"({'reset' if reset else 'sin reset'})"
+    )
 
 
 @app.command("clean-lists")
@@ -94,6 +155,7 @@ def clean_lists_command() -> None:
 
 @app.command("refresh-branches")
 def refresh_branches_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
     delay: float = typer.Option(
         settings.crawl_delay, "--delay", min=0.0, help="Segundos entre peticiones"
     ),
@@ -104,10 +166,21 @@ def refresh_branches_command(
 ) -> None:
     """Actualiza direcciones y coordenadas de las sucursales desde el directorio."""
     configure_logging()
-    with session_scope() as session, DirectoryClient(delay=delay) as client:
-        stats = refresh_sucursales(
-            session, client, limit=limit, max_pages=max_pages
-        )
+    with session_scope() as session:
+        source = require_enabled_fuente(session, fuente)
+        try:
+            client = _directory_client(source, delay=delay)
+        except DirectoryUnavailable as exc:
+            console.print(f"[yellow]{exc}[/yellow]")
+            return
+        with client:
+            stats = refresh_sucursales(
+                session,
+                client,
+                fuente=source,
+                limit=limit,
+                max_pages=max_pages,
+            )
 
     table = Table(title="Actualizacion de sucursales")
     table.add_column("Metrica")
@@ -124,12 +197,15 @@ def refresh_branches_command(
 
 
 @app.command("enqueue-branches")
-def enqueue_branches_command() -> None:
+def enqueue_branches_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
+) -> None:
     """Encola la recarga de direcciones de bibliotecas ya conocidas."""
     configure_logging()
     with session_scope() as session:
         try:
-            job = enqueue_branches_job(session, reason="cli")
+            source = require_enabled_fuente(session, fuente)
+            job = enqueue_branches_job(session, fuente=source, reason="cli")
         except JobAlreadyActive as exc:
             console.print(f"[yellow]{exc}[/yellow]")
             raise typer.Exit(code=1) from exc
@@ -141,6 +217,7 @@ def enqueue_branches_command() -> None:
 
 @app.command("harvest")
 def harvest_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
     query: str = typer.Option("cine", "--query", "-q", help="Termino de busqueda"),
     max_pages: int = typer.Option(1, "--max-pages", min=1, help="Paginas maximas"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Fichas maximas"),
@@ -149,13 +226,15 @@ def harvest_command(
 ) -> None:
     """Recolecta fichas del OPAC y las guarda en PostgreSQL."""
     configure_logging()
-    with session_scope() as session, OpacClient(
-        delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
-    ) as client:
-        harvester = Harvester(session, client=client)
-        stats = harvester.harvest_query(
-            query, max_pages=max_pages, limit=limit, delay=delay
-        )
+    with session_scope() as session:
+        source = require_enabled_fuente(session, fuente)
+        with _opac_client(
+            source, delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
+        ) as client:
+            harvester = Harvester(session, fuente=source, client=client)
+            stats = harvester.harvest_query(
+                query, max_pages=max_pages, limit=limit, delay=delay
+            )
     console.print(f"[green]Recoleccion terminada:[/green] {stats}")
     if index:
         with session_scope() as session:
@@ -165,6 +244,7 @@ def harvest_command(
 
 @app.command("discover")
 def discover_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
     max_pages: int | None = typer.Option(
         None, "--max-pages", min=1, help="Paginas maximas (todas por defecto)"
     ),
@@ -174,13 +254,15 @@ def discover_command(
 ) -> None:
     """Descubre el catalogo completo y crea ediciones stub."""
     configure_logging()
-    with session_scope() as session, OpacClient(
-        delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
-    ) as client:
-        harvester = Harvester(session, client=client)
-        stats = harvester.harvest_discovery(
-            max_pages=max_pages, limit=limit, delay=delay
-        )
+    with session_scope() as session:
+        source = require_enabled_fuente(session, fuente)
+        with _opac_client(
+            source, delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
+        ) as client:
+            harvester = Harvester(session, fuente=source, client=client)
+            stats = harvester.harvest_discovery(
+                max_pages=max_pages, limit=limit, delay=delay
+            )
     console.print(f"[green]Descubrimiento terminado:[/green] {stats}")
     if index:
         with session_scope() as session:
@@ -192,6 +274,7 @@ def discover_command(
 
 @app.command("enrich")
 def enrich_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
     limit: int = typer.Option(
         5000, "--limit", min=1, help="Fichas maximas por lote"
     ),
@@ -201,13 +284,15 @@ def enrich_command(
     """Enriquece por lotes las ediciones descubiertas y pendientes."""
     configure_logging()
     with session_scope() as session:
+        source = require_enabled_fuente(session, fuente)
         tmdb_client = build_tmdb_client(session)
         try:
-            with OpacClient(
-                delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
+            with _opac_client(
+                source, delay=delay, flaresolverr_url=effective_flaresolverr_url(session)
             ) as client:
                 harvester = Harvester(
                     session,
+                    fuente=source,
                     client=client,
                     tmdb_client=tmdb_client,
                 )
@@ -226,6 +311,7 @@ def enrich_command(
 
 @app.command("tmdb-enrich")
 def tmdb_enrich_command(
+    fuente: str = typer.Option("madrid", "--fuente", help="Codigo de fuente"),
     limit: int = typer.Option(
         5000, "--limit", min=1, help="Ediciones maximas por lote"
     ),
@@ -244,6 +330,7 @@ def tmdb_enrich_command(
     """Completa los metadatos TMDB de las ediciones ya enriquecidas."""
     configure_logging()
     with session_scope() as session:
+        source = require_enabled_fuente(session, fuente)
         tmdb_client = build_tmdb_client(session, delay=delay)
         if tmdb_client is None:
             console.print(
@@ -252,9 +339,10 @@ def tmdb_enrich_command(
             )
             raise typer.Exit(code=1)
         try:
-            with OpacClient() as client:
+            with _opac_client(source) as client:
                 harvester = Harvester(
                     session,
+                    fuente=source,
                     client=client,
                     tmdb_client=tmdb_client,
                 )
@@ -333,11 +421,15 @@ def normalize_titles_command(
 @app.command("index")
 def index_command(
     reset: bool = typer.Option(False, "--reset", help="Vaciar el indice antes de cargar"),
+    fuente: str | None = typer.Option(None, "--fuente", help="Codigo de fuente"),
 ) -> None:
     """Construye el indice de Meilisearch desde PostgreSQL."""
     configure_logging()
     with session_scope() as session:
-        total = MeiliIndexer().index_editions(session, reset=reset)
+        source = get_fuente(session, fuente) if fuente else None
+        total = MeiliIndexer().index_editions(
+            session, reset=reset, fuente_id=source.id if source else None
+        )
     console.print(f"[green]{total} ediciones indexadas[/green]")
 
 

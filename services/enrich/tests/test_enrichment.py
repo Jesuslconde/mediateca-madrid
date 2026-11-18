@@ -101,9 +101,9 @@ def test_seleccion_pendiente_no_repite_enriquecidas_y_respeta_cursor() -> None:
 
     pendientes = select_pending_titns(session, limit=10)
 
-    assert pendientes == ["1", "3"]
-    assert select_pending_titns(session, limit=10, after_titn="1") == ["3"]
-    assert select_pending_titns(session, limit=1) == ["1"]
+    assert pendientes == ["madrid:1", "madrid:3"]
+    assert select_pending_titns(session, limit=10, after_titn="1") == ["madrid:3"]
+    assert select_pending_titns(session, limit=1) == ["madrid:1"]
 
 
 def test_un_fallo_no_bloquea_el_resto_del_lote(
@@ -128,7 +128,7 @@ def test_un_fallo_no_bloquea_el_resto_del_lote(
     assert client.calls.count(BLURAY_TITN) == 1
     assert stats["processed"] == 1
     assert stats["errors"] == 1
-    assert stats["failed"] == [DVD_TITN]
+    assert stats["failed"] == [f"madrid:{DVD_TITN}"]
     fallida = session.scalars(select(Edicion).where(Edicion.titn == DVD_TITN)).one()
     correcta = session.scalars(select(Edicion).where(Edicion.titn == BLURAY_TITN)).one()
     assert fallida.detail_fetched_at is None
@@ -453,4 +453,4 @@ def test_seleccion_pendiente_no_depende_del_estado() -> None:
     fallida.tmdb_status = "matched"
     session.commit()
 
-    assert select_pending_titns(session, limit=10) == ["1", "2", "3"]
+    assert select_pending_titns(session, limit=10) == ["madrid:1", "madrid:2", "madrid:3"]

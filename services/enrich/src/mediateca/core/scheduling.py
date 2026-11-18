@@ -214,26 +214,35 @@ def last_job(
     session: Session,
     job_type: str,
     *,
+    fuente_id: int | None = None,
     statuses: tuple[str, ...] | None = None,
 ) -> HarvestJob | None:
     stmt = select(HarvestJob).where(HarvestJob.job_type == job_type)
+    if fuente_id is not None:
+        stmt = stmt.where(HarvestJob.fuente_id == fuente_id)
     if statuses:
         stmt = stmt.where(HarvestJob.status.in_(statuses))
     stmt = stmt.order_by(HarvestJob.created_at.desc(), HarvestJob.id.desc()).limit(1)
     return session.scalars(stmt).first()
 
 
-def last_completed_discover(session: Session) -> HarvestJob | None:
-    return last_job(session, "discover", statuses=("completed",))
-
-
-def last_full_discover(session: Session) -> HarvestJob | None:
-    stmt = (
-        select(HarvestJob)
-        .where(HarvestJob.job_type == "discover")
-        .order_by(HarvestJob.created_at.desc(), HarvestJob.id.desc())
-        .limit(200)
+def last_completed_discover(
+    session: Session, *, fuente_id: int | None = None
+) -> HarvestJob | None:
+    return last_job(
+        session, "discover", fuente_id=fuente_id, statuses=("completed",)
     )
+
+
+def last_full_discover(
+    session: Session, *, fuente_id: int | None = None
+) -> HarvestJob | None:
+    stmt = select(HarvestJob).where(HarvestJob.job_type == "discover")
+    if fuente_id is not None:
+        stmt = stmt.where(HarvestJob.fuente_id == fuente_id)
+    stmt = stmt.order_by(
+        HarvestJob.created_at.desc(), HarvestJob.id.desc()
+    ).limit(200)
     for job in session.scalars(stmt):
         mode = (job.stats or {}).get("mode")
         if mode == "full" or mode is None:
@@ -241,14 +250,16 @@ def last_full_discover(session: Session) -> HarvestJob | None:
     return None
 
 
-def has_active_job(session: Session, job_type: str) -> bool:
-    total = session.scalar(
-        select(func.count(HarvestJob.id)).where(
-            HarvestJob.job_type == job_type,
-            HarvestJob.status.in_(("pending", "running")),
-        )
+def has_active_job(
+    session: Session, job_type: str, *, fuente_id: int | None = None
+) -> bool:
+    stmt = select(func.count(HarvestJob.id)).where(
+        HarvestJob.job_type == job_type,
+        HarvestJob.status.in_(("pending", "running")),
     )
-    return bool(total)
+    if fuente_id is not None:
+        stmt = stmt.where(HarvestJob.fuente_id == fuente_id)
+    return bool(session.scalar(stmt))
 
 
 def _as_aware(value: datetime | None) -> datetime | None:

@@ -8,10 +8,12 @@ from datetime import UTC, datetime, timedelta
 from threading import Lock
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from mediateca_shared.fuentes import MADRID_PROFILE, FuenteProfile
+from mediateca_shared.identity import normalize_record_id, parse_record_id
 from mediateca_shared.lists import Lista, ListaItem
 from mediateca_shared.models import Edicion
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from mediateca.api.deps import get_db
 from mediateca.api.schemas import (
@@ -22,7 +24,6 @@ from mediateca.api.schemas import (
     ListaOut,
     ListaRenameIn,
 )
-from mediateca.core.config import settings
 
 router = APIRouter(tags=["listas"])
 
@@ -59,8 +60,13 @@ def _normalize_title(value: str | None) -> str:
     return title[:80] if title else TITULO_POR_DEFECTO
 
 
-def _opac_url(titn: str) -> str:
-    return f"{settings.opac_base_url.rstrip('/')}{settings.opac_path}?TITN={titn}"
+def _opac_url(edicion: Edicion) -> str:
+    profile = (
+        FuenteProfile.from_model(edicion.fuente)
+        if edicion.fuente is not None
+        else MADRID_PROFILE
+    )
+    return profile.source_url(edicion.titn)
 
 
 def _client_key(request: Request, x_client_ip: str | None) -> str:
@@ -106,23 +112,30 @@ def _serialize_items(session: Session, lista: Lista) -> list[ListaItemOut]:
     items = session.scalars(
         select(ListaItem)
         .where(ListaItem.lista_id == lista.id)
-        .order_by(ListaItem.added_at.desc(), ListaItem.titn)
+        .order_by(ListaItem.added_at.desc(), ListaItem.record_id)
     ).all()
-    titns = [item.titn for item in items]
+    record_ids = [item.record_id for item in items]
     ediciones: dict[str, Edicion] = {}
-    if titns:
+    if record_ids:
         ediciones = {
-            edicion.titn: edicion
-            for edicion in session.scalars(select(Edicion).where(Edicion.titn.in_(titns))).all()
+            edicion.record_id: edicion
+            for edicion in session.scalars(
+                select(Edicion)
+                .where(Edicion.record_id.in_(record_ids))
+                .options(joinedload(Edicion.fuente))
+            ).all()
         }
 
     payload: list[ListaItemOut] = []
     for item in items:
-        edicion = ediciones.get(item.titn)
+        fuente, titn = parse_record_id(item.record_id)
+        edicion = ediciones.get(item.record_id)
         if edicion is None:
             payload.append(
                 ListaItemOut(
-                    titn=item.titn,
+                    record_id=item.record_id,
+                    fuente=fuente,
+                    titn=titn,
                     titulo=item.titulo_snapshot,
                     disponible=False,
                 )
@@ -131,12 +144,14 @@ def _serialize_items(session: Session, lista: Lista) -> list[ListaItemOut]:
         disponible = edicion.missing_at is None
         payload.append(
             ListaItemOut(
+                record_id=edicion.record_id,
+                fuente=fuente,
                 titn=edicion.titn,
                 titulo=edicion.titulo,
                 soportes=edicion.soportes or [],
                 anio=edicion.anio,
                 poster_url=edicion.tmdb_poster_url,
-                opac_url=_opac_url(edicion.titn) if disponible else None,
+                opac_url=_opac_url(edicion) if disponible else None,
                 disponible=disponible,
             )
         )
@@ -190,11 +205,14 @@ def add_item(
     session: Session = Depends(get_db),
 ) -> ItemMutationOut:
     lista = _get_lista(session, token)
-    edicion = session.scalar(select(Edicion).where(Edicion.titn == payload.titn))
+    record_id = normalize_record_id(payload.identity)
+    edicion = session.scalar(
+        select(Edicion).where(Edicion.record_id == record_id)
+    )
     if edicion is None:
-        raise HTTPException(status_code=422, detail=f"No existe la edicion {payload.titn}")
+        raise HTTPException(status_code=422, detail=f"No existe la edicion {record_id}")
 
-    existing = session.get(ListaItem, (lista.id, payload.titn))
+    existing = session.get(ListaItem, (lista.id, record_id))
     if existing is not None:
         response.status_code = 200
         return ItemMutationOut(item_count=_item_count(session, lista.id), saved=True)
@@ -208,7 +226,7 @@ def add_item(
     session.add(
         ListaItem(
             lista_id=lista.id,
-            titn=payload.titn,
+            record_id=record_id,
             titulo_snapshot=edicion.titulo,
             added_at=datetime.now(UTC),
         )
@@ -219,10 +237,13 @@ def add_item(
     return ItemMutationOut(item_count=_item_count(session, lista.id), saved=True)
 
 
-@router.delete("/lists/{token}/items/{titn}", response_model=ItemMutationOut)
-def remove_item(token: str, titn: str, session: Session = Depends(get_db)) -> ItemMutationOut:
+@router.delete("/lists/{token}/items/{record_id}", response_model=ItemMutationOut)
+def remove_item(
+    token: str, record_id: str, session: Session = Depends(get_db)
+) -> ItemMutationOut:
     lista = _get_lista(session, token)
-    item = session.get(ListaItem, (lista.id, titn))
+    normalized = normalize_record_id(record_id)
+    item = session.get(ListaItem, (lista.id, normalized))
     if item is not None:
         session.delete(item)
         _touch(lista)

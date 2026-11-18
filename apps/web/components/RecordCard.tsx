@@ -28,9 +28,10 @@ export function RecordCard({
   const title = hit._formatted?.titulo ?? hit.titulo;
   const synopsis = hit._formatted?.sinopsis ?? hit.sinopsis;
   const countries = (hit.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
+  const recordId = hit.record_id ?? hit.titn;
   const detailHref = volver
-    ? `/registro/${hit.titn}?volver=${encodeURIComponent(volver)}`
-    : `/registro/${hit.titn}`;
+    ? `/registro/${encodeURIComponent(recordId)}?volver=${encodeURIComponent(volver)}`
+    : `/registro/${encodeURIComponent(recordId)}`;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-slate-300">
@@ -63,7 +64,7 @@ export function RecordCard({
               {(hit.soportes ?? []).map((soporte) => (
                 <SupportBadge key={soporte} support={soporte} />
               ))}
-              <FavoriteButton titn={hit.titn} saved={saved} />
+              <FavoriteButton recordId={recordId} saved={saved} />
             </div>
           </div>
 

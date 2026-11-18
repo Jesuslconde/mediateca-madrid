@@ -38,13 +38,15 @@ export async function createListAction(): Promise<void> {
 }
 
 export async function toggleFavoriteAction(
-  titn: string,
+  recordId: string,
   saved: boolean,
 ): Promise<FavoriteResult> {
   try {
     let token = await ensureListToken();
     try {
-      const result = saved ? await removeItem(token, titn) : await addItem(token, titn);
+      const result = saved
+        ? await removeItem(token, recordId)
+        : await addItem(token, recordId);
       refresh();
       return { saved: !saved, itemCount: result.item_count };
     } catch (error) {
@@ -52,7 +54,9 @@ export async function toggleFavoriteAction(
         const created = await createList();
         token = created.token;
         await setActiveListToken(token);
-        const result = saved ? await removeItem(token, titn) : await addItem(token, titn);
+        const result = saved
+          ? await removeItem(token, recordId)
+          : await addItem(token, recordId);
         refresh();
         return { saved: !saved, itemCount: result.item_count };
       }
@@ -75,18 +79,22 @@ export async function toggleFavoriteAction(
 }
 
 export async function toggleFavoriteFormAction(formData: FormData): Promise<void> {
-  const titn = String(formData.get("titn") ?? "").trim();
-  if (!titn) return;
+  const recordId = String(
+    formData.get("record_id") ?? formData.get("titn") ?? "",
+  ).trim();
+  if (!recordId) return;
   const saved = formData.get("saved") === "true";
-  await toggleFavoriteAction(titn, saved);
+  await toggleFavoriteAction(recordId, saved);
 }
 
 export async function removeItemAction(formData: FormData): Promise<void> {
   const token = String(formData.get("token") ?? "").trim();
-  const titn = String(formData.get("titn") ?? "").trim();
-  if (!token || !titn) return;
+  const recordId = String(
+    formData.get("record_id") ?? formData.get("titn") ?? "",
+  ).trim();
+  if (!token || !recordId) return;
   try {
-    await removeItem(token, titn);
+    await removeItem(token, recordId);
   } catch {
     // La lista puede haber caducado; la pagina se refresca igualmente.
   }

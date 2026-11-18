@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.4.1"
+    "version": "0.5.1"
   },
   "paths": {
     "/api/search": {
@@ -154,6 +154,22 @@
             }
           },
           {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fuente"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
@@ -211,21 +227,21 @@
         }
       }
     },
-    "/api/records/{titn}": {
+    "/api/records/{record_id}": {
       "get": {
         "tags": [
           "registros"
         ],
         "summary": "Get Record",
-        "operationId": "get_record_api_records__titn__get",
+        "operationId": "get_record_api_records__record_id__get",
         "parameters": [
           {
-            "name": "titn",
+            "name": "record_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Titn"
+              "title": "Record Id"
             }
           }
         ],
@@ -517,13 +533,13 @@
         }
       }
     },
-    "/api/lists/{token}/items/{titn}": {
+    "/api/lists/{token}/items/{record_id}": {
       "delete": {
         "tags": [
           "listas"
         ],
         "summary": "Remove Item",
-        "operationId": "remove_item_api_lists__token__items__titn__delete",
+        "operationId": "remove_item_api_lists__token__items__record_id__delete",
         "parameters": [
           {
             "name": "token",
@@ -535,12 +551,12 @@
             }
           },
           {
-            "name": "titn",
+            "name": "record_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Titn"
+              "title": "Record Id"
             }
           }
         ],
@@ -802,6 +818,10 @@
       },
       "LibraryOut": {
         "properties": {
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
           "codigo": {
             "type": "string",
             "title": "Codigo"
@@ -828,6 +848,7 @@
         },
         "type": "object",
         "required": [
+          "fuente",
           "codigo",
           "nombre",
           "ejemplares"
@@ -849,21 +870,46 @@
       },
       "ListaItemIn": {
         "properties": {
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
           "titn": {
-            "type": "string",
-            "maxLength": 32,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Titn"
           }
         },
         "type": "object",
-        "required": [
-          "titn"
-        ],
         "title": "ListaItemIn"
       },
       "ListaItemOut": {
         "properties": {
+          "record_id": {
+            "type": "string",
+            "title": "Record Id"
+          },
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
           "titn": {
             "type": "string",
             "title": "Titn"
@@ -921,6 +967,8 @@
         },
         "type": "object",
         "required": [
+          "record_id",
+          "fuente",
           "titn",
           "titulo"
         ],
@@ -990,6 +1038,10 @@
       },
       "LocationOut": {
         "properties": {
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
           "codigo": {
             "type": "string",
             "title": "Codigo"
@@ -1032,6 +1084,7 @@
         },
         "type": "object",
         "required": [
+          "fuente",
           "codigo",
           "nombre",
           "tipo",
@@ -1101,6 +1154,25 @@
       },
       "RecordDetail": {
         "properties": {
+          "record_id": {
+            "type": "string",
+            "title": "Record Id"
+          },
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "fuente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Nombre"
+          },
           "titn": {
             "type": "string",
             "title": "Titn"
@@ -1357,6 +1429,8 @@
         },
         "type": "object",
         "required": [
+          "record_id",
+          "fuente",
           "titn",
           "titulo"
         ],
@@ -1367,6 +1441,39 @@
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "fuente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente"
+          },
+          "fuente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Nombre"
           },
           "titn": {
             "type": "string",

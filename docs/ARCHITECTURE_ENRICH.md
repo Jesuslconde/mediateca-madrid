@@ -328,3 +328,8 @@ escriben logs JSON con `job_id`, `job_type`, `titn`, `doc`, `result`,
   sin el flag usa la concurrencia guardada en el dashboard o el entorno.
 - El worker procesa los trabajos `discover`, `enrich`, `index`, `tmdb` y
   `branches` de `harvest_jobs` con el mismo checkpoint y reanudacion.
+
+
+## Fuentes OPAC
+
+Cada ejecucion de descubrimiento o enriquecimiento pertenece a una fuente de la tabla `fuentes`. El perfil de la fuente define URL base, ruta, patron de sesion, filtro de formato, retardo y politica de captcha. La identidad de una edicion es `record_id = <fuente>:<titn>`; los cursores, la deduplicacion, los contadores y el indexado se evaluan por fuente. Una fuente deshabilitada o pausada por captcha no recibe trabajos, pero no altera a las demas.

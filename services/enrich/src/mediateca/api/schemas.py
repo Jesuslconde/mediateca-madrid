@@ -3,13 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IngestJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    fuente: str | None = Field(default=None, validation_alias="fuente_codigo")
+    fuente_nombre: str | None = None
     job_type: str
     status: str
     cursor_doc: int | None = None
@@ -33,6 +35,7 @@ class IngestCoverageOut(BaseModel):
     fallidas: int
     desaparecidas: int
     porcentaje: int
+    por_fuente: dict[str, dict[str, int]] = {}
 
 
 class IngestMetricsOut(BaseModel):
@@ -45,6 +48,7 @@ class IngestMetricsOut(BaseModel):
     failed: int
     pending: int
     average_ms: float | None = None
+    por_fuente: dict[str, dict[str, int]] = {}
 
 
 class WorkerHealthOut(BaseModel):

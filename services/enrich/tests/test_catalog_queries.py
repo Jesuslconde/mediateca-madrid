@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -24,7 +24,12 @@ def _session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    session.add(fuente)
+    session.commit()
+    session.info["fuente"] = fuente
+    return session
 
 
 def _edicion(
@@ -102,13 +107,24 @@ def test_filtro_por_texto_y_campos() -> None:
 
 def test_filtro_por_biblioteca_no_duplica() -> None:
     session = _session()
-    biblio = Biblioteca(codigo="B1", nombre="Central")
+    biblio = Biblioteca(
+        fuente_id=session.info["fuente"].id,
+        codigo="B1",
+        nombre="Central",
+    )
     session.add(biblio)
     session.flush()
 
     edicion = _edicion(session, "1")
     for key in ("k1", "k2"):
-        session.add(Ejemplar(external_key=key, biblioteca=biblio, edicion=edicion))
+        session.add(
+            Ejemplar(
+                fuente_id=session.info["fuente"].id,
+                external_key=key,
+                biblioteca=biblio,
+                edicion=edicion,
+            )
+        )
     session.flush()
 
     _edicion(session, "2")

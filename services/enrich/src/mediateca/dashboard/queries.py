@@ -10,7 +10,7 @@ from mediateca_shared.constants import (
     MAX_WORKER_CONCURRENCY,
     MIN_WORKER_CONCURRENCY,
 )
-from mediateca_shared.models import HarvestJob
+from mediateca_shared.models import Fuente, HarvestJob
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -188,6 +188,15 @@ def job_type_counts(session: Session) -> dict[str, int]:
     for job_type, total in rows:
         counts[str(job_type)] = int(total)
     return counts
+
+
+def job_fuente_counts(session: Session) -> dict[str, int]:
+    rows = session.execute(
+        select(Fuente.codigo, func.count(HarvestJob.id))
+        .join(Fuente, Fuente.id == HarvestJob.fuente_id)
+        .group_by(Fuente.codigo)
+    ).all()
+    return {str(codigo): int(total) for codigo, total in rows}
 
 
 def recent_jobs(session: Session, limit: int | None = None) -> list[HarvestJob]:

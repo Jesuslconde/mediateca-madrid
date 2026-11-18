@@ -52,7 +52,7 @@ El modelo obra -> edicion -> ejemplar, las marcas de progreso, los paises de ori
 
 La tabla `sucursales` guarda una ficha por sucursal con `codigo` unico, biblioteca, nombre, municipio, direccion, codigo postal y coordenadas opcionales. `Ejemplar` se relaciona con su sucursal por `sucursal_codigo` mediante una relacion de solo lectura, sin clave foranea ni relleno retroactivo. `Biblioteca.codigo_postal` y el resto de campos de ubicacion sirven de respaldo cuando un ejemplar no tiene sucursal.
 
-`SCHEMA_VERSION` es `6`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos.
+`SCHEMA_VERSION` es `7`. La migracion `migrate_fuentes.sql` crea la tabla `fuentes`, asocia el catalogo historico a Madrid y sustituye las unicidades por `(fuente_id, titn)`, `(fuente_id, codigo)` y `(fuente_id, external_key)`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos.
 
 La API expone `EjemplarOut.ubicacion` con codigo postal, municipio, latitud y longitud. El portal usa esos datos y, si faltan coordenadas de sucursal, el centroide del codigo postal del JSON `apps/web/lib/codigos-postales-madrid.json`. Ese JSON se genera con `scripts/generate_codigos_postales.py` a partir de centroides abiertos y del municipio del INE; no se sirve desde PostgreSQL ni desde Meilisearch.
 
@@ -71,12 +71,13 @@ La imagen `mediateca-web` contiene Python y Node. La API y el portal se ejecutan
 - `deploy/portainer-stack.yml` usa las imagenes publicadas en el registry.
 - El orden es `db/meilisearch -> init -> batch/web`.
 - La API comprueba `schema_meta.schema_version` al arrancar y falla si no coincide con `SCHEMA_VERSION`.
+- La migracion de fuentes exige reindexado completo; `init` lo hace con `--reset` al detectar el salto a la version 7.
 
 ## Busqueda de solo lectura
 
 La API usa un adaptador `CatalogSearch` sobre Meilisearch. No escribe documentos, no crea el indice y no reconstruye facetas por su cuenta.
 
-El indice publica `paises_origen` como atributo filtrable y faceta. `GET /api/search` acepta el parametro repetible `paises_origen` y lo combina con la consulta y el resto de filtros; `GET /api/records/{titn}` devuelve `paises_origen` junto al `pais` bibliografico del OPAC.
+El indice publica `paises_origen` como atributo filtrable y faceta. `GET /api/search` acepta el parametro repetible `paises_origen` y lo combina con la consulta y el resto de filtros; `GET /api/records/{record_id}` devuelve `paises_origen` junto al `pais` bibliografico del OPAC.
 
 ## Contratos
 

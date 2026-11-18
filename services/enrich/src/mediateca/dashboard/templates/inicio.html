@@ -34,6 +34,17 @@
   </section>
 
   <section>
+    <h2>Trabajos por fuente</h2>
+    <div class="grid">
+      {% for fuente, total in fuente_counts.items() %}
+        <div class="metric"><span class="muted">{{ fuente }}</span><strong>{{ total }}</strong></div>
+      {% else %}
+        <p class="muted">Sin fuentes registradas.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
     <h2>Cobertura del catalogo</h2>
     <div class="grid">
       <div class="metric"><span class="muted">Ediciones</span><strong>{{ coverage.ediciones }}</strong></div>

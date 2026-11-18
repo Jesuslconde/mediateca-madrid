@@ -8,34 +8,40 @@
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="discover">
         <input type="hidden" name="mode" value="incremental">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <button type="submit" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Buscar novedades</button>
       </form>
       <form method="post" action="/jobs" onsubmit="return confirm('El descubrimiento completo recorre todo el catalogo y puede tardar horas. ¿Continuar?');">
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="discover">
         <input type="hidden" name="mode" value="full">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <button type="submit" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Descubrimiento completo</button>
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="enrich">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
         <button type="submit" {% if active_jobs['enrich'] or not is_admin %}disabled{% endif %}>Enriquecer pendientes</button>
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="index">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <button type="submit" {% if active_jobs['index'] or not is_admin %}disabled{% endif %}>Reindexar</button>
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="branches">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <button type="submit" {% if active_jobs['branches'] or not is_admin %}disabled{% endif %}>Recargar direcciones de bibliotecas</button>
         <span class="muted">Actualiza bibliotecas conocidas y sus sucursales</span>
       </form>
       <form method="post" action="/jobs">
         <input type="hidden" name="next" value="/tareas">
         <input type="hidden" name="job_type" value="tmdb">
+        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
         <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
         <label><input type="checkbox" name="refresh" value="true"> Reactualizar también las ya sincronizadas</label>
         <button type="submit" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>
@@ -51,6 +57,7 @@
         <thead>
           <tr>
             <th>ID</th>
+            <th>Fuente</th>
             <th>Tipo</th>
             <th>Estado</th>
             <th>Cursor</th>
@@ -66,6 +73,7 @@
           {% for job in jobs %}
             <tr>
               <td>{{ job.id }}</td>
+              <td>{{ job.fuente.codigo if job.fuente else 'global' }}</td>
               <td>{{ job.job_type }}</td>
               <td>{{ job.status }}</td>
               <td>{{ job.cursor_doc if job.cursor_doc is not none else '—' }}/{{ job.cursor_titn if job.cursor_titn is not none else '—' }}</td>

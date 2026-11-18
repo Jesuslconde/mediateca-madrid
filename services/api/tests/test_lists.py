@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 from mediateca_shared.db import Base
 from mediateca_shared.lists import Lista, ListaItem
-from mediateca_shared.models import Edicion
+from mediateca_shared.models import Edicion, Fuente
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -26,7 +26,12 @@ def _session() -> Session:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, expire_on_commit=False)()
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    session.add(fuente)
+    session.commit()
+    session.info["fuente"] = fuente
+    return session
 
 
 def _request(session: Session, method: str, url: str, **kwargs):
@@ -45,8 +50,14 @@ def _crear_lista(session: Session, **kwargs):
     return response.json()["token"]
 
 
-def _edicion(titn: str, titulo: str, **kwargs) -> Edicion:
-    return Edicion(titn=titn, titulo=titulo, **kwargs)
+def _edicion(session: Session, titn: str, titulo: str, **kwargs) -> Edicion:
+    return Edicion(
+        fuente_id=session.info["fuente"].id,
+        record_id=f"madrid:{titn}",
+        titn=titn,
+        titulo=titulo,
+        **kwargs,
+    )
 
 
 def test_crear_y_consultar_lista() -> None:
@@ -76,7 +87,7 @@ def test_crear_y_consultar_lista() -> None:
 
 def test_anadir_es_idempotente_y_quitar() -> None:
     session = _session()
-    session.add(_edicion("111", "Primera", soportes=["DVD"], anio=2001))
+    session.add(_edicion(session, "111", "Primera", soportes=["DVD"], anio=2001))
     session.commit()
     token = _crear_lista(session)
 
@@ -95,7 +106,7 @@ def test_anadir_es_idempotente_y_quitar() -> None:
 
 def test_elementos_del_mas_reciente_al_mas_antiguo() -> None:
     session = _session()
-    session.add_all([_edicion("111", "Primera"), _edicion("222", "Segunda")])
+    session.add_all([_edicion(session, "111", "Primera"), _edicion(session, "222", "Segunda")])
     session.commit()
     token = _crear_lista(session)
 
@@ -121,7 +132,7 @@ def test_edicion_inexistente() -> None:
 
 def test_ficha_desaparecida_conserva_titulo() -> None:
     session = _session()
-    edicion = _edicion("111", "Titulo guardado")
+    edicion = _edicion(session, "111", "Titulo guardado")
     session.add(edicion)
     session.commit()
     token = _crear_lista(session)
@@ -145,7 +156,7 @@ def test_token_invalido() -> None:
 
 def test_mutacion_renueva_fechas() -> None:
     session = _session()
-    session.add(_edicion("111", "Primera"))
+    session.add(_edicion(session, "111", "Primera"))
     session.commit()
     token = _crear_lista(session)
     lista = session.scalars(select(Lista)).one()
@@ -160,7 +171,7 @@ def test_mutacion_renueva_fechas() -> None:
 
 def test_lista_llena() -> None:
     session = _session()
-    session.add(_edicion("111", "Primera"))
+    session.add(_edicion(session, "111", "Primera"))
     session.commit()
     token = _crear_lista(session)
     lista = session.scalars(select(Lista)).one()
@@ -168,7 +179,7 @@ def test_lista_llena() -> None:
         session.add(
             ListaItem(
                 lista_id=lista.id,
-                titn=f"relleno-{index}",
+                record_id=f"madrid:relleno-{index}",
                 titulo_snapshot="Relleno",
                 added_at=datetime.now(UTC),
             )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class HealthResponse(BaseModel):
@@ -24,6 +24,9 @@ class SearchHit(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
+    record_id: str | None = None
+    fuente: str | None = None
+    fuente_nombre: str | None = None
     titn: str
     titulo: str
     titulo_uniforme: str | None = None
@@ -111,6 +114,9 @@ class ObraOut(BaseModel):
 
 
 class RecordDetail(BaseModel):
+    record_id: str
+    fuente: str
+    fuente_nombre: str | None = None
     titn: str
     titulo: str
     titulo_uniforme: str | None = None
@@ -141,6 +147,7 @@ class RecordDetail(BaseModel):
 
 
 class LibraryOut(BaseModel):
+    fuente: str
     codigo: str
     nombre: str
     municipio: str | None = None
@@ -148,6 +155,7 @@ class LibraryOut(BaseModel):
 
 
 class LocationOut(BaseModel):
+    fuente: str
     codigo: str
     nombre: str
     tipo: Literal["biblioteca", "sucursal"]
@@ -165,6 +173,8 @@ class StatsResponse(BaseModel):
 
 
 class ListaItemOut(BaseModel):
+    record_id: str
+    fuente: str
     titn: str
     titulo: str
     soportes: list[str] = []
@@ -188,7 +198,18 @@ class ListaCreatedOut(BaseModel):
 
 
 class ListaItemIn(BaseModel):
-    titn: str = Field(min_length=1, max_length=32)
+    record_id: str | None = Field(default=None, min_length=1, max_length=160)
+    titn: str | None = Field(default=None, min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def _require_identity(self) -> ListaItemIn:
+        if not self.record_id and not self.titn:
+            raise ValueError("Se requiere record_id o titn")
+        return self
+
+    @property
+    def identity(self) -> str:
+        return self.record_id or self.titn or ""
 
 
 class ListaRenameIn(BaseModel):

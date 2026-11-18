@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from mediateca.catalog.fuentes import enabled_fuentes
 from mediateca.catalog.jobs import (
     JobAlreadyActive,
     enqueue_discover_job,
@@ -55,67 +56,109 @@ def enqueue_due_jobs(
 
     enqueued = []
 
-    if not has_active_job(session, "discover") and _is_due(
-        last_job(session, "discover"), schedule.discover_interval_hours, current
-    ):
-        full_due = schedule.full_sweep_interval_hours > 0 and _is_due(
-            last_full_discover(session), schedule.full_sweep_interval_hours, current
-        )
-        mode = "full" if full_due else "incremental"
-        try:
-            job = enqueue_discover_job(session, mode=mode, reason="scheduler")
-        except JobAlreadyActive:
-            logger.info("Ya hay un descubrimiento activo; no se encola otro")
-        else:
-            enqueued.append(job)
-            logger.info(
-                "Descubrimiento encolado por el scheduler",
-                extra={"job_id": job.id, "job_type": job.job_type, "action": mode},
-            )
+    for fuente in enabled_fuentes(session):
+        if fuente.paused_until is not None:
+            paused = _as_aware(fuente.paused_until)
+            if paused is not None and paused > current:
+                logger.info(
+                    "Fuente pausada por captcha; no se encolan trabajos",
+                    extra={"fuente": fuente.codigo},
+                )
+                continue
 
-    if not has_active_job(session, "discover") and not has_active_job(session, "enrich"):
-        pending = count_pending_titns(session)
-        if pending > 0 and _is_due(
-            last_job(session, "enrich"), schedule.enrich_interval_hours, current
+        if not has_active_job(session, "discover", fuente_id=fuente.id) and _is_due(
+            last_job(session, "discover", fuente_id=fuente.id),
+            schedule.discover_interval_hours,
+            current,
         ):
+            full_due = schedule.full_sweep_interval_hours > 0 and _is_due(
+                last_full_discover(session, fuente_id=fuente.id),
+                schedule.full_sweep_interval_hours,
+                current,
+            )
+            mode = "full" if full_due else "incremental"
             try:
-                job = enqueue_enrich_job(
-                    session,
-                    since=None,
-                    batch_size=schedule.enrich_batch_size,
-                    reason="scheduler",
+                job = enqueue_discover_job(
+                    session, fuente=fuente, mode=mode, reason="scheduler"
                 )
             except JobAlreadyActive:
-                logger.info("Ya hay un enriquecimiento activo; no se encola otro")
+                logger.info(
+                    "Ya hay un descubrimiento activo; no se encola otro",
+                    extra={"fuente": fuente.codigo},
+                )
             else:
                 enqueued.append(job)
                 logger.info(
-                    "Enriquecimiento encolado por el scheduler",
+                    "Descubrimiento encolado por el scheduler",
                     extra={
                         "job_id": job.id,
                         "job_type": job.job_type,
-                        "pending": pending,
+                        "fuente": fuente.codigo,
+                        "action": mode,
                     },
                 )
 
-    if (
-        not has_active_job(session, "discover")
-        and not has_active_job(session, "enrich")
-        and not has_active_job(session, "index")
-        and _is_due(
-            last_job(session, "index"), schedule.index_interval_hours, current
-        )
-    ):
-        try:
-            job = enqueue_index_job(session)
-        except JobAlreadyActive:
-            logger.info("Ya hay una indexacion activa; no se encola otra")
-        else:
-            enqueued.append(job)
-            logger.info(
-                "Indexacion de reconciliacion encolada por el scheduler",
-                extra={"job_id": job.id, "job_type": job.job_type},
+        if not has_active_job(session, "discover", fuente_id=fuente.id) and not has_active_job(
+            session, "enrich", fuente_id=fuente.id
+        ):
+            pending = count_pending_titns(session, fuente_id=fuente.id)
+            if pending > 0 and _is_due(
+                last_job(session, "enrich", fuente_id=fuente.id),
+                schedule.enrich_interval_hours,
+                current,
+            ):
+                try:
+                    job = enqueue_enrich_job(
+                        session,
+                        fuente=fuente,
+                        since=None,
+                        batch_size=schedule.enrich_batch_size,
+                        reason="scheduler",
+                    )
+                except JobAlreadyActive:
+                    logger.info(
+                        "Ya hay un enriquecimiento activo; no se encola otro",
+                        extra={"fuente": fuente.codigo},
+                    )
+                else:
+                    enqueued.append(job)
+                    logger.info(
+                        "Enriquecimiento encolado por el scheduler",
+                        extra={
+                            "job_id": job.id,
+                            "job_type": job.job_type,
+                            "fuente": fuente.codigo,
+                            "pending": pending,
+                        },
+                    )
+
+        if (
+            not has_active_job(session, "discover", fuente_id=fuente.id)
+            and not has_active_job(session, "enrich", fuente_id=fuente.id)
+            and not has_active_job(session, "index", fuente_id=fuente.id)
+            and _is_due(
+                last_job(session, "index", fuente_id=fuente.id),
+                schedule.index_interval_hours,
+                current,
             )
+        ):
+            try:
+                job = enqueue_index_job(session, fuente=fuente)
+            except JobAlreadyActive:
+                logger.info(
+                    "Ya hay una indexacion activa; no se encola otra",
+                    extra={"fuente": fuente.codigo},
+                )
+            else:
+                enqueued.append(job)
+                logger.info(
+                    "Indexacion de reconciliacion encolada por el scheduler",
+                    extra={
+                        "job_id": job.id,
+                        "job_type": job.job_type,
+                        "fuente": fuente.codigo,
+                    },
+                )
 
     if enqueued:
         session.flush()

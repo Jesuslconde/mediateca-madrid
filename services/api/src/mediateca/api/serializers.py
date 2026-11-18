@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from mediateca_shared.fuentes import MADRID_PROFILE, FuenteProfile
 from mediateca_shared.models import Edicion, Ejemplar
 
-from mediateca.core.config import settings
 
-
-def _opac_permalink(titn: str) -> str:
-    return f"{settings.opac_base_url.rstrip('/')}{settings.opac_path}?TITN={titn}"
+def _profile(edicion: Edicion) -> FuenteProfile:
+    if edicion.fuente is None:
+        return MADRID_PROFILE
+    return FuenteProfile.from_model(edicion.fuente)
 
 
 def _ubicacion(ejemplar: Ejemplar) -> dict[str, Any] | None:
@@ -33,7 +34,11 @@ def _ubicacion(ejemplar: Ejemplar) -> dict[str, Any] | None:
 
 
 def serialize_record(edicion: Edicion) -> dict[str, Any]:
+    profile = _profile(edicion)
     return {
+        "record_id": edicion.record_id,
+        "fuente": profile.codigo,
+        "fuente_nombre": profile.nombre,
         "titn": edicion.titn,
         "titulo": edicion.titulo,
         "titulo_uniforme": edicion.titulo_uniforme,
@@ -88,6 +93,6 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
         ),
         "notas": edicion.notas or {},
         "marc": edicion.marc or {},
-        "source_url": _opac_permalink(edicion.titn),
+        "source_url": profile.source_url(edicion.titn),
         "updated_at": edicion.updated_at.isoformat() if edicion.updated_at else None,
     }

@@ -71,10 +71,7 @@ services:
     command:
       - |
         set -e
-        python -m mediateca init-db
-        python -m mediateca migrate
-        python -m mediateca clean-lists
-        python -m mediateca index
+        python -m mediateca init
 
   worker:
     <<: *batch-build
@@ -192,6 +189,7 @@ services:
       MEDIATECA_MEILISEARCH_INDEX: ${MEDIATECA_MEILISEARCH_INDEX:-ediciones}
       MEDIATECA_API_CORS_ORIGINS: ${MEDIATECA_API_CORS_ORIGINS:-http://localhost:3000}
       MEDIATECA_OPAC_BASE_URL: ${MEDIATECA_OPAC_BASE_URL:-https://gestiona.comunidad.madrid}
+      MEDIATECA_OPAC_PATH: ${MEDIATECA_OPAC_PATH:-/biblio_publicas/cgi-bin/abnetopac}
       MEDIATECA_LOG_LEVEL: ${MEDIATECA_LOG_LEVEL:-INFO}
     ports:
       - "${API_PORT:-8000}:8000"

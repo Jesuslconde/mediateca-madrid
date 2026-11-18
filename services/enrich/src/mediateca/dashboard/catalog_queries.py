@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mediateca_shared.constants import ENRICH_STATUSES, TMDB_STATUSES
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ class CatalogFilter:
     anio_hasta: int | None = None
     idioma: str | None = None
     pais: str | None = None
+    fuente: str | None = None
     page: int = 1
     limit: int = DEFAULT_LIMIT
 
@@ -70,6 +71,11 @@ def _predicates(filtro: CatalogFilter) -> list:
         clauses.append(Edicion.idioma == filtro.idioma)
     if filtro.pais:
         clauses.append(Edicion.pais == filtro.pais)
+    if filtro.fuente:
+        clauses.append(
+            Edicion.fuente_id
+            == select(Fuente.id).where(Fuente.codigo == filtro.fuente).scalar_subquery()
+        )
     return clauses
 
 
@@ -87,7 +93,7 @@ def catalog_rows(session: Session, filtro: CatalogFilter) -> list[Edicion]:
     stmt = (
         select(Edicion)
         .where(*_predicates(filtro))
-        .order_by(Edicion.titn)
+        .order_by(Edicion.record_id)
         .limit(limit)
         .offset(offset)
     )

@@ -4,7 +4,15 @@ import pytest
 from sqlalchemy import create_engine
 
 from mediateca_shared.db import Base
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob, SchemaMeta, Sucursal
+from mediateca_shared.models import (
+    Biblioteca,
+    Edicion,
+    Ejemplar,
+    Fuente,
+    HarvestJob,
+    SchemaMeta,
+    Sucursal,
+)
 from mediateca_shared.version import SCHEMA_VERSION, SchemaVersionError, check_schema_version
 
 
@@ -12,6 +20,7 @@ def test_modelos_se_crean_en_sqlite() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     assert "ediciones" in Base.metadata.tables
+    assert "fuentes" in Base.metadata.tables
     assert "harvest_jobs" in Base.metadata.tables
     assert "schema_meta" in Base.metadata.tables
     assert "sucursales" in Base.metadata.tables
@@ -67,5 +76,20 @@ def test_sucursal_incluye_ubicacion() -> None:
     assert hasattr(Ejemplar, "sucursal")
 
 
-def test_esquema_version_6() -> None:
-    assert SCHEMA_VERSION == "6"
+def test_esquema_version_7() -> None:
+    assert SCHEMA_VERSION == "7"
+
+
+def test_fuente_valida_codigo() -> None:
+    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://example.org")
+    assert fuente.codigo == "madrid"
+    with pytest.raises(ValueError):
+        Fuente(codigo="Madrid", nombre="Madrid", base_url="https://example.org")
+
+
+def test_edicion_tiene_identidad_compuesta() -> None:
+    columnas = {columna.name for columna in Edicion.__table__.columns}
+    assert {"fuente_id", "record_id", "titn"} <= columnas
+    constraints = {constraint.name for constraint in Edicion.__table__.constraints}
+    assert "uq_ediciones_fuente_titn" in constraints
+    assert "uq_ediciones_record_id" in constraints

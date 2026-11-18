@@ -3,10 +3,20 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from mediateca_shared.identity import normalize_location_code
+
 from mediateca.core.config import settings
 from mediateca.core.search import get_index, get_meili_client
 
-FACET_FIELDS = ["soportes", "generos", "anio", "idioma", "paises_origen", "bibliotecas"]
+FACET_FIELDS = [
+    "soportes",
+    "generos",
+    "anio",
+    "idioma",
+    "paises_origen",
+    "bibliotecas",
+    "fuente",
+]
 ENRICHED_FILTER = "detail_complete = true"
 
 
@@ -24,8 +34,12 @@ def build_filters(
     idioma: str | None = None,
     paises_origen: list[str] | None = None,
     biblioteca: str | None = None,
+    fuente: str | None = None,
 ) -> str | None:
     filters: list[str] = []
+
+    if fuente:
+        filters.append(f"fuente = {_quote(fuente)}")
 
     if soportes:
         filters.append(
@@ -43,7 +57,9 @@ def build_filters(
         )
     if biblioteca:
         if biblioteca.startswith(("b:", "s:")):
-            filters.append(f"ubicaciones = {_quote(biblioteca)}")
+            filters.append(
+                f"ubicaciones = {_quote(normalize_location_code(biblioteca))}"
+            )
         else:
             quoted = _quote(biblioteca)
             filters.append(f"(bibliotecas = {quoted} OR ubicaciones_texto = {quoted})")
@@ -73,6 +89,7 @@ class CatalogSearch:
         idioma: str | None = None,
         paises_origen: list[str] | None = None,
         biblioteca: str | None = None,
+        fuente: str | None = None,
         sort: list[str] | None = None,
         page: int = 1,
         limit: int = 20,
@@ -85,6 +102,7 @@ class CatalogSearch:
             idioma=idioma,
             paises_origen=paises_origen,
             biblioteca=biblioteca,
+            fuente=fuente,
         )
         options: dict[str, Any] = {
             "page": max(1, page),

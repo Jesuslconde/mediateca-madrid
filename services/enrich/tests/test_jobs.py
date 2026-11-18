@@ -364,7 +364,7 @@ def test_enqueue_tmdb_job_guarda_el_modo() -> None:
     assert job.job_type == "tmdb"
     assert job.status == "pending"
     assert job.batch_size == 123
-    assert job.stats == {"reason": "manual", "refresh": True}
+    assert job.stats == {"fuente": "madrid", "reason": "manual", "refresh": True}
 
 
 def test_enqueue_branches_job_guarda_solo_conocidas() -> None:
@@ -376,6 +376,7 @@ def test_enqueue_branches_job_guarda_solo_conocidas() -> None:
     assert job.job_type == "branches"
     assert job.status == "pending"
     assert job.stats == {
+        "fuente": "madrid",
         "reason": "manual",
         "only_known": True,
         "delay": 0.5,
@@ -403,7 +404,7 @@ def test_worker_ejecuta_el_handler_branches(monkeypatch) -> None:
         def __exit__(self, *args) -> None:
             pass
 
-    def fake_refresh(session, client, *, max_pages=None, only_known=False):  # noqa: ANN001
+    def fake_refresh(session, client, *, fuente=None, max_pages=None, only_known=False):  # noqa: ANN001
         visto["max_pages"] = max_pages
         visto["only_known"] = only_known
         return RefreshStats(records=3, branches_matched=1, libraries_updated=1)

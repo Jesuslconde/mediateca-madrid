@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from mediateca_shared.identity import RecordIdError, normalize_record_id
 from mediateca_shared.models import (
     Edicion,
     EdicionMateria,
@@ -17,12 +18,18 @@ from mediateca.api.serializers import serialize_record
 router = APIRouter(tags=["registros"])
 
 
-@router.get("/records/{titn}", response_model=RecordDetail)
-def get_record(titn: str, session: Session = Depends(get_db)) -> RecordDetail:
+@router.get("/records/{record_id}", response_model=RecordDetail)
+def get_record(record_id: str, session: Session = Depends(get_db)) -> RecordDetail:
+    try:
+        normalized = normalize_record_id(record_id)
+    except RecordIdError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     stmt = (
         select(Edicion)
-        .where(Edicion.titn == titn)
+        .where(Edicion.record_id == normalized)
         .options(
+            joinedload(Edicion.fuente),
             joinedload(Edicion.obra),
             selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
             selectinload(Edicion.ejemplares).selectinload(Ejemplar.sucursal),
@@ -33,5 +40,5 @@ def get_record(titn: str, session: Session = Depends(get_db)) -> RecordDetail:
     )
     edicion = session.scalars(stmt).first()
     if edicion is None:
-        raise HTTPException(status_code=404, detail=f"No existe el registro {titn}")
+        raise HTTPException(status_code=404, detail=f"No existe el registro {record_id}")
     return RecordDetail(**serialize_record(edicion))

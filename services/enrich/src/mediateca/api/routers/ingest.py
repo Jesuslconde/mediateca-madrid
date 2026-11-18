@@ -50,6 +50,7 @@ def _coverage_out(cover: IngestCoverage, metrics: IngestMetrics) -> IngestCovera
             if cover.ediciones
             else 0
         ),
+        por_fuente=cover.por_fuente,
     )
 
 
@@ -64,6 +65,7 @@ def _metrics_out(metrics: IngestMetrics) -> IngestMetricsOut:
         failed=metrics.failed,
         pending=metrics.pending,
         average_ms=metrics.average_ms,
+        por_fuente=metrics.por_fuente,
     )
 
 
@@ -83,9 +85,7 @@ def ingest_status(
     try:
         cover = coverage(session)
         metrics = ingest_metrics(session, cover)
-        jobs = [
-            IngestJobOut.model_validate(job) for job in recent_jobs(session, limit)
-        ]
+        jobs = [IngestJobOut.model_validate(job) for job in recent_jobs(session, limit)]
         worker = worker_state(session)
     except SQLAlchemyError as exc:
         raise HTTPException(

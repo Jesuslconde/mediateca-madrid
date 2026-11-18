@@ -31,6 +31,7 @@ function sortItems(items: Location[]): Location[] {
 
 function legacyLocation(codigo: string): Location {
   return {
+    fuente: "madrid",
     codigo,
     nombre: codigo,
     tipo: "biblioteca",
@@ -62,7 +63,7 @@ export function LibrarySelect({
       : locations;
     const grouped = new Map<string, Group>();
     for (const location of matches) {
-      const key = location.biblioteca_codigo || location.codigo;
+      const key = `${location.fuente}:${location.biblioteca_codigo || location.codigo}`;
       const current = grouped.get(key) ?? {
         key,
         label: location.biblioteca_nombre || location.nombre,
@@ -80,7 +81,7 @@ export function LibrarySelect({
       const selectedLocation =
         locations.find((location) => location.codigo === selected) ??
         legacyLocation(selected);
-      const key = selectedLocation.biblioteca_codigo || selectedLocation.codigo;
+      const key = `${selectedLocation.fuente}:${selectedLocation.biblioteca_codigo || selectedLocation.codigo}`;
       let group = result.find((candidate) => candidate.key === key);
       if (group === undefined) {
         group = {

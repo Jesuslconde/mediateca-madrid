@@ -5,11 +5,11 @@ import { useOptimistic, useState, useTransition, type FormEvent } from "react";
 import { toggleFavoriteAction, toggleFavoriteFormAction } from "@/app/actions/lists";
 
 export function FavoriteButton({
-  titn,
+  recordId,
   saved: initialSaved,
   compact = true,
 }: {
-  titn: string;
+  recordId: string;
   saved: boolean;
   compact?: boolean;
 }) {
@@ -27,7 +27,7 @@ export function FavoriteButton({
     setError(null);
     startTransition(async () => {
       setOptimisticSaved(!previous);
-      const result = await toggleFavoriteAction(titn, previous);
+      const result = await toggleFavoriteAction(recordId, previous);
       if (result.error) {
         setError(result.error);
         return;
@@ -39,7 +39,7 @@ export function FavoriteButton({
   return (
     <div className="flex flex-col items-end gap-1">
       <form action={toggleFavoriteFormAction} onSubmit={onSubmit}>
-        <input type="hidden" name="titn" value={titn} />
+        <input type="hidden" name="record_id" value={recordId} />
         <input type="hidden" name="saved" value={String(saved)} />
         <button
           type="submit"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 
 from fastapi import APIRouter, Depends
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Sucursal
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Sucursal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -17,17 +17,20 @@ router = APIRouter(tags=["bibliotecas"])
 def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
     stmt = (
         select(
+            Fuente.codigo.label("fuente"),
             Biblioteca.codigo,
             Biblioteca.nombre,
             Biblioteca.municipio,
             func.count(Ejemplar.id).label("ejemplares"),
         )
+        .join(Fuente, Fuente.id == Biblioteca.fuente_id)
         .outerjoin(Ejemplar, Ejemplar.biblioteca_id == Biblioteca.id)
-        .group_by(Biblioteca.id)
+        .group_by(Biblioteca.id, Fuente.codigo)
         .order_by(Biblioteca.nombre)
     )
     return [
         LibraryOut(
+            fuente=row.fuente,
             codigo=row.codigo,
             nombre=row.nombre,
             municipio=row.municipio,
@@ -41,16 +44,19 @@ def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
 def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
     libraries_stmt = (
         select(
+            Fuente.codigo.label("fuente"),
             Biblioteca.codigo,
             Biblioteca.nombre,
             Biblioteca.municipio,
             func.count(Ejemplar.id).label("ejemplares"),
         )
+        .join(Fuente, Fuente.id == Biblioteca.fuente_id)
         .outerjoin(Ejemplar, Ejemplar.biblioteca_id == Biblioteca.id)
-        .group_by(Biblioteca.id)
+        .group_by(Biblioteca.id, Fuente.codigo)
     )
     branches_stmt = (
         select(
+            Fuente.codigo.label("fuente"),
             Biblioteca.codigo.label("biblioteca_codigo"),
             Biblioteca.nombre.label("biblioteca_nombre"),
             Ejemplar.sucursal_codigo.label("sucursal_codigo"),
@@ -60,10 +66,16 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
             func.count(Ejemplar.id).label("ejemplares"),
         )
         .join(Biblioteca, Biblioteca.id == Ejemplar.biblioteca_id)
-        .outerjoin(Sucursal, Sucursal.codigo == Ejemplar.sucursal_codigo)
+        .join(Fuente, Fuente.id == Biblioteca.fuente_id)
+        .outerjoin(
+            Sucursal,
+            (Sucursal.codigo == Ejemplar.sucursal_codigo)
+            & (Sucursal.fuente_id == Biblioteca.fuente_id),
+        )
         .where(Ejemplar.sucursal_codigo.is_not(None))
         .group_by(
             Biblioteca.id,
+            Fuente.codigo,
             Biblioteca.codigo,
             Biblioteca.nombre,
             Ejemplar.sucursal_codigo,
@@ -72,7 +84,8 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
 
     locations = [
         LocationOut(
-            codigo=f"b:{row.codigo}",
+            fuente=row.fuente,
+            codigo=f"b:{row.fuente}:{row.codigo}",
             nombre=row.nombre,
             tipo="biblioteca",
             biblioteca_codigo=row.codigo,
@@ -84,7 +97,8 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
     ]
     locations.extend(
         LocationOut(
-            codigo=f"s:{row.sucursal_codigo}",
+            fuente=row.fuente,
+            codigo=f"s:{row.fuente}:{row.sucursal_codigo}",
             nombre=row.sucursal_nombre or row.sucursal_codigo,
             tipo="sucursal",
             biblioteca_codigo=row.biblioteca_codigo,

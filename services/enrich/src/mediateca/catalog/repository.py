@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from mediateca_shared.identity import compose_record_id, normalize_record_id
 from mediateca_shared.models import (
     Biblioteca,
     Edicion,
@@ -14,6 +15,7 @@ from mediateca_shared.models import (
     EdicionPersona,
     Ejemplar,
     Enlace,
+    Fuente,
     Materia,
     Obra,
     Persona,
@@ -95,14 +97,17 @@ def get_or_create_obra(session: Session, parsed: ParsedEdicion) -> Obra:
 
 
 def get_or_create_biblioteca(
-    session: Session, codigo: str | None, nombre: str
+    session: Session, fuente_id: int, codigo: str | None, nombre: str
 ) -> Biblioteca:
     code = codigo if codigo and codigo != "DESCONOCIDA" else slugify(nombre)
     biblioteca = session.scalars(
-        select(Biblioteca).where(Biblioteca.codigo == code)
+        select(Biblioteca).where(
+            Biblioteca.fuente_id == fuente_id,
+            Biblioteca.codigo == code,
+        )
     ).first()
     if biblioteca is None:
-        biblioteca = Biblioteca(codigo=code, nombre=nombre)
+        biblioteca = Biblioteca(fuente_id=fuente_id, codigo=code, nombre=nombre)
         session.add(biblioteca)
         session.flush()
     elif nombre and biblioteca.nombre != nombre:
@@ -135,10 +140,14 @@ def upsert_sucursal(
         raise ValueError("La ficha del directorio no tiene codigo de sucursal")
 
     sucursal = session.scalars(
-        select(Sucursal).where(Sucursal.codigo == parsed.sucursal_codigo)
+        select(Sucursal).where(
+            Sucursal.fuente_id == biblioteca.fuente_id,
+            Sucursal.codigo == parsed.sucursal_codigo,
+        )
     ).first()
     if sucursal is None:
         sucursal = Sucursal(
+            fuente_id=biblioteca.fuente_id,
             biblioteca=biblioteca,
             codigo=parsed.sucursal_codigo,
             nombre=parsed.nombre,
@@ -218,7 +227,9 @@ def _sync_enlaces(edicion: Edicion, parsed: ParsedEdicion) -> None:
         )
 
 
-def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) -> None:
+def _sync_ejemplares(
+    session: Session, edicion: Edicion, parsed: ParsedEdicion, fuente_id: int
+) -> None:
     existing = {ejemplar.external_key: ejemplar for ejemplar in edicion.ejemplares}
     seen_keys: set[str] = set()
 
@@ -229,12 +240,14 @@ def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) 
         seen_keys.add(key)
         biblioteca = get_or_create_biblioteca(
             session,
+            fuente_id,
             parsed_ejemplar.biblioteca_codigo,
             parsed_ejemplar.biblioteca_nombre,
         )
         ejemplar = existing.get(key)
         if ejemplar is None:
             ejemplar = Ejemplar(
+                fuente_id=fuente_id,
                 external_key=key,
                 biblioteca=biblioteca,
                 sucursal_codigo=parsed_ejemplar.sucursal_codigo,
@@ -255,16 +268,31 @@ def _sync_ejemplares(session: Session, edicion: Edicion, parsed: ParsedEdicion) 
             ejemplar.soporte = parsed_ejemplar.soporte
 
 
-def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
+def upsert_edicion(
+    session: Session, parsed: ParsedEdicion, *, fuente: Fuente | None = None
+) -> Edicion:
+    if fuente is None:
+        from mediateca.catalog.fuentes import ensure_default_fuente
+
+        fuente = ensure_default_fuente(session)
     obra = get_or_create_obra(session, parsed)
 
+    record_id = compose_record_id(fuente.codigo, parsed.titn)
     edicion = session.scalars(
-        select(Edicion).where(Edicion.titn == parsed.titn)
+        select(Edicion).where(Edicion.record_id == record_id)
     ).first()
     if edicion is None:
-        edicion = Edicion(titn=parsed.titn, titulo=parsed.titulo, obra=obra)
+        edicion = Edicion(
+            fuente_id=fuente.id,
+            record_id=record_id,
+            titn=parsed.titn,
+            titulo=parsed.titulo,
+            obra=obra,
+        )
         session.add(edicion)
 
+    edicion.fuente_id = fuente.id
+    edicion.record_id = record_id
     edicion.obra = obra
     edicion.titulo = parsed.titulo
     edicion.titulo_uniforme = parsed.titulo_uniforme
@@ -292,7 +320,7 @@ def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
     _sync_personas(session, edicion, parsed)
     _sync_materias(session, edicion, parsed)
     _sync_enlaces(edicion, parsed)
-    _sync_ejemplares(session, edicion, parsed)
+    _sync_ejemplares(session, edicion, parsed, fuente.id)
 
     timestamp = datetime.now(UTC)
     if edicion.discovery_seen_at is None:
@@ -304,14 +332,23 @@ def upsert_edicion(session: Session, parsed: ParsedEdicion) -> Edicion:
     return edicion
 
 
-def upsert_stub(session: Session, parsed: ParsedEdicion) -> Edicion:
+def upsert_stub(
+    session: Session, parsed: ParsedEdicion, *, fuente: Fuente | None = None
+) -> Edicion:
+    if fuente is None:
+        from mediateca.catalog.fuentes import ensure_default_fuente
+
+        fuente = ensure_default_fuente(session)
     timestamp = datetime.now(UTC)
+    record_id = compose_record_id(fuente.codigo, parsed.titn)
     edicion = session.scalars(
-        select(Edicion).where(Edicion.titn == parsed.titn)
+        select(Edicion).where(Edicion.record_id == record_id)
     ).first()
 
     if edicion is None:
         edicion = Edicion(
+            fuente_id=fuente.id,
+            record_id=record_id,
             titn=parsed.titn,
             titulo=parsed.titulo,
             publicacion=parsed.publicacion,
@@ -391,12 +428,15 @@ def record_enrich_success(
 
 def record_enrich_failure(
     session: Session,
-    titn: str,
+    record_id: str,
     error: str,
     *,
     at: datetime | None = None,
 ) -> None:
-    edicion = session.scalars(select(Edicion).where(Edicion.titn == titn)).first()
+    normalized = normalize_record_id(record_id)
+    edicion = session.scalars(
+        select(Edicion).where(Edicion.record_id == normalized)
+    ).first()
     if edicion is None:
         return
     edicion.enrich_status = "failed"
@@ -426,19 +466,22 @@ def record_tmdb_outcome(
 
 def mark_absent_since(
     session: Session,
-    seen_titns: Iterable[str],
+    seen_record_ids: Iterable[str],
     *,
+    fuente_id: int | None = None,
     since: datetime,
     missing_at: datetime | None = None,
 ) -> int:
     """Marca como ausentes las ediciones no vistas desde ``since``."""
-    seen = set(seen_titns)
+    seen = {normalize_record_id(value) for value in seen_record_ids}
     stmt = select(Edicion).where(
         Edicion.discovery_seen_at.is_not(None),
         Edicion.discovery_seen_at < since,
     )
+    if fuente_id is not None:
+        stmt = stmt.where(Edicion.fuente_id == fuente_id)
     if seen:
-        stmt = stmt.where(Edicion.titn.not_in(seen))
+        stmt = stmt.where(Edicion.record_id.not_in(seen))
 
     timestamp = missing_at or datetime.now(UTC)
     ausentes = 0
@@ -453,12 +496,15 @@ def mark_absent_since(
 def select_pending_titns(
     session: Session,
     *,
+    fuente_id: int | None = None,
     limit: int = 5000,
     after_titn: str | None = None,
     since: datetime | None = None,
 ) -> list[str]:
-    """Devuelve hasta ``limit`` TITN pendientes de enriquecer, ordenados por TITN."""
-    stmt = select(Edicion.titn).where(Edicion.detail_fetched_at.is_(None))
+    """Devuelve hasta ``limit`` record_id pendientes de enriquecer."""
+    stmt = select(Edicion.record_id).where(Edicion.detail_fetched_at.is_(None))
+    if fuente_id is not None:
+        stmt = stmt.where(Edicion.fuente_id == fuente_id)
     if after_titn is not None:
         stmt = stmt.where(Edicion.titn > after_titn)
     if since is not None:
@@ -470,10 +516,13 @@ def select_pending_titns(
 def count_pending_titns(
     session: Session,
     *,
+    fuente_id: int | None = None,
     since: datetime | None = None,
     after_titn: str | None = None,
 ) -> int:
     stmt = select(func.count(Edicion.id)).where(Edicion.detail_fetched_at.is_(None))
+    if fuente_id is not None:
+        stmt = stmt.where(Edicion.fuente_id == fuente_id)
     if after_titn is not None:
         stmt = stmt.where(Edicion.titn > after_titn)
     if since is not None:

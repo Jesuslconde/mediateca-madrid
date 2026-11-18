@@ -64,16 +64,16 @@ export async function getList(token: string): Promise<Lista | null> {
   }
 }
 
-export async function addItem(token: string, titn: string): Promise<ItemMutation> {
+export async function addItem(token: string, recordId: string): Promise<ItemMutation> {
   return listFetch<ItemMutation>(`/api/lists/${encodeURIComponent(token)}/items`, {
     method: "POST",
-    body: JSON.stringify({ titn }),
+    body: JSON.stringify({ record_id: recordId }),
   });
 }
 
-export async function removeItem(token: string, titn: string): Promise<ItemMutation> {
+export async function removeItem(token: string, recordId: string): Promise<ItemMutation> {
   return listFetch<ItemMutation>(
-    `/api/lists/${encodeURIComponent(token)}/items/${encodeURIComponent(titn)}`,
+    `/api/lists/${encodeURIComponent(token)}/items/${encodeURIComponent(recordId)}`,
     { method: "DELETE" },
   );
 }

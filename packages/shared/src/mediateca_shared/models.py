@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -16,9 +17,54 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from mediateca_shared.db import Base
+
+FUENTE_CODIGO_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+DEFAULT_SESSION_PATTERN = r"/abnetopac/([A-Za-z0-9]+)"
+
+
+class Fuente(Base):
+    __tablename__ = "fuentes"
+    __table_args__ = (UniqueConstraint("codigo", name="uq_fuentes_codigo"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    codigo: Mapped[str] = mapped_column(String(64), index=True)
+    nombre: Mapped[str] = mapped_column(String(500))
+    adapter: Mapped[str] = mapped_column(String(32), default="absysnet")
+    base_url: Mapped[str] = mapped_column(String(500))
+    opac_path: Mapped[str] = mapped_column(String(500), default="")
+    session_pattern: Mapped[str] = mapped_column(
+        String(500), default=DEFAULT_SESSION_PATTERN
+    )
+    format_field: Mapped[str] = mapped_column(String(64), default="select03")
+    format_value: Mapped[str] = mapped_column(String(64), default="6")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    delay: Mapped[float] = mapped_column(Float, default=1.0)
+    captcha_policy: Mapped[str] = mapped_column(String(32), default="pause")
+    options: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    ediciones: Mapped[list[Edicion]] = relationship(back_populates="fuente")
+    bibliotecas: Mapped[list[Biblioteca]] = relationship(back_populates="fuente")
+    sucursales: Mapped[list[Sucursal]] = relationship(back_populates="fuente")
+    ejemplares: Mapped[list[Ejemplar]] = relationship(back_populates="fuente")
+    jobs: Mapped[list[HarvestJob]] = relationship(back_populates="fuente")
+
+    @validates("codigo")
+    def _validate_codigo(self, _key: str, value: str) -> str:
+        if not value or not FUENTE_CODIGO_RE.match(value):
+            raise ValueError(
+                "El codigo de fuente debe cumplir ^[a-z0-9][a-z0-9-]*$"
+            )
+        return value
 
 
 class Obra(Base):
@@ -37,12 +83,18 @@ class Obra(Base):
 class Edicion(Base):
     __tablename__ = "ediciones"
     __table_args__ = (
+        UniqueConstraint("fuente_id", "titn", name="uq_ediciones_fuente_titn"),
+        UniqueConstraint("record_id", name="uq_ediciones_record_id"),
         Index("ix_ediciones_enrich_status_titn", "enrich_status", "titn"),
         Index("ix_ediciones_tmdb_status_titn", "tmdb_status", "titn"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    titn: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    fuente_id: Mapped[int] = mapped_column(
+        ForeignKey("fuentes.id", ondelete="RESTRICT"), index=True
+    )
+    record_id: Mapped[str] = mapped_column(String(160))
+    titn: Mapped[str] = mapped_column(String(32), index=True)
     obra_id: Mapped[int | None] = mapped_column(
         ForeignKey("obras.id", ondelete="CASCADE"), index=True
     )
@@ -92,6 +144,7 @@ class Edicion(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    fuente: Mapped[Fuente] = relationship(back_populates="ediciones")
     obra: Mapped[Obra | None] = relationship(back_populates="ediciones")
     ejemplares: Mapped[list[Ejemplar]] = relationship(
         back_populates="edicion", cascade="all, delete-orphan"
@@ -109,9 +162,15 @@ class Edicion(Base):
 
 class Biblioteca(Base):
     __tablename__ = "bibliotecas"
+    __table_args__ = (
+        UniqueConstraint("fuente_id", "codigo", name="uq_bibliotecas_fuente_codigo"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    codigo: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    fuente_id: Mapped[int] = mapped_column(
+        ForeignKey("fuentes.id", ondelete="RESTRICT"), index=True
+    )
+    codigo: Mapped[str] = mapped_column(String(64), index=True)
     nombre: Mapped[str] = mapped_column(String(500), index=True)
     municipio: Mapped[str | None] = mapped_column(String(250), index=True)
     direccion: Mapped[str | None] = mapped_column(Text)
@@ -119,6 +178,7 @@ class Biblioteca(Base):
     latitud: Mapped[float | None] = mapped_column(Float)
     longitud: Mapped[float | None] = mapped_column(Float)
 
+    fuente: Mapped[Fuente] = relationship(back_populates="bibliotecas")
     ejemplares: Mapped[list[Ejemplar]] = relationship(back_populates="biblioteca")
     sucursales: Mapped[list[Sucursal]] = relationship(
         back_populates="biblioteca", cascade="all, delete-orphan"
@@ -127,12 +187,18 @@ class Biblioteca(Base):
 
 class Sucursal(Base):
     __tablename__ = "sucursales"
+    __table_args__ = (
+        UniqueConstraint("fuente_id", "codigo", name="uq_sucursales_fuente_codigo"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fuente_id: Mapped[int] = mapped_column(
+        ForeignKey("fuentes.id", ondelete="RESTRICT"), index=True
+    )
     biblioteca_id: Mapped[int] = mapped_column(
         ForeignKey("bibliotecas.id", ondelete="CASCADE"), index=True
     )
-    codigo: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    codigo: Mapped[str] = mapped_column(String(64), index=True)
     nombre: Mapped[str] = mapped_column(String(500))
     municipio: Mapped[str | None] = mapped_column(String(250), index=True)
     direccion: Mapped[str | None] = mapped_column(Text)
@@ -143,14 +209,22 @@ class Sucursal(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    fuente: Mapped[Fuente] = relationship(back_populates="sucursales")
     biblioteca: Mapped[Biblioteca] = relationship(back_populates="sucursales")
 
 
 class Ejemplar(Base):
     __tablename__ = "ejemplares"
-    __table_args__ = (UniqueConstraint("external_key", name="uq_ejemplar_external_key"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "fuente_id", "external_key", name="uq_ejemplar_fuente_external_key"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fuente_id: Mapped[int] = mapped_column(
+        ForeignKey("fuentes.id", ondelete="RESTRICT"), index=True
+    )
     edicion_id: Mapped[int] = mapped_column(
         ForeignKey("ediciones.id", ondelete="CASCADE"), index=True
     )
@@ -169,11 +243,15 @@ class Ejemplar(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    fuente: Mapped[Fuente] = relationship(back_populates="ejemplares")
     edicion: Mapped[Edicion] = relationship(back_populates="ejemplares")
     biblioteca: Mapped[Biblioteca] = relationship(back_populates="ejemplares")
     sucursal: Mapped[Sucursal | None] = relationship(
         "Sucursal",
-        primaryjoin="foreign(Ejemplar.sucursal_codigo) == Sucursal.codigo",
+        primaryjoin=(
+            "and_(Ejemplar.sucursal_codigo == foreign(Sucursal.codigo), "
+            "Ejemplar.fuente_id == foreign(Sucursal.fuente_id))"
+        ),
         viewonly=True,
         uselist=False,
     )
@@ -251,9 +329,15 @@ class Enlace(Base):
 
 class HarvestJob(Base):
     __tablename__ = "harvest_jobs"
-    __table_args__ = (Index("ix_harvest_jobs_status_job_type", "status", "job_type"),)
+    __table_args__ = (
+        Index("ix_harvest_jobs_status_job_type", "status", "job_type"),
+        Index("ix_harvest_jobs_fuente_status", "fuente_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fuente_id: Mapped[int | None] = mapped_column(
+        ForeignKey("fuentes.id", ondelete="RESTRICT"), index=True
+    )
     job_type: Mapped[str] = mapped_column(String(32), index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     cursor_doc: Mapped[int | None] = mapped_column(Integer)
@@ -269,6 +353,16 @@ class HarvestJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    fuente: Mapped[Fuente | None] = relationship(back_populates="jobs")
+
+    @property
+    def fuente_codigo(self) -> str | None:
+        return self.fuente.codigo if self.fuente is not None else None
+
+    @property
+    def fuente_nombre(self) -> str | None:
+        return self.fuente.nombre if self.fuente is not None else None
 
 
 class HarvestRun(Base):

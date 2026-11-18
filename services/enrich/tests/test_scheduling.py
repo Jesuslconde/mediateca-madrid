@@ -156,9 +156,9 @@ def test_enriquecimiento_solo_selecciona_los_nuevos() -> None:
     session.commit()
 
     since = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
-    assert select_pending_titns(session, since=since) == [new.titn]
+    assert select_pending_titns(session, since=since) == [new.record_id]
     assert count_pending_titns(session, since=since) == 1
-    assert select_pending_titns(session) == [old.titn, new.titn]
+    assert select_pending_titns(session) == [old.record_id, new.record_id]
 
 
 def test_estado_de_programacion_calcula_proxima_ejecucion() -> None:
@@ -423,3 +423,28 @@ def test_scheduler_encola_reconciliacion_del_indice() -> None:
 
     assert [job.job_type for job in jobs] == ["index"]
     assert jobs[0].status == "pending"
+
+
+def test_scheduler_ignora_fuentes_deshabilitadas() -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.fuentes import ensure_default_fuente
+
+    session = _session()
+    madrid = ensure_default_fuente(session)
+    otra = Fuente(
+        codigo="otra",
+        nombre="Otra",
+        base_url="https://otra.example",
+        enabled=False,
+    )
+    session.add(otra)
+    session.commit()
+
+    create_stub(session, "1", fuente=madrid)
+    create_stub(session, "2", fuente=otra)
+    session.commit()
+
+    jobs = enqueue_due_jobs(session)
+    assert jobs
+    assert {job.fuente_id for job in jobs} == {madrid.id}

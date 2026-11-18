@@ -47,15 +47,15 @@ def test_lista_usa_titulo_por_defecto() -> None:
 
 def test_lista_item_tiene_clave_compuesta() -> None:
     columnas = [columna.name for columna in ListaItem.__table__.primary_key.columns]
-    assert columnas == ["lista_id", "titn"]
+    assert columnas == ["lista_id", "record_id"]
 
 
 def test_borrar_lista_elimina_sus_items() -> None:
     session = _session()
     lista = _lista()
     lista.items = [
-        ListaItem(titn="111", titulo_snapshot="Primera"),
-        ListaItem(titn="222", titulo_snapshot="Segunda"),
+        ListaItem(record_id="madrid:111", titulo_snapshot="Primera"),
+        ListaItem(record_id="madrid:222", titulo_snapshot="Segunda"),
     ]
     session.add(lista)
     session.commit()

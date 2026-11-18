@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from mediateca.api.routers.ingest import router as ingest_router
+from mediateca.catalog.fuentes import enabled_fuentes, get_fuente
 from mediateca.catalog.jobs import (
     JobAlreadyActive,
     enqueue_branches_job,
@@ -60,6 +61,7 @@ from .queries import (
     catalog_coverage,
     enrichment_percentage,
     flaresolverr_config,
+    job_fuente_counts,
     job_status_counts,
     job_type_counts,
     recent_jobs,
@@ -164,6 +166,8 @@ def _inicio_context(request: Request, session: Session) -> dict[str, Any]:
         {
             "status_counts": job_status_counts(session),
             "type_counts": job_type_counts(session),
+            "fuente_counts": job_fuente_counts(session),
+            "fuentes": enabled_fuentes(session),
             "coverage": cover,
             "enrichment_percent": enrichment_percentage(cover),
             "metrics": ingest_metrics(session, cover),
@@ -180,6 +184,7 @@ def _tareas_context(request: Request, session: Session) -> dict[str, Any]:
     context.update(
         {
             "jobs": recent_jobs(session),
+            "fuentes": enabled_fuentes(session),
             "active_jobs": {
                 job_type: has_active_job(session, job_type) for job_type in JOB_TYPES
             },
@@ -228,6 +233,7 @@ def _parse_catalog_filter(request: Request) -> CatalogFilter:
         anio_hasta=_int("anio_hasta", None),
         idioma=q.get("idioma") or None,
         pais=q.get("pais") or None,
+        fuente=q.get("fuente") or None,
         page=max(_int("page", 1) or 1, 1),
         limit=min(max(_int("limit", DEFAULT_LIMIT) or DEFAULT_LIMIT, 1), MAX_LIMIT),
     )
@@ -260,6 +266,7 @@ def _catalogo_context(request: Request, session: Session) -> dict[str, Any]:
             "next_query": _page_query(request, page + 1),
             "estados_enrich": ENRICH_STATUSES,
             "estados_tmdb": TMDB_STATUSES,
+            "fuentes": enabled_fuentes(session),
         }
     )
     return context
@@ -461,24 +468,36 @@ async def enqueue_job_from_dashboard(
     if not _has_write_access(request):
         return _admin_error(next_path)
     job_type = (values.get("job_type") or [""])[0].strip()
+    fuente_codigo = (values.get("fuente") or ["madrid"])[0].strip() or "madrid"
     try:
+        try:
+            fuente = get_fuente(session, fuente_codigo)
+        except Exception:
+            from mediateca.catalog.fuentes import ensure_default_fuente
+
+            if fuente_codigo != "madrid":
+                raise
+            fuente = ensure_default_fuente(session, fuente_codigo)
         if job_type == "discover":
             mode = (values.get("mode") or ["incremental"])[0].strip()
-            job = enqueue_discover_job(session, mode=mode, reason="dashboard")
+            job = enqueue_discover_job(
+                session, fuente=fuente, mode=mode, reason="dashboard"
+            )
         elif job_type == "enrich":
             limit = int((values.get("limit") or ["5000"])[0])
             if not 1 <= limit <= 50000:
                 raise ValueError("El lote debe estar entre 1 y 50000")
             job = enqueue_enrich_job(
                 session,
+                fuente=fuente,
                 batch_size=limit,
                 since=None,
                 reason="dashboard",
             )
         elif job_type == "index":
-            job = enqueue_index_job(session)
+            job = enqueue_index_job(session, fuente=fuente)
         elif job_type == "branches":
-            job = enqueue_branches_job(session, reason="dashboard")
+            job = enqueue_branches_job(session, fuente=fuente, reason="dashboard")
         elif job_type == "tmdb":
             if not effective_tmdb_api_token(session):
                 raise ValueError(
@@ -497,6 +516,7 @@ async def enqueue_job_from_dashboard(
             }
             job = enqueue_tmdb_job(
                 session,
+                fuente=fuente,
                 batch_size=limit,
                 refresh=refresh,
                 reason="dashboard",

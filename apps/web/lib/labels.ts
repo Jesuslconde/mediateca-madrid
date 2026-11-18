@@ -145,3 +145,13 @@ export function countryLabel(code: string | null | undefined): string | null {
   if (!code) return null;
   return COUNTRIES[code.toLowerCase()] ?? code;
 }
+
+const FUENTES: Record<string, string> = {
+  madrid: "Madrid",
+};
+
+export function fuenteLabel(codigo: string | null | undefined, nombre?: string | null): string {
+  if (nombre) return nombre;
+  if (!codigo) return "";
+  return FUENTES[codigo] ?? codigo;
+}

@@ -11,6 +11,8 @@ export async function getActiveList(): Promise<Lista | null> {
   }
 }
 
-export function savedTitns(lista: Lista | null): Set<string> {
-  return new Set((lista?.items ?? []).map((item) => item.titn));
+export function savedRecordIds(lista: Lista | null): Set<string> {
+  return new Set((lista?.items ?? []).map((item) => item.record_id));
 }
+
+export const savedTitns = savedRecordIds;
