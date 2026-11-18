@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LibrariesTable } from "@/components/LibrariesTable";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { SupportBadge } from "@/components/SupportBadge";
 import { getRecord, type Persona } from "@/lib/api";
+import { getActiveList, savedTitns } from "@/lib/active-list";
 import { countryLabel, languageLabel } from "@/lib/labels";
 import { first, type RawSearchParams } from "@/lib/url";
 
@@ -72,6 +74,9 @@ export default async function RecordPage({
   const record = await getRecord(titn).catch(() => null);
   if (!record) notFound();
 
+  const activeList = await getActiveList().catch(() => null);
+  const saved = savedTitns(activeList).has(record.titn);
+
   const people = groupPeople(record.personas);
   const countries = (record.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
   const bibliotecas = new Set(record.ejemplares.map((ejemplar) => ejemplar.biblioteca)).size;
@@ -117,6 +122,9 @@ export default async function RecordPage({
               <p className="mt-3 text-sm text-slate-600">
                 {[record.publicacion, record.anio].filter(Boolean).join(" · ")}
               </p>
+              <div className="mt-4">
+                <FavoriteButton titn={record.titn} saved={saved} compact={false} />
+              </div>
               {record.tmdb_url ? (
                 <a
                   href={record.tmdb_url}

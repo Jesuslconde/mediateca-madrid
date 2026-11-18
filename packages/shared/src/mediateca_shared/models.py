@@ -291,3 +291,7 @@ class SchemaMeta(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(64))
+
+
+# Las listas comparten la misma Base y deben registrarse en la metadata.
+from mediateca_shared.lists import Lista, ListaItem  # noqa: E402,F401

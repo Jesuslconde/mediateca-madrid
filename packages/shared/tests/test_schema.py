@@ -67,5 +67,5 @@ def test_sucursal_incluye_ubicacion() -> None:
     assert hasattr(Ejemplar, "sucursal")
 
 
-def test_esquema_version_5() -> None:
-    assert SCHEMA_VERSION == "5"
+def test_esquema_version_6() -> None:
+    assert SCHEMA_VERSION == "6"

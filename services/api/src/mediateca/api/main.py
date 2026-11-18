@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from mediateca import __version__
-from mediateca.api.routers import health, libraries, records, search
+from mediateca.api.routers import health, libraries, lists, records, search
 from mediateca.core.config import settings
 from mediateca.core.db import check_schema
 from mediateca.core.logging import configure_logging, get_logger
@@ -45,6 +45,7 @@ app.add_middleware(
 app.include_router(search.router, prefix="/api")
 app.include_router(records.router, prefix="/api")
 app.include_router(libraries.router, prefix="/api")
+app.include_router(lists.router, prefix="/api")
 app.include_router(health.router)
 
 

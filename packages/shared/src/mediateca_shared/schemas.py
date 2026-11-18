@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -161,3 +162,39 @@ class StatsResponse(BaseModel):
     ejemplares: int
     bibliotecas: int
     por_soporte: dict[str, int]
+
+
+class ListaItemOut(BaseModel):
+    titn: str
+    titulo: str
+    soportes: list[str] = []
+    anio: int | None = None
+    poster_url: str | None = None
+    opac_url: str | None = None
+    disponible: bool = True
+
+
+class ListaOut(BaseModel):
+    titulo: str
+    item_count: int
+    created_at: datetime
+    updated_at: datetime
+    expires_at: datetime
+    items: list[ListaItemOut] = []
+
+
+class ListaCreatedOut(BaseModel):
+    token: str
+
+
+class ListaItemIn(BaseModel):
+    titn: str = Field(min_length=1, max_length=32)
+
+
+class ListaRenameIn(BaseModel):
+    titulo: str | None = Field(default=None, max_length=1000)
+
+
+class ItemMutationOut(BaseModel):
+    item_count: int
+    saved: bool

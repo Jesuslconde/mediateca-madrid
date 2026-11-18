@@ -4,6 +4,7 @@ import type { SearchHit } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
 
 import { SupportBadge } from "./SupportBadge";
+import { FavoriteButton } from "./FavoriteButton";
 
 function Meta({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -15,7 +16,15 @@ function Meta({ label, value }: { label: string; value: string | number | null |
   );
 }
 
-export function RecordCard({ hit, volver }: { hit: SearchHit; volver?: string }) {
+export function RecordCard({
+  hit,
+  volver,
+  saved = false,
+}: {
+  hit: SearchHit;
+  volver?: string;
+  saved?: boolean;
+}) {
   const title = hit._formatted?.titulo ?? hit.titulo;
   const synopsis = hit._formatted?.sinopsis ?? hit.sinopsis;
   const countries = (hit.paises_origen ?? []).map((code) => countryLabel(code) ?? code);
@@ -50,10 +59,11 @@ export function RecordCard({ hit, volver }: { hit: SearchHit; volver?: string })
                 <p className="mt-1 text-sm text-slate-500">{hit.titulo_uniforme}</p>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {(hit.soportes ?? []).map((soporte) => (
                 <SupportBadge key={soporte} support={soporte} />
               ))}
+              <FavoriteButton titn={hit.titn} saved={saved} />
             </div>
           </div>
 

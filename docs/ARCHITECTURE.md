@@ -36,9 +36,13 @@ El worker ejecuta hasta cinco trabajos compatibles en paralelo. La concurrencia 
 | Componente | PostgreSQL | Meilisearch |
 |---|---|---|
 | `services/enrich` | Escritura, migraciones y `schema_meta` | Escritura del indice |
-| `services/api` | Solo lectura | Solo lectura |
+| `services/api` | Lectura del catalogo; escritura solo en `listas` y `lista_items` | Solo lectura |
 | `apps/web` | Sin acceso directo | Sin acceso directo |
 | `packages/shared` | Modelos y contratos | Contrato de documentos |
+
+## Listas de favoritos
+
+`services/api` es la unica pieza que escribe fuera del catalogo: crea y modifica las tablas `listas` y `lista_items`. Es una excepcion acotada, no cambia la propiedad del catalogo ni del indice. La migracion `services/enrich/scripts/migrate_listas.sql` crea ambas tablas y la limpieza de listas caducadas se ejecuta desde el servicio `init` con `python -m mediateca clean-lists`.
 
 ## Modelo de datos compartido
 
@@ -48,7 +52,7 @@ El modelo obra -> edicion -> ejemplar, las marcas de progreso, los paises de ori
 
 La tabla `sucursales` guarda una ficha por sucursal con `codigo` unico, biblioteca, nombre, municipio, direccion, codigo postal y coordenadas opcionales. `Ejemplar` se relaciona con su sucursal por `sucursal_codigo` mediante una relacion de solo lectura, sin clave foranea ni relleno retroactivo. `Biblioteca.codigo_postal` y el resto de campos de ubicacion sirven de respaldo cuando un ejemplar no tiene sucursal.
 
-`SCHEMA_VERSION` es `5`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema.
+`SCHEMA_VERSION` es `6`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos.
 
 La API expone `EjemplarOut.ubicacion` con codigo postal, municipio, latitud y longitud. El portal usa esos datos y, si faltan coordenadas de sucursal, el centroide del codigo postal del JSON `apps/web/lib/codigos-postales-madrid.json`. Ese JSON se genera con `scripts/generate_codigos_postales.py` a partir de centroides abiertos y del municipio del INE; no se sirve desde PostgreSQL ni desde Meilisearch.
 

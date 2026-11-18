@@ -59,6 +59,7 @@ services:
         set -e
         python -m mediateca init-db
         python -m mediateca migrate
+        python -m mediateca clean-lists
         python -m mediateca index
 
   worker:

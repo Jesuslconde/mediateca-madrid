@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.4.0"
+    "version": "0.4.1"
   },
   "paths": {
     "/api/search": {
@@ -324,6 +324,250 @@
         }
       }
     },
+    "/api/lists": {
+      "post": {
+        "tags": [
+          "listas"
+        ],
+        "summary": "Create List",
+        "operationId": "create_list_api_lists_post",
+        "parameters": [
+          {
+            "name": "x-client-ip",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Ip"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaCreatedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{token}": {
+      "get": {
+        "tags": [
+          "listas"
+        ],
+        "summary": "Get List",
+        "operationId": "get_list_api_lists__token__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "listas"
+        ],
+        "summary": "Rename List",
+        "operationId": "rename_list_api_lists__token__patch",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListaRenameIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{token}/items": {
+      "post": {
+        "tags": [
+          "listas"
+        ],
+        "summary": "Add Item",
+        "operationId": "add_item_api_lists__token__items_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListaItemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemMutationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lists/{token}/items/{titn}": {
+      "delete": {
+        "tags": [
+          "listas"
+        ],
+        "summary": "Remove Item",
+        "operationId": "remove_item_api_lists__token__items__titn__delete",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "titn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Titn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemMutationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -538,6 +782,24 @@
         ],
         "title": "HealthResponse"
       },
+      "ItemMutationOut": {
+        "properties": {
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count"
+          },
+          "saved": {
+            "type": "boolean",
+            "title": "Saved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_count",
+          "saved"
+        ],
+        "title": "ItemMutationOut"
+      },
       "LibraryOut": {
         "properties": {
           "codigo": {
@@ -571,6 +833,160 @@
           "ejemplares"
         ],
         "title": "LibraryOut"
+      },
+      "ListaCreatedOut": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "ListaCreatedOut"
+      },
+      "ListaItemIn": {
+        "properties": {
+          "titn": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Titn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "titn"
+        ],
+        "title": "ListaItemIn"
+      },
+      "ListaItemOut": {
+        "properties": {
+          "titn": {
+            "type": "string",
+            "title": "Titn"
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "soportes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Soportes",
+            "default": []
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
+          "opac_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opac Url"
+          },
+          "disponible": {
+            "type": "boolean",
+            "title": "Disponible",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "titn",
+          "titulo"
+        ],
+        "title": "ListaItemOut"
+      },
+      "ListaOut": {
+        "properties": {
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ListaItemOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "titulo",
+          "item_count",
+          "created_at",
+          "updated_at",
+          "expires_at"
+        ],
+        "title": "ListaOut"
+      },
+      "ListaRenameIn": {
+        "properties": {
+          "titulo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          }
+        },
+        "type": "object",
+        "title": "ListaRenameIn"
       },
       "LocationOut": {
         "properties": {

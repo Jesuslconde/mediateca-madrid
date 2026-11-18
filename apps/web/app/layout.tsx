@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { getActiveList } from "@/lib/active-list";
+
 import packageJson from "../package.json";
 
 import "./globals.css";
@@ -15,7 +17,9 @@ export const metadata: Metadata = {
   icons: [{ rel: "icon", url: "/favicon.svg" }],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const activeList = await getActiveList().catch(() => null);
+
   return (
     <html lang="es">
       <body className="flex min-h-screen flex-col">
@@ -44,6 +48,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 className="rounded-lg px-3 py-2 hover:bg-white/10"
               >
                 Blu-ray
+              </Link>
+              <Link
+                href="/mi-lista"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 hover:bg-white/10"
+              >
+                Mi lista
+                {activeList && activeList.item_count > 0 ? (
+                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold text-white">
+                    {activeList.item_count}
+                  </span>
+                ) : null}
               </Link>
             </nav>
           </div>

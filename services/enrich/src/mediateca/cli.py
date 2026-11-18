@@ -7,11 +7,12 @@ from pathlib import Path
 
 import typer
 from mediateca_shared.constants import MAX_WORKER_CONCURRENCY
+from mediateca_shared.lists import Lista
 from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, HarvestJob
 from mediateca_shared.version import SCHEMA_VERSION
 from rich.console import Console
 from rich.table import Table
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from mediateca.catalog.directory import DirectoryClient, refresh_sucursales
 from mediateca.catalog.harvester import Harvester, OpacClient
@@ -79,6 +80,16 @@ def migrate_command() -> None:
             {"v": SCHEMA_VERSION},
         )
     console.print("[green]Migraciones aplicadas[/green]")
+
+
+@app.command("clean-lists")
+def clean_lists_command() -> None:
+    """Elimina las listas de favoritos caducadas."""
+    configure_logging()
+    with session_scope() as session:
+        result = session.execute(delete(Lista).where(Lista.expires_at < func.now()))
+        deleted = result.rowcount or 0
+    console.print(f"[green]Listas caducadas eliminadas:[/green] {deleted}")
 
 
 @app.command("refresh-branches")

@@ -121,7 +121,7 @@ ${MEDIATECA_REGISTRY}/mediateca-batch:${MEDIATECA_IMAGE_TAG}
 ${MEDIATECA_REGISTRY}/mediateca-web:${MEDIATECA_IMAGE_TAG}
 ```
 
-La base de datos y el indice se comparten entre todos los servicios. La ingesta es la unica propietaria de las migraciones y de las escrituras del catalogo; la API y el portal solo leen.
+La base de datos y el indice se comparten entre todos los servicios. La ingesta es la unica propietaria de las migraciones y de las escrituras del catalogo; la API solo lee el catalogo y escribe las listas de favoritos; el portal no accede directamente a la base.
 
 ## Gestion de modelos
 
@@ -143,6 +143,11 @@ Cuando cambie el modelo:
 | GET | `/api/records/{titn}` | Ficha completa con ejemplares, paises de origen y `ubicacion` por ejemplar |
 | GET | `/api/libraries` | Bibliotecas con numero de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
+| POST | `/api/lists` | Crea una lista de favoritos y devuelve su token |
+| GET | `/api/lists/{token}` | Lista con sus titulos y el estado de cada ficha |
+| POST | `/api/lists/{token}/items` | Anade una edicion a la lista (idempotente) |
+| DELETE | `/api/lists/{token}/items/{titn}` | Quita una edicion de la lista |
+| PATCH | `/api/lists/{token}` | Renombra la lista |
 
 ```bash
 curl "http://localhost:8000/api/search?q=abejas&soporte=DVD&soporte=Blu-ray"
@@ -171,12 +176,22 @@ make openapi
 make web-types
 ```
 
+## Listas de favoritos
+
+Cualquier visitante puede guardar ediciones en una lista sin crear una cuenta. La lista se guarda en PostgreSQL y se identifica por un token opaco que viaja en la URL `/lista/{token}`.
+
+- El primer corazon crea la lista y el portal recuerda cual es la lista activa en una cookie.
+- Compartir la lista es enviar ese enlace. Cualquiera que lo abra puede leerla y editarla.
+- El token se guarda hasheado en la base de datos y la API lo enmascara en sus logs de acceso. Un proxy inverso debería aplicar la misma redacción.
+- Las listas sin ediciones durante 180 dias se eliminan desde el servicio `init`.
+- No hay cuentas, correo, contrasenas ni datos personales asociados.
+
 ## Datos y atribucion
 
 - La fuente es el catalogo publico de AbsysNet. La recoleccion se ejecuta en `services/enrich`.
 - Las direcciones, codigos postales y coordenadas de sucursal proceden del Directorio de Bibliotecas de la Comunidad de Madrid.
 - Los centroides de codigos postales proceden de `kodens-dev/Spain-Postal-Codes` (MIT) y los municipios del INE via `regi-es/ds-codigos-postales-ine-es` (CC BY 4.0). La ficha muestra esta atribucion.
-- No se almacenan datos personales, solo metadatos bibliograficos y de ejemplares. La ubicacion elegida por el usuario se guarda solo en su navegador (`localStorage`).
+- No se almacenan datos personales, solo metadatos bibliograficos y de ejemplares. La ubicacion elegida por el usuario se guarda solo en su navegador (`localStorage`). Las listas de favoritos guardan solo identificadores de ediciones, un titulo opcional y marcas de tiempo.
 - Las portadas, sinopsis y enlaces externos de TMDB pertenecen a sus respectivos titulares.
 - Este producto usa la API de TMDB, pero no esta avalado ni certificado por TMDB.
 

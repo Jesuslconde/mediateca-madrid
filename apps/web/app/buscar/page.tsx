@@ -8,6 +8,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { SearchSkeleton } from "@/components/SearchSkeleton";
 import { SortSelect } from "@/components/SortSelect";
 import { getLocations, searchRecords } from "@/lib/api";
+import { getActiveList, savedTitns } from "@/lib/active-list";
 import { countryLabel } from "@/lib/labels";
 import { parseSort, type SortValue } from "@/lib/sort";
 import {
@@ -126,7 +127,7 @@ async function SearchBody({
   sort,
   volver,
 }: SearchBodyProps) {
-  const [result, locations] = await Promise.all([
+  const [result, locations, activeList] = await Promise.all([
     searchRecords({
       q: query || undefined,
       soporte: supports.length ? supports : undefined,
@@ -141,7 +142,9 @@ async function SearchBody({
       sort,
     }).catch(() => null),
     getLocations().catch(() => []),
+    getActiveList().catch(() => null),
   ]);
+  const saved = savedTitns(activeList);
 
   const selectedLocation = locations.find(
     (location) => location.codigo === biblioteca,
@@ -229,7 +232,12 @@ async function SearchBody({
         ) : (
           <div className="space-y-3">
             {result.hits.map((hit) => (
-              <RecordCard key={hit.id} hit={hit} volver={volver} />
+              <RecordCard
+                key={hit.id}
+                hit={hit}
+                volver={volver}
+                saved={saved.has(hit.titn)}
+              />
             ))}
           </div>
         )}
