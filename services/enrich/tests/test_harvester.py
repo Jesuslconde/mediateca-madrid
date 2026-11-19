@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 from mediateca_shared.models import Edicion, HarvestJob
@@ -21,6 +23,12 @@ from mediateca.catalog.harvester import (
     SessionExpired,
 )
 from mediateca.core.db import Base
+
+ANDALUCIA_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "andalucia"
+
+
+def _andalucia_html(name: str) -> str:
+    return (ANDALUCIA_FIXTURES / name).read_text(encoding="utf-8")
 
 
 def _session():
@@ -350,6 +358,135 @@ def test_respuesta_de_flaresolverr_que_sigue_siendo_captcha() -> None:
     assert client.captchas == 1
     assert client.captchas_solved == 0
     assert client.captchas_failed == 1
+
+
+def _response_with(text: str) -> httpx.Response:
+    return httpx.Response(
+        200,
+        text=text,
+        request=httpx.Request("GET", "https://opac.example/buscar"),
+    )
+
+
+def test_listado_andaluz_con_texto_de_ayuda_no_es_captcha() -> None:
+    client = OpacClient(delay=0)
+    try:
+        client._check_response(_response_with(_andalucia_html("search_results.html")))
+        assert client.captchas == 0
+    finally:
+        client.close()
+
+
+def test_pagina_con_marcador_de_recaptcha_es_captcha() -> None:
+    client = OpacClient(delay=0)
+    try:
+        with pytest.raises(CaptchaRequired):
+            client._check_response(
+                _response_with(
+                    '<html><body><div class="g-recaptcha" '
+                    'data-sitekey="clave"></div></body></html>'
+                )
+            )
+        assert client.captchas == 1
+    finally:
+        client.close()
+
+
+def test_pagina_minima_solo_con_la_frase_es_captcha() -> None:
+    client = OpacClient(delay=0)
+    try:
+        with pytest.raises(CaptchaRequired):
+            client._check_response(_response_with("No soy un robot"))
+        assert client.captchas == 1
+    finally:
+        client.close()
+
+
+def test_pagina_de_madrid_sin_captcha_no_cambia_los_contadores(
+    search_results_fixture,
+) -> None:
+    client = OpacClient(delay=0)
+    try:
+        client._check_response(
+            _response_with(search_results_fixture.read_text(encoding="utf-8"))
+        )
+        assert client.captchas == 0
+    finally:
+        client.close()
+
+
+def test_flaresolverr_con_texto_de_ayuda_no_cuenta_como_fallido() -> None:
+    solver = _FakeSolver(
+        FlareSolverrResponse(
+            status_code=200,
+            text=_andalucia_html("search_results.html"),
+            url="https://www.juntadeandalucia.es/cultura/absys/abnopac/abnetcl.cgi/SESIONANDA/NT2",
+        )
+    )
+    client = _captcha_client(solver)
+    try:
+        client._request("GET", "https://www.juntadeandalucia.es/cultura/absys/abnopac/abnetcl.cgi/SESIONANDA/NT2")
+        metrics = {
+            "captchas": client.captchas,
+            "resueltos": client.captchas_solved,
+            "fallidos": client.captchas_failed,
+        }
+    finally:
+        client.close()
+
+    assert metrics == {"captchas": 1, "resueltos": 1, "fallidos": 0}
+
+
+def test_descubrimiento_del_fixture_andaluz_crea_stubs_sin_captcha() -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        opac_path="/cultura/absys/abnopac/abnetcl.cgi",
+        session_pattern=r"/abnetcl\.cgi/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="05",
+    )
+    session.add(andalucia)
+    session.commit()
+
+    listing = _andalucia_html("search_results.html")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "SESIONANDA" not in str(request.url):
+            return httpx.Response(
+                200,
+                text=(
+                    '<a href="/cultura/absys/abnopac/abnetcl.cgi/'
+                    'SESIONANDA/NT1">Inicio</a>'
+                ),
+            )
+        return httpx.Response(200, text=listing)
+
+    client = OpacClient.from_fuente(
+        andalucia,
+        delay=0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    try:
+        stats = Harvester(
+            session, fuente=andalucia, client=client
+        ).harvest_discovery(max_pages=1)
+    finally:
+        client.close()
+
+    assert stats["processed"] == 3
+    assert stats["captchas"] == 0
+    assert session.scalar(select(func.count(Edicion.id))) == 3
+    record_ids = set(session.scalars(select(Edicion.record_id)))
+    assert record_ids == {
+        "andalucia:2101557",
+        "andalucia:2107423",
+        "andalucia:2109999",
+    }
 
 
 def test_perfil_opac_andalucia_usa_abnetcl_y_videograbaciones() -> None:

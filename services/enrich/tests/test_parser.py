@@ -196,3 +196,22 @@ def test_parser_andalucia_abnetcl_y_videograbaciones() -> None:
     assert detail.titulo
     assert detail.publicacion or detail.duracion_min
     assert detail.ejemplares
+
+
+def test_parser_fixture_andaluz_primera_pagina_sin_captcha() -> None:
+    base = Path(__file__).resolve().parents[1] / "fixtures" / "andalucia"
+    html = (base / "search_results.html").read_text(encoding="utf-8")
+
+    listing = parse_search_results(html)
+
+    assert [item.titn for item in listing] == ["2101557", "2107423", "2109999"]
+    assert [item.doc for item in listing] == [1, 2, 3]
+    assert [item.titulo for item in listing] == [
+        "20.000 especies de abejas",
+        "20.000 especies de abejas",
+        "Cine experimental en VHS",
+    ]
+    assert all(
+        "/cultura/absys/abnopac/abnetcl.cgi/SESIONANDA/" in (item.source_url or "")
+        for item in listing
+    )

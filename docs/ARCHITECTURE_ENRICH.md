@@ -212,6 +212,15 @@ detecta la pagina de reCAPTCHA y existe una URL efectiva configurada. La URL se
 resuelve al crear cada cliente del OPAC y puede venir de la tabla `app_config`
 (configuracion del dashboard) o de `MEDIATECA_FLARESOLVERR_URL`.
 
+La deteccion distingue un desafio real del texto de ayuda de AbsysNet. Una
+respuesta es captcha si contiene un marcador de reCAPTCHA (`g-recaptcha`,
+`grecaptcha`, `recaptcha/api.js` o `g-recaptcha-response`). La frase
+`No soy un robot` solo cuenta como respaldo cuando aparece fuera del nodo oculto
+`hmsgopa1075` y la pagina no contiene un listado (`li.c-docs_unit`), una ficha
+(`span.js-TITN`, `span.doc_title`) ni el formulario de busqueda del OPAC. Asi, las
+paginas de Andalucia que incluyen el texto de ayuda no incrementan el contador de
+captchas ni detienen el descubrimiento.
+
 La configuracion persistida se guarda en `app_config`:
 
 - `key`: nombre del ajuste, por ejemplo `flaresolverr_url`.
@@ -231,7 +240,9 @@ cookies y el `userAgent`. Se asume una version de FlareSolverr con esta API v1.
 FlareSolverr se invoca solo cuando la pagina del OPAC contiene el reCAPTCHA. Si no
 hay URL, el servicio no responde o la respuesta sigue siendo un captcha, el
 recolector registra el fallo y el trabajo se reprograma con el backoff existente,
-sin reintentar la resolucion dentro de la misma peticion.
+sin reintentar la resolucion dentro de la misma peticion. La respuesta de
+FlareSolverr se valida con la misma deteccion: una pagina con el texto de ayuda y
+sin desafio real se considera resuelta y no incrementa `captchas_failed`.
 
 ## Programacion de la ingesta
 

@@ -22,7 +22,7 @@ from mediateca.catalog.flaresolverr import (
 )
 from mediateca.catalog.fuentes import ensure_default_fuente
 from mediateca.catalog.jobs import create_job, finish_job, update_cursor
-from mediateca.catalog.parser import parse_detail, parse_search_results
+from mediateca.catalog.parser import BS_PARSER, parse_detail, parse_search_results
 from mediateca.catalog.repository import (
     apply_tmdb_enrichment,
     mark_absent_since,
@@ -50,6 +50,45 @@ SESSION_RE = re.compile(r"/abnetopac/([A-Za-z0-9]+)")
 DOC_RE = re.compile(r"ACC=165(?:&amp;|&)DOC=(\d+)")
 NEXT_RE = re.compile(r"ACC=161(?:&amp;|&)DOC=(\d+)")
 TOTAL_RE = re.compile(r"\(([\d.]+)\s*Registros\)")
+
+CAPTCHA_MARKERS = (
+    "g-recaptcha",
+    "grecaptcha",
+    "recaptcha/api.js",
+    "g-recaptcha-response",
+)
+CAPTCHA_HELP_NODE_ID = "hmsgopa1075"
+CAPTCHA_PHRASE = "No soy un robot"
+OPAC_CONTENT_SELECTOR = (
+    "li.c-docs_unit, span.js-TITN, span.doc_title, .c-docs, "
+    "form#abnform, form[name='abnform']"
+)
+
+
+def is_captcha_response(text: str) -> bool:
+    """Detecta un desafio real de reCAPTCHA sin confundir el texto de ayuda.
+
+    Los marcadores de reCAPTCHA son la senal principal. La frase del desafio se
+    conserva como respaldo para paginas antiguas o minimas, pero solo cuenta si
+    aparece fuera del nodo de ayuda de AbsysNet y la pagina no parece un listado,
+    una ficha o el formulario de busqueda del OPAC.
+    """
+    folded = text.casefold()
+    if any(marker.casefold() in folded for marker in CAPTCHA_MARKERS):
+        return True
+
+    phrase = CAPTCHA_PHRASE.casefold()
+    if phrase not in folded:
+        return False
+
+    soup = BeautifulSoup(text, BS_PARSER)
+    help_node = soup.find(id=CAPTCHA_HELP_NODE_ID)
+    if help_node is not None:
+        help_node.decompose()
+    remaining = soup.get_text(" ", strip=True).casefold()
+    if phrase not in remaining:
+        return False
+    return soup.select_one(OPAC_CONTENT_SELECTOR) is None
 
 
 def _parse_since(value: object) -> datetime | None:
@@ -107,6 +146,7 @@ class OpacClient:
         format_field: str | None = None,
         format_value: str | None = None,
         subcat: str | None = None,
+        client: httpx.Client | None = None,
     ) -> None:
         self.base_url = (base_url or settings.opac_base_url).rstrip("/")
         self.path = path or settings.opac_path
@@ -119,7 +159,7 @@ class OpacClient:
         self.delay = delay if delay is not None else settings.crawl_delay
         self.max_retries = max_retries or settings.crawl_max_retries
         self.user_agent = user_agent or settings.user_agent
-        self.client = httpx.Client(
+        self.client = client or httpx.Client(
             follow_redirects=True,
             timeout=self.timeout,
             headers={
@@ -232,7 +272,7 @@ class OpacClient:
         self, response: httpx.Response, *, count_captcha: bool = True
     ) -> None:
         text = response.text
-        if "No soy un robot" in text or "chequeado 'No soy un robot'" in text:
+        if is_captcha_response(text):
             if count_captcha:
                 self.captchas += 1
             raise CaptchaRequired(
