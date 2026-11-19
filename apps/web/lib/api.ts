@@ -1,4 +1,5 @@
 import type { components } from "./api-types";
+import { decodePathParam } from "./url";
 
 export const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
@@ -66,7 +67,9 @@ export function searchRecords(params: SearchParamsInput): Promise<SearchResponse
 }
 
 export function getRecord(recordId: string): Promise<RecordDetail> {
-  return apiFetch<RecordDetail>(`/api/records/${encodeURIComponent(recordId)}`);
+  return apiFetch<RecordDetail>(
+    `/api/records/${encodeURIComponent(decodePathParam(recordId))}`,
+  );
 }
 
 export function getLibraries(): Promise<Library[]> {

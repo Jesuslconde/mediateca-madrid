@@ -6,11 +6,17 @@ export function first(value: string | string[] | undefined): string | undefined 
 }
 
 export function decodePathParam(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
+  let current = value;
+  for (let i = 0; i < 5; i += 1) {
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) return current;
+      current = decoded;
+    } catch {
+      return current;
+    }
   }
+  return current;
 }
 
 export function toArray(value: string | string[] | undefined): string[] {
