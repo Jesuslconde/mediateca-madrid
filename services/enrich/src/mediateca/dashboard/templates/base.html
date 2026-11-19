@@ -3,7 +3,6 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    {% if refresh_seconds %}<meta http-equiv="refresh" content="{{ refresh_seconds }}">{% endif %}
     <title>Mediateca Madrid - Estado de la ingesta</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f8; color: #1c2430; }
@@ -85,14 +84,237 @@
       <main class="main">
         <div class="content">
           <p class="topbar">
-            Actualizado {{ generated_at.strftime('%Y-%m-%d %H:%M:%S %Z') }}
+            <span id="updated-at">Actualizado {{ generated_at.strftime('%Y-%m-%d %H:%M:%S %Z') }}</span>
             {% if refresh_seconds %} · Se actualiza cada {{ refresh_seconds }} s{% else %} · Sin refresco automatico{% endif %}
           </p>
+          <p id="refresh-error" class="error" hidden></p>
           {% if message %}<p class="ok">{{ message }}</p>{% endif %}
           {% if error %}<p class="error">{{ error }}</p>{% endif %}
           {% block content %}{% endblock %}
         </div>
       </main>
     </div>
+    {% if refresh_seconds %}
+    <script>
+      (function () {
+        var section = {{ section|tojson }};
+        var refreshSeconds = {{ refresh_seconds|tojson }};
+        var isAdmin = {{ is_admin|tojson }};
+        var endpoint = section === 'inicio' ? '/api/dashboard/inicio' : '/api/dashboard/tareas';
+        var inFlight = false;
+
+        function pad(value) {
+          return value < 10 ? '0' + value : '' + value;
+        }
+
+        function formatDate(iso) {
+          if (!iso) return '—';
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return '—';
+          return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        function formatDateTime(iso) {
+          if (!iso) return '—';
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return '—';
+          return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+
+        function metric(label, value) {
+          var div = document.createElement('div');
+          div.className = 'metric';
+          var span = document.createElement('span');
+          span.className = 'muted';
+          span.textContent = label;
+          var strong = document.createElement('strong');
+          strong.textContent = value == null ? '' : String(value);
+          div.appendChild(span);
+          div.appendChild(strong);
+          return div;
+        }
+
+        function renderGrid(el, items) {
+          el.textContent = '';
+          items.forEach(function (item) {
+            el.appendChild(metric(item.label, item.value));
+          });
+        }
+
+        function entriesToItems(entries) {
+          return entries.map(function (entry) {
+            return { label: entry[0], value: entry[1] };
+          });
+        }
+
+        function renderWorker(el, worker) {
+          el.textContent = '';
+          el.appendChild(document.createTextNode('Estado: '));
+          var status = document.createElement('span');
+          status.className = worker.status === 'ok' ? 'ok' : 'degraded';
+          status.textContent = worker.status;
+          el.appendChild(status);
+          if (worker.last_heartbeat) {
+            el.appendChild(document.createTextNode(
+              ' | Ultimo heartbeat: ' + formatDateTime(worker.last_heartbeat) +
+              ' | Fuente: ' + (worker.source || '')
+            ));
+          } else {
+            el.appendChild(document.createTextNode(' | Sin heartbeat registrado'));
+          }
+        }
+
+        function renderInicio(data) {
+          renderWorker(document.getElementById('worker-status'), data.worker);
+          renderGrid(document.getElementById('grid-status'), entriesToItems(Object.entries(data.status_counts || {})));
+          renderGrid(document.getElementById('grid-type'), entriesToItems(Object.entries(data.type_counts || {})));
+
+          var fuenteGrid = document.getElementById('grid-fuente');
+          var fuentes = Object.entries(data.fuente_counts || {});
+          if (fuentes.length === 0) {
+            fuenteGrid.textContent = '';
+            var p = document.createElement('p');
+            p.className = 'muted';
+            p.textContent = 'Sin fuentes registradas.';
+            fuenteGrid.appendChild(p);
+          } else {
+            renderGrid(fuenteGrid, entriesToItems(fuentes));
+          }
+
+          var coverage = data.coverage || {};
+          renderGrid(document.getElementById('grid-coverage'), [
+            { label: 'Ediciones', value: coverage.ediciones },
+            { label: 'Descubiertas', value: coverage.descubiertas },
+            { label: 'Enriquecidas', value: coverage.enriquecidas },
+            { label: 'Pendientes', value: coverage.pendientes },
+            { label: 'Fallidas', value: coverage.fallidas },
+            { label: 'Enriquecimiento', value: data.enrichment_percent + '%' },
+          ]);
+
+          var m = data.metrics || {};
+          renderGrid(document.getElementById('grid-metrics'), [
+            { label: 'Procesadas', value: m.processed },
+            { label: 'Errores', value: m.errors },
+            { label: 'Captchas', value: m.captchas },
+            { label: 'Captchas resueltos', value: m.captchas_solved },
+            { label: 'Captchas fallidos', value: m.captchas_failed },
+            { label: 'Renovaciones de sesion', value: m.session_renewals },
+            { label: 'Tiempo medio por ficha', value: m.average_ms != null ? m.average_ms + ' ms' : '—' },
+          ]);
+        }
+
+        function renderJobs(data) {
+          var container = document.getElementById('jobs-table');
+          container.textContent = '';
+          var jobs = data.jobs || [];
+          if (jobs.length === 0) {
+            var p = document.createElement('p');
+            p.className = 'muted';
+            p.textContent = 'No hay trabajos registrados.';
+            container.appendChild(p);
+            return;
+          }
+          var table = document.createElement('table');
+          var thead = document.createElement('thead');
+          var headerRow = document.createElement('tr');
+          ['ID', 'Fuente', 'Tipo', 'Estado', 'Cursor', 'Intentos', 'Creado', 'Inicio', 'Fin', 'Heartbeat', 'Error'].forEach(function (heading) {
+            var th = document.createElement('th');
+            th.textContent = heading;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+          var tbody = document.createElement('tbody');
+          jobs.forEach(function (job) {
+            var tr = document.createElement('tr');
+            var cells = [
+              job.id,
+              job.fuente,
+              job.job_type,
+              job.status,
+              (job.cursor_doc != null ? job.cursor_doc : '—') + '/' + (job.cursor_titn != null ? job.cursor_titn : '—'),
+              (job.attempts || 0) + '/' + (job.max_attempts || 0),
+              formatDate(job.created_at),
+              formatDate(job.started_at),
+              formatDate(job.finished_at),
+              formatDate(job.heartbeat_at),
+              job.error || '',
+            ];
+            cells.forEach(function (value, index) {
+              var td = document.createElement('td');
+              if (index === 10) td.className = 'error';
+              td.textContent = value == null ? '' : String(value);
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          container.appendChild(table);
+        }
+
+        function updateButtons(data) {
+          var active = data.active_jobs || {};
+          document.querySelectorAll('button[data-job-type]').forEach(function (button) {
+            var jobType = button.getAttribute('data-job-type');
+            button.disabled = !isAdmin || !!active[jobType];
+          });
+        }
+
+        function renderTareas(data) {
+          updateButtons(data);
+          renderJobs(data);
+        }
+
+        function showError(message) {
+          var el = document.getElementById('refresh-error');
+          if (!el) return;
+          el.textContent = message || 'No se pudo actualizar el dashboard.';
+          el.hidden = false;
+        }
+
+        function hideError() {
+          var el = document.getElementById('refresh-error');
+          if (el) el.hidden = true;
+        }
+
+        function updateTimestamp(iso) {
+          var el = document.getElementById('updated-at');
+          if (el && iso) {
+            el.textContent = 'Actualizado ' + formatDateTime(iso);
+          }
+        }
+
+        function update() {
+          if (inFlight) return;
+          inFlight = true;
+          fetch(endpoint, { headers: { 'Accept': 'application/json' } })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+              if (data.status === 'degraded') {
+                showError(data.message);
+              } else {
+                hideError();
+                if (section === 'inicio') {
+                  renderInicio(data);
+                } else {
+                  renderTareas(data);
+                }
+                updateTimestamp(data.generated_at);
+              }
+            })
+            .catch(function () {
+              showError('No se pudo actualizar el dashboard.');
+            })
+            .finally(function () {
+              inFlight = false;
+            });
+        }
+
+        setInterval(update, refreshSeconds * 1000);
+      })();
+    </script>
+    {% endif %}
   </body>
 </html>

@@ -65,6 +65,8 @@ from .queries import (
     job_status_counts,
     job_type_counts,
     recent_jobs,
+    serialize_inicio,
+    serialize_tareas,
     tmdb_config,
     worker_config,
     worker_health,
@@ -305,6 +307,24 @@ def dashboard(
         name="inicio.html",
         context=context,
     )
+
+
+@app.get("/api/dashboard/inicio")
+def api_dashboard_inicio(session: Session = Depends(get_session)) -> dict[str, Any]:
+    try:
+        return serialize_inicio(session)
+    except SQLAlchemyError:
+        logger.exception("No se pudo leer el estado de la ingesta")
+        return {"status": "degraded", "message": DEGRADED_MESSAGE}
+
+
+@app.get("/api/dashboard/tareas")
+def api_dashboard_tareas(session: Session = Depends(get_session)) -> dict[str, Any]:
+    try:
+        return serialize_tareas(session)
+    except SQLAlchemyError:
+        logger.exception("No se pudo leer los trabajos de la ingesta")
+        return {"status": "degraded", "message": DEGRADED_MESSAGE}
 
 
 @app.get("/tareas", response_class=HTMLResponse)

@@ -3,7 +3,7 @@
 {% block content %}
   <section>
     <h2>Salud del worker</h2>
-    <p>
+    <p id="worker-status">
       Estado:
       <span class="{{ 'ok' if worker.status == 'ok' else 'degraded' }}">{{ worker.status }}</span>
       {% if worker.last_heartbeat %}
@@ -17,7 +17,7 @@
 
   <section>
     <h2>Trabajos por estado</h2>
-    <div class="grid">
+    <div class="grid" id="grid-status">
       {% for status, total in status_counts.items() %}
         <div class="metric"><span class="muted">{{ status }}</span><strong>{{ total }}</strong></div>
       {% endfor %}
@@ -26,7 +26,7 @@
 
   <section>
     <h2>Trabajos por tipo</h2>
-    <div class="grid">
+    <div class="grid" id="grid-type">
       {% for job_type, total in type_counts.items() %}
         <div class="metric"><span class="muted">{{ job_type }}</span><strong>{{ total }}</strong></div>
       {% endfor %}
@@ -35,7 +35,7 @@
 
   <section>
     <h2>Trabajos por fuente</h2>
-    <div class="grid">
+    <div class="grid" id="grid-fuente">
       {% for fuente, total in fuente_counts.items() %}
         <div class="metric"><span class="muted">{{ fuente }}</span><strong>{{ total }}</strong></div>
       {% else %}
@@ -46,7 +46,7 @@
 
   <section>
     <h2>Cobertura del catalogo</h2>
-    <div class="grid">
+    <div class="grid" id="grid-coverage">
       <div class="metric"><span class="muted">Ediciones</span><strong>{{ coverage.ediciones }}</strong></div>
       <div class="metric"><span class="muted">Descubiertas</span><strong>{{ coverage.descubiertas }}</strong></div>
       <div class="metric"><span class="muted">Enriquecidas</span><strong>{{ coverage.enriquecidas }}</strong></div>
@@ -58,7 +58,7 @@
 
   <section>
     <h2>Metricas de ingesta</h2>
-    <div class="grid">
+    <div class="grid" id="grid-metrics">
       <div class="metric"><span class="muted">Procesadas</span><strong>{{ metrics.processed }}</strong></div>
       <div class="metric"><span class="muted">Errores</span><strong>{{ metrics.errors }}</strong></div>
       <div class="metric"><span class="muted">Captchas</span><strong>{{ metrics.captchas }}</strong></div>

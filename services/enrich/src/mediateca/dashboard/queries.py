@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from mediateca_shared.constants import (
     JOB_STATUSES,
@@ -14,7 +15,12 @@ from mediateca_shared.models import Fuente, HarvestJob
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from mediateca.catalog.jobs import IngestCoverage, coverage
+from mediateca.catalog.jobs import (
+    IngestCoverage,
+    coverage,
+    has_active_job,
+    ingest_metrics,
+)
 from mediateca.core.config import settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
@@ -264,3 +270,66 @@ def enrichment_percentage(cover: IngestCoverage) -> int:
 
 def catalog_coverage(session: Session) -> IngestCoverage:
     return coverage(session)
+
+
+def _iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
+
+
+def serialize_worker(worker: WorkerHealth) -> dict[str, Any]:
+    return {
+        "status": worker.status,
+        "last_heartbeat": _iso(worker.last_heartbeat),
+        "source": worker.source,
+    }
+
+
+def serialize_job(job: HarvestJob) -> dict[str, Any]:
+    return {
+        "id": job.id,
+        "fuente": job.fuente_codigo or "global",
+        "job_type": job.job_type,
+        "status": job.status,
+        "cursor_doc": job.cursor_doc,
+        "cursor_titn": job.cursor_titn,
+        "attempts": job.attempts or 0,
+        "max_attempts": job.max_attempts or 0,
+        "created_at": _iso(job.created_at),
+        "started_at": _iso(job.started_at),
+        "finished_at": _iso(job.finished_at),
+        "heartbeat_at": _iso(job.heartbeat_at),
+        "error": job.error,
+    }
+
+
+def serialize_inicio(
+    session: Session, *, now: datetime | None = None
+) -> dict[str, Any]:
+    cover = catalog_coverage(session)
+    return {
+        "worker": serialize_worker(worker_health(session, now=now)),
+        "status_counts": job_status_counts(session),
+        "type_counts": job_type_counts(session),
+        "fuente_counts": job_fuente_counts(session),
+        "coverage": asdict(cover),
+        "enrichment_percent": enrichment_percentage(cover),
+        "metrics": asdict(ingest_metrics(session, cover)),
+        "generated_at": _iso(now or datetime.now(UTC)),
+    }
+
+
+def serialize_tareas(
+    session: Session, *, now: datetime | None = None
+) -> dict[str, Any]:
+    return {
+        "jobs": [serialize_job(job) for job in recent_jobs(session)],
+        "active_jobs": {
+            job_type: has_active_job(session, job_type) for job_type in JOB_TYPES
+        },
+        "worker_concurrency": effective_worker_concurrency(session),
+        "generated_at": _iso(now or datetime.now(UTC)),
+    }

@@ -266,7 +266,8 @@ def test_app_responde_y_muestra_los_datos(monkeypatch, tmp_path) -> None:
     assert health.status_code == 200
     assert health.json() == {"status": "ok", "db": "ok"}
     html = inicio.text
-    assert 'http-equiv="refresh" content="42"' in html
+    assert 'http-equiv="refresh"' not in html
+    assert "/api/dashboard/inicio" in html
     assert "pending" in html
     assert "completed" in html
     assert "failed" in html
@@ -277,6 +278,150 @@ def test_app_responde_y_muestra_los_datos(monkeypatch, tmp_path) -> None:
     assert "Tareas bajo demanda" in tareas.text
     assert "error visible" in tareas.text
     assert f"<td>{running.id}</td>" in tareas.text
+
+
+def test_api_dashboard_inicio_devuelve_datos(monkeypatch, tmp_path) -> None:
+    session = _session()
+    running = create_job(session, "enrich")
+    claim_job(session)
+    failed = create_job(session, "index")
+    finish_job(session, failed, status="failed", error="error visible")
+    create_stub(session, "1")
+    enriched = create_stub(session, "2")
+    mark_enriched(session, enriched)
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.get("/api/dashboard/inicio")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["worker"]["status"] == "ok"
+    assert data["status_counts"]["running"] == 1
+    assert data["status_counts"]["failed"] == 1
+    assert data["type_counts"]["enrich"] == 1
+    assert data["type_counts"]["index"] == 1
+    assert data["coverage"]["ediciones"] == 2
+    assert data["coverage"]["enriquecidas"] == 1
+    assert data["enrichment_percent"] == 50
+    assert data["metrics"]["processed"] >= 0
+    assert data["generated_at"] is not None
+
+
+def test_api_dashboard_tareas_devuelve_datos(monkeypatch, tmp_path) -> None:
+    session = _session()
+    running = create_job(session, "enrich")
+    claim_job(session)
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.get("/api/dashboard/tareas")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["active_jobs"]["enrich"] is True
+    assert data["active_jobs"]["discover"] is False
+    assert isinstance(data["worker_concurrency"], int)
+    assert data["generated_at"] is not None
+    assert len(data["jobs"]) == 1
+    job = data["jobs"][0]
+    assert job["id"] == running.id
+    assert job["job_type"] == "enrich"
+    assert job["status"] == "running"
+    assert job["fuente"] == "madrid"
+
+
+def test_api_dashboard_endpoints_no_modifican(monkeypatch, tmp_path) -> None:
+    session = _session()
+    create_job(session, "discover")
+    create_stub(session, "1")
+    session.commit()
+
+    before_jobs = session.scalar(select(func.count(HarvestJob.id)))
+    before_ediciones = session.scalar(select(func.count(Edicion.id)))
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    client = _client_for(session)
+    try:
+        for _ in range(3):
+            assert client.get("/api/dashboard/inicio").status_code == 200
+            assert client.get("/api/dashboard/tareas").status_code == 200
+    finally:
+        _clear_overrides()
+
+    assert session.scalar(select(func.count(HarvestJob.id))) == before_jobs
+    assert session.scalar(select(func.count(Edicion.id))) == before_ediciones
+
+
+def test_api_dashboard_degradado_sin_trazas(monkeypatch) -> None:
+    class BrokenSession:
+        def execute(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def scalar(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def scalars(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+        def get_bind(self, *args, **kwargs):
+            raise OperationalError("SELECT 1", {}, Exception("db down"))
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", Path("/no/existe"))
+
+    broken = BrokenSession()
+
+    def dependency():
+        yield broken
+
+    dashboard_module.app.dependency_overrides[dashboard_module.get_session] = dependency
+    client = TestClient(dashboard_module.app)
+    try:
+        inicio = client.get("/api/dashboard/inicio")
+        tareas = client.get("/api/dashboard/tareas")
+    finally:
+        _clear_overrides()
+
+    for response in (inicio, tareas):
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert "message" in data
+        assert "db down" not in str(data)
+        assert "Traceback" not in str(data)
+
+
+def test_plantillas_incluyen_contenedores_y_atributos(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        inicio = client.get("/")
+        tareas = client.get("/tareas")
+    finally:
+        _clear_overrides()
+
+    assert 'id="worker-status"' in inicio.text
+    assert 'id="grid-status"' in inicio.text
+    assert 'id="grid-type"' in inicio.text
+    assert 'id="grid-fuente"' in inicio.text
+    assert 'id="grid-coverage"' in inicio.text
+    assert 'id="grid-metrics"' in inicio.text
+    assert 'id="jobs-table"' in tareas.text
+    for job_type in ("discover", "enrich", "index", "branches", "tmdb"):
+        assert f'data-job-type="{job_type}"' in tareas.text
 
 
 def test_dashboard_sin_tabla_app_config_no_se_degrada(
@@ -1161,9 +1306,13 @@ def test_refresco_solo_en_inicio_y_tareas(monkeypatch, tmp_path) -> None:
     finally:
         _clear_overrides()
 
-    assert 'http-equiv="refresh" content="42"' in inicio.text
-    assert 'http-equiv="refresh" content="42"' in tareas.text
+    assert 'http-equiv="refresh"' not in inicio.text
+    assert 'http-equiv="refresh"' not in tareas.text
     assert 'http-equiv="refresh"' not in configuracion.text
+    assert "/api/dashboard/inicio" in inicio.text
+    assert "/api/dashboard/tareas" in tareas.text
+    assert "/api/dashboard/inicio" not in configuracion.text
+    assert "/api/dashboard/tareas" not in configuracion.text
     assert "Sin refresco automatico" in configuracion.text
 
 
