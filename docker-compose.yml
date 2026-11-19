@@ -215,6 +215,7 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:8000
+      MEDIATECA_WEB_COOKIE_SECURE: ${MEDITECA_WEB_COOKIE_SECURE:-auto}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:

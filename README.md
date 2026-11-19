@@ -124,6 +124,8 @@ ${MEDIATECA_REGISTRY}/mediateca-web:${MEDIATECA_IMAGE_TAG}
 
 La base de datos y el indice se comparten entre todos los servicios. La ingesta es la unica propietaria de las migraciones y de las escrituras del catalogo; la API solo lee el catalogo y escribe las listas de favoritos; el portal no accede directamente a la base.
 
+La cookie de la lista activa se emite con `Secure` cuando la peticion llega por HTTPS o cuando `MEDITECA_WEB_COOKIE_SECURE=true`. Por defecto vale `auto`, de modo que el despliegue por HTTP sigue funcionando y un proxy con TLS puede activar `Secure` reenviando `x-forwarded-proto: https`.
+
 ## Gestion de modelos
 
 Los modelos SQLAlchemy, los esquemas Pydantic y `SCHEMA_VERSION` viven en `packages/shared`. API e ingesta instalan ese paquete local durante el build y no existen copias locales ni wheels versionados.
@@ -207,7 +209,7 @@ make web-types
 
 Cualquier visitante puede guardar ediciones en una lista sin crear una cuenta. La lista se guarda en PostgreSQL y se identifica por un token opaco que viaja en la URL `/lista/{token}`.
 
-- El primer corazon crea la lista y el portal recuerda cual es la lista activa en una cookie.
+- El primer corazon crea la lista y el portal recuerda cual es la lista activa en una cookie persistente, compartida por todas las pestañas y conservada al cerrar el navegador.
 - Compartir la lista es enviar ese enlace. Cualquiera que lo abra puede leerla y editarla.
 - El token se guarda hasheado en la base de datos y la API lo enmascara en sus logs de acceso. Un proxy inverso debería aplicar la misma redacción.
 - Las listas sin ediciones durante 180 dias se eliminan desde el servicio `init`.
