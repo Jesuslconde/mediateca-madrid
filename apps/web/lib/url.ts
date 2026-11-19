@@ -5,6 +5,14 @@ export function first(value: string | string[] | undefined): string | undefined 
   return value;
 }
 
+export function decodePathParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function toArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];

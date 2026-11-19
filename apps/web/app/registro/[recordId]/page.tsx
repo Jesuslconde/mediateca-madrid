@@ -7,7 +7,7 @@ import { SupportBadge } from "@/components/SupportBadge";
 import { getRecord, type Persona } from "@/lib/api";
 import { getActiveList, savedRecordIds } from "@/lib/active-list";
 import { countryLabel, languageLabel } from "@/lib/labels";
-import { first, type RawSearchParams } from "@/lib/url";
+import { decodePathParam, first, type RawSearchParams } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function RecordPage({
   const { recordId } = await params;
   const sp = await searchParams;
   const volver = safeVolver(first(sp.volver));
-  const record = await getRecord(recordId).catch(() => null);
+  const record = await getRecord(decodePathParam(recordId)).catch(() => null);
   if (!record) notFound();
 
   const activeList = await getActiveList().catch(() => null);
