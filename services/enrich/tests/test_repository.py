@@ -247,6 +247,6 @@ def test_misma_titn_en_dos_fuentes_genera_dos_ediciones(dvd_fixture) -> None:
     assert len({edicion.id for edicion in ediciones}) == 2
     documents = [build_document(edicion) for edicion in ediciones]
     assert {document["id"] for document in documents} == {
-        "madrid:2101557",
-        "andalucia:2101557",
+        "madrid_2101557",
+        "andalucia_2101557",
     }

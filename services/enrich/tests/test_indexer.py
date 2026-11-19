@@ -104,8 +104,8 @@ def test_index_titns_solo_actualiza_los_titn_indicados(dvd_fixture) -> None:
     assert first == 1
     assert second == 2
     assert missing == 0
-    assert index.batches == [["madrid:1"], ["madrid:2", "madrid:2101557"]]
-    assert set(index.documents) == {"madrid:1", "madrid:2", "madrid:2101557"}
+    assert index.batches == [["madrid_1"], ["madrid_2", "madrid_2101557"]]
+    assert set(index.documents) == {"madrid_1", "madrid_2", "madrid_2101557"}
 
 
 def test_index_titns_envia_lotes_de_200() -> None:
@@ -197,7 +197,7 @@ def test_index_reset_reconstruye_paises_origen(dvd_fixture) -> None:
 
     assert total == 1
     assert "antiguo" not in index.documents
-    assert index.documents[edicion.record_id]["paises_origen"] == ["ES"]
+    assert index.documents[edicion.record_id.replace(":", "_")]["paises_origen"] == ["ES"]
 
 
 def test_index_editions_por_fuente_no_reconstruye_documentos() -> None:
@@ -230,7 +230,7 @@ def test_index_editions_por_fuente_no_reconstruye_documentos() -> None:
     total = indexer.index_editions(session, fuente_id=andalucia.id)
 
     assert total == 1
-    assert list(index.documents) == ["andalucia:1"]
-    assert index.documents["andalucia:1"]["personas"] == [
+    assert list(index.documents) == ["andalucia_1"]
+    assert index.documents["andalucia_1"]["personas"] == [
         {"nombre": "Dirección de prueba", "rol": "director"}
     ]

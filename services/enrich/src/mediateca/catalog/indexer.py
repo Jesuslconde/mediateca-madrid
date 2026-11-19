@@ -80,6 +80,10 @@ def _dedupe(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _meili_id(record_id: str) -> str:
+    return record_id.replace(":", "_")
+
+
 def build_document(edicion: Edicion) -> dict[str, Any]:
     personas = [
         {"nombre": relacion.persona.nombre, "rol": relacion.rol}
@@ -116,7 +120,7 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
     materias = [relacion.materia.termino for relacion in edicion.materias]
 
     return {
-        "id": edicion.record_id,
+        "id": _meili_id(edicion.record_id),
         "record_id": edicion.record_id,
         "fuente": fuente_codigo,
         "fuente_nombre": fuente_nombre,
