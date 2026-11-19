@@ -19,7 +19,9 @@ Este corte sube `SCHEMA_VERSION` a `7` y cambia la identidad de las ediciones a 
 
 1. Copia de seguridad de PostgreSQL y del indice de Meilisearch.
 2. Desplegar la imagen nueva y ejecutar `init`; aplica la migracion y reconstruye el indice con `--reset` al detectar el salto de version.
-3. Verificar busqueda, `/api/records/madrid:2101557`, `/api/records/2101557`, `/api/locations` y una lista historica.
+3. Aplicar `migrate_andalucia.sql` (incluida en `init`) y verificar que `fuentes` contiene `andalucia` habilitada; no se reindexa Madrid por este alta.
+4. Verificar busqueda, `/api/records/madrid:2101557`, `/api/records/2101557`, `/api/locations` y una lista historica.
+5. Ejecutar una primera recoleccion controlada de Andalucía y consultar `/api/search?fuente=andalucia`.
 
 ## Rollback
 

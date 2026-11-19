@@ -448,3 +448,33 @@ def test_scheduler_ignora_fuentes_deshabilitadas() -> None:
     jobs = enqueue_due_jobs(session)
     assert jobs
     assert {job.fuente_id for job in jobs} == {madrid.id}
+
+
+def test_scheduler_encola_por_fuente_y_respeta_pausa() -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.fuentes import ensure_default_fuente
+
+    session = _session()
+    madrid = ensure_default_fuente(session)
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        enabled=True,
+    )
+    pausada = Fuente(
+        codigo="pausada",
+        nombre="Pausada",
+        base_url="https://pausada.example",
+        enabled=True,
+        paused_until=datetime.now(UTC) + timedelta(minutes=30),
+    )
+    session.add_all([andalucia, pausada])
+    session.commit()
+
+    jobs = enqueue_due_jobs(session)
+
+    assert [job.job_type for job in jobs] == ["discover", "discover"]
+    assert {job.fuente_id for job in jobs} == {madrid.id, andalucia.id}
+    assert pausada.id not in {job.fuente_id for job in jobs}

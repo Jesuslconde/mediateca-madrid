@@ -14,7 +14,12 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import delete, func, select
 
-from mediateca.catalog.directory import DirectoryClient, DirectoryUnavailable, refresh_sucursales
+from mediateca.catalog.directory import (
+    DirectoryClient,
+    DirectoryUnavailable,
+    directory_path,
+    refresh_sucursales,
+)
 from mediateca.catalog.fuentes import get_fuente, require_enabled_fuente, seed_default_fuente
 from mediateca.catalog.harvester import Harvester, OpacClient
 from mediateca.catalog.indexer import MeiliIndexer
@@ -205,6 +210,11 @@ def enqueue_branches_command(
     with session_scope() as session:
         try:
             source = require_enabled_fuente(session, fuente)
+            if not directory_path(source):
+                console.print(
+                    f"[yellow]La fuente {source.codigo} no tiene directorio disponible[/yellow]"
+                )
+                return
             job = enqueue_branches_job(session, fuente=source, reason="cli")
         except JobAlreadyActive as exc:
             console.print(f"[yellow]{exc}[/yellow]")

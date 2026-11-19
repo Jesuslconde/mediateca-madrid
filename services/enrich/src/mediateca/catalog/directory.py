@@ -38,6 +38,11 @@ class DirectoryUnavailable(RuntimeError):
     pass
 
 
+def directory_path(fuente: Fuente) -> str | None:
+    profile = FuenteProfile.from_model(fuente)
+    return (profile.options or {}).get("directory_path")
+
+
 @dataclass(slots=True)
 class ParsedSucursal:
     biblioteca_codigo: str
@@ -207,7 +212,7 @@ class DirectoryClient:
     @classmethod
     def from_fuente(cls, fuente: Fuente, **kwargs) -> DirectoryClient:
         profile = FuenteProfile.from_model(fuente)
-        path = (profile.options or {}).get("directory_path")
+        path = directory_path(fuente)
         if not path:
             raise DirectoryUnavailable(
                 f"La fuente {fuente.codigo} no tiene directorio configurado"

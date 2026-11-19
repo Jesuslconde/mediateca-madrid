@@ -6,6 +6,7 @@ from pathlib import Path
 
 import mediateca_shared.models  # noqa: F401  (registra las tablas)
 import pytest
+from mediateca_shared.models import Fuente
 from sqlalchemy import create_engine
 
 from mediateca.core.db import Base
@@ -137,12 +138,21 @@ def test_migraciones_dos_veces_sobre_esquema_legacy(pg_connection) -> None:
         """
     )
 
+    Fuente.__table__.create(bind=conn, checkfirst=True)
+
     _run_migrations(conn)
     _run_migrations(conn)
 
     assert conn.exec_driver_sql(
         "SELECT count(*) FROM fuentes WHERE codigo = 'madrid'"
     ).scalar_one() == 1
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = 'andalucia'"
+    ).scalar_one() == 1
+    assert conn.exec_driver_sql(
+        "SELECT enabled, format_value, base_url FROM fuentes WHERE codigo = 'andalucia'"
+    ).one() == (True, "05", "https://www.juntadeandalucia.es")
+    assert conn.exec_driver_sql("SELECT count(*) FROM ediciones").scalar_one() == 1
     assert conn.exec_driver_sql(
         "SELECT record_id FROM ediciones WHERE titn = '2101557'"
     ).scalar_one() == "madrid:2101557"
@@ -167,3 +177,10 @@ def test_migraciones_sobre_esquema_nuevo_son_idempotentes(pg_connection) -> None
     assert conn.exec_driver_sql(
         "SELECT count(*) FROM fuentes WHERE codigo = 'madrid'"
     ).scalar_one() == 1
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = 'andalucia'"
+    ).scalar_one() == 1
+    assert conn.exec_driver_sql(
+        "SELECT enabled, format_value, base_url FROM fuentes WHERE codigo = 'andalucia'"
+    ).one() == (True, "05", "https://www.juntadeandalucia.es")
+    assert conn.exec_driver_sql("SELECT count(*) FROM ediciones").scalar_one() == 0

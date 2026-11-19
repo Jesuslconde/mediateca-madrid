@@ -264,24 +264,9 @@ class MeiliIndexer:
         if reset:
             self.delete_all()
 
-        if fuente_id is not None:
-            documents = [
-                build_document(edicion)
-                for edicion in iter_documents(session, fuente_id=fuente_id)
-            ]
-            self._add_batch(documents)
-            return len(documents)
-
-        stmt = select(Edicion).options(
-            selectinload(Edicion.fuente),
-            selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
-            selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
-            selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
-        )
-
         total = 0
         batch: list[dict[str, Any]] = []
-        for edicion in session.scalars(stmt).yield_per(200):
+        for edicion in iter_ediciones(session, fuente_id=fuente_id):
             batch.append(build_document(edicion))
             total += 1
             if len(batch) >= 200:
@@ -376,9 +361,9 @@ class MeiliIndexer:
         return self.client.health()
 
 
-def iter_documents(
+def iter_ediciones(
     session: Session, *, fuente_id: int | None = None
-) -> Iterable[dict[str, Any]]:
+) -> Iterable[Edicion]:
     stmt = select(Edicion).options(
         selectinload(Edicion.fuente),
         selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
@@ -387,5 +372,11 @@ def iter_documents(
     )
     if fuente_id is not None:
         stmt = stmt.where(Edicion.fuente_id == fuente_id)
-    for edicion in session.scalars(stmt).yield_per(200):
+    yield from session.scalars(stmt).yield_per(200)
+
+
+def iter_documents(
+    session: Session, *, fuente_id: int | None = None
+) -> Iterable[dict[str, Any]]:
+    for edicion in iter_ediciones(session, fuente_id=fuente_id):
         yield build_document(edicion)

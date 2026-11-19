@@ -350,3 +350,66 @@ def test_respuesta_de_flaresolverr_que_sigue_siendo_captcha() -> None:
     assert client.captchas == 1
     assert client.captchas_solved == 0
     assert client.captchas_failed == 1
+
+
+def test_perfil_opac_andalucia_usa_abnetcl_y_videograbaciones() -> None:
+    from mediateca_shared.models import Fuente
+
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        opac_path="/cultura/absys/abnopac/abnetcl.cgi",
+        session_pattern=r"/abnetcl\.cgi/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="05",
+    )
+    madrid = Fuente(
+        codigo="madrid",
+        nombre="Madrid",
+        base_url="https://gestiona.comunidad.madrid",
+        opac_path="/biblio_publicas/cgi-bin/abnetopac",
+        session_pattern=r"/abnetopac/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="6",
+    )
+
+    andalucia_client = OpacClient.from_fuente(andalucia)
+    madrid_client = OpacClient.from_fuente(madrid)
+    override = OpacClient.from_fuente(andalucia, delay=0.5)
+    try:
+        assert override.delay == 0.5
+        assert andalucia_client.base_url == "https://www.juntadeandalucia.es"
+        assert andalucia_client.path == "/cultura/absys/abnopac/abnetcl.cgi"
+        assert andalucia_client.session_pattern == r"/abnetcl\.cgi/([A-Za-z0-9]+)"
+        assert andalucia_client.format_field == "select03"
+        assert andalucia_client.format_value == "05"
+
+        andalucia_response = httpx.Response(
+            200,
+            request=httpx.Request(
+                "GET",
+                "https://www.juntadeandalucia.es/cultura/absys/abnopac/abnetcl.cgi/SESIONANDA",
+            ),
+            text="",
+        )
+        madrid_response = httpx.Response(
+            200,
+            request=httpx.Request(
+                "GET",
+                "https://gestiona.comunidad.madrid/biblio_publicas/cgi-bin/abnetopac/SESIONMADRID",
+            ),
+            text="",
+        )
+        assert andalucia_client._extract_session(andalucia_response) == "SESIONANDA"
+        assert madrid_client._extract_session(madrid_response) == "SESIONMADRID"
+        assert andalucia_client._extract_session(madrid_response) is None
+        assert madrid_client._extract_session(andalucia_response) is None
+
+        andalucia_client.session_id = "ANDA"
+        madrid_client.session_id = "MADRID"
+        assert andalucia_client.captchas == madrid_client.captchas == 0
+    finally:
+        andalucia_client.close()
+        madrid_client.close()
+        override.close()

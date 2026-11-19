@@ -1044,3 +1044,35 @@ def test_stats_de_drenado_persistidos() -> None:
     assert persisted is not None
     for key in ("pending_after", "pending_after_cursor", "drain_chain", "drained", "stop_reason"):
         assert key in persisted.stats
+
+
+def test_handler_index_usa_la_fuente_del_trabajo(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    import mediateca.catalog.indexer as indexer_module
+    from mediateca.catalog.jobs import _index_handler
+
+    session = _session()
+    fuente = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+    )
+    session.add(fuente)
+    session.flush()
+    job = create_job(session, "index", fuente=fuente)
+    session.commit()
+
+    calls: list[tuple[bool, int | None]] = []
+
+    class FakeIndexer:
+        def index_editions(self, session, *, reset=False, fuente_id=None):  # noqa: ANN001
+            calls.append((reset, fuente_id))
+            return 0
+
+    monkeypatch.setattr(indexer_module, "MeiliIndexer", lambda: FakeIndexer())
+
+    stats = _index_handler(session, job)
+
+    assert stats == {"indexed": 0}
+    assert calls == [(False, fuente.id)]

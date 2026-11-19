@@ -475,7 +475,7 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
 
     result = CliRunner().invoke(
         cli_module.app,
-        ["refresh-branches", "--limit", "2", "--max-pages", "1", "--delay", "0"],
+        ["refresh-branches", "--limit", "2", "--max-pages", "1", "--delay", "0.1"],
     )
 
     assert result.exit_code == 0, result.output
@@ -548,3 +548,144 @@ def test_cli_worker_permite_sobreescribir_la_concurrencia(monkeypatch) -> None:
     assert len(threads) == 4
     assert "concurrencia=4" in result.output
     assert "origen=cli" in result.output
+
+
+def test_cli_usa_el_perfil_de_andalucia_en_recoleccion_e_indexado(
+    monkeypatch,
+) -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.harvester import SearchPage
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        opac_path="/cultura/absys/abnopac/abnetcl.cgi",
+        session_pattern=r"/abnetcl\.cgi/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="05",
+        options={},
+    )
+    session.add(andalucia)
+    session.commit()
+
+    capturado: list[dict] = []
+
+    class FakeOpacClient:
+        def __init__(self, *args, **kwargs) -> None:
+            self.delay = 0.0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+        def search_all(self, query: str, *, max_pages=None, start_doc=None):
+            yield SearchPage(query=query, total=0, items=[], html="<html></html>")
+
+        def search(self, query: str):
+            return SearchPage(query=query, total=0, items=[], html="<html></html>")
+
+    class FakeIndexer:
+        def __init__(self) -> None:
+            self.calls: list[int | None] = []
+
+        def index_editions(self, session, *, reset=False, fuente_id=None):  # noqa: ANN001
+            self.calls.append(fuente_id)
+            return 0
+
+    fake_indexer = FakeIndexer()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    def fake_opac_client(fuente, **kwargs):
+        capturado.append({"fuente": fuente, **kwargs})
+        return FakeOpacClient()
+
+    monkeypatch.setattr(cli_module, "_opac_client", fake_opac_client)
+    monkeypatch.setattr(cli_module, "MeiliIndexer", lambda: fake_indexer)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    for args in (
+        ["discover", "--fuente", "andalucia", "--max-pages", "1", "--delay", "0.1"],
+        ["harvest", "--fuente", "andalucia", "--query", "cine", "--max-pages", "1", "--limit", "1", "--delay", "0.1"],
+        ["enrich", "--fuente", "andalucia", "--limit", "1", "--delay", "0.1"],
+        ["index", "--fuente", "andalucia"],
+    ):
+        result = CliRunner().invoke(cli_module.app, args)
+        assert result.exit_code == 0, result.output
+
+    assert capturado
+    assert all(
+        item["fuente"].base_url == "https://www.juntadeandalucia.es"
+        for item in capturado
+    )
+    assert all(
+        item["fuente"].opac_path == "/cultura/absys/abnopac/abnetcl.cgi"
+        for item in capturado
+    )
+    assert all(item["fuente"].format_value == "05" for item in capturado)
+    assert fake_indexer.calls == [andalucia.id]
+
+
+def test_cli_enqueue_branches_sin_directorio_no_encola(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        options={},
+    )
+    session.add(andalucia)
+    session.commit()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(
+        cli_module.app, ["enqueue-branches", "--fuente", "andalucia"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "no tiene directorio" in result.output
+    assert session.scalars(select(HarvestJob)).all() == []
+
+
+def test_cli_refresh_branches_sin_directorio_no_falla(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        options={},
+    )
+    session.add(andalucia)
+    session.commit()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(
+        cli_module.app, ["refresh-branches", "--fuente", "andalucia", "--delay", "0"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "no tiene directorio" in result.output

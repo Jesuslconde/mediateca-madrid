@@ -1369,3 +1369,42 @@ def test_catalogo_en_menu_lateral_y_seccion_activa(monkeypatch, tmp_path) -> Non
         assert 'href="/catalogo"' in html
     assert '<a href="/catalogo" class="nav-link active" aria-current="page">Catálogo</a>' in catalogo.text
     assert catalogo.text.count('aria-current="page"') == 1
+
+
+def test_dashboard_muestra_y_encola_andalucia(monkeypatch, tmp_path) -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    fuente = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+    )
+    session.add(fuente)
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        tareas = client.get("/tareas")
+        response = client.post(
+            "/jobs",
+            data={
+                "job_type": "discover",
+                "fuente": "andalucia",
+                "next": "/tareas",
+            },
+            follow_redirects=False,
+        )
+        job = session.scalars(
+            select(HarvestJob).order_by(HarvestJob.id.desc())
+        ).first()
+    finally:
+        _clear_overrides()
+
+    assert tareas.status_code == 200
+    assert "Andalucía" in tareas.text
+    assert response.status_code == 303
+    assert job is not None
+    assert job.fuente_id == fuente.id
+    assert job.job_type == "discover"

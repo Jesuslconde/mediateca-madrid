@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from mediateca_shared.models import Edicion, EdicionPersona, Fuente, Persona
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -197,3 +198,39 @@ def test_index_reset_reconstruye_paises_origen(dvd_fixture) -> None:
     assert total == 1
     assert "antiguo" not in index.documents
     assert index.documents[edicion.record_id]["paises_origen"] == ["ES"]
+
+
+def test_index_editions_por_fuente_no_reconstruye_documentos() -> None:
+    session = _session()
+    madrid = Fuente(codigo="madrid", nombre="Madrid", base_url="https://madrid.example")
+    andalucia = Fuente(
+        codigo="andalucia", nombre="Andalucía", base_url="https://andalucia.example"
+    )
+    session.add_all([madrid, andalucia])
+    session.flush()
+
+    persona = Persona(nombre="Dirección de prueba", nombre_normalizado="direccion de prueba")
+    session.add(persona)
+    session.flush()
+
+    for fuente in (madrid, andalucia):
+        edicion = Edicion(
+            fuente_id=fuente.id,
+            record_id=f"{fuente.codigo}:1",
+            titn="1",
+            titulo="Película de prueba",
+            personas=[
+                EdicionPersona(persona=persona, rol="director", orden=0),
+            ],
+        )
+        session.add(edicion)
+    session.commit()
+
+    indexer, index = _fake_indexer()
+    total = indexer.index_editions(session, fuente_id=andalucia.id)
+
+    assert total == 1
+    assert list(index.documents) == ["andalucia:1"]
+    assert index.documents["andalucia:1"]["personas"] == [
+        {"nombre": "Dirección de prueba", "rol": "director"}
+    ]

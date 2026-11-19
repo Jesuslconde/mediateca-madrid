@@ -178,3 +178,21 @@ def test_parser_absysnet_con_ruta_abnetcl() -> None:
     assert detail.titn == "2101557"
     assert detail.titulo
     assert detail.ejemplares
+
+
+def test_parser_andalucia_abnetcl_y_videograbaciones() -> None:
+    base = Path(__file__).resolve().parents[1] / "fixtures" / "andalucia"
+    listing = parse_search_results(
+        (base / "search_results.html").read_text(encoding="utf-8")
+    )
+    assert [item.titn for item in listing] == ["2101557", "2107423", "2109999"]
+    assert all("/abnetcl.cgi/" in (item.source_url or "") for item in listing)
+
+    detail = parse_detail(
+        (base / "detail_video.html").read_text(encoding="utf-8"),
+        "https://www.juntadeandalucia.es/cultura/absys/abnopac/abnetcl.cgi/SESION/NT1?TITN=2101557",
+    )
+    assert detail.titn == "2101557"
+    assert detail.titulo
+    assert detail.publicacion or detail.duracion_min
+    assert detail.ejemplares

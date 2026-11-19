@@ -173,13 +173,23 @@ Si la sucursal no tiene coordenadas pero tiene codigo postal, `latitud` y `longi
 
 ## Fuentes y reindexado
 
-Las fuentes OPAC viven en la tabla `fuentes` y Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`. Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
+Las fuentes OPAC viven en la tabla `fuentes`. Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`; Andalucía se crea con `services/enrich/scripts/migrate_andalucia.sql` y su perfil AbsysNet (`abnetcl.cgi`, `select03=05`). Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
 
 Tras aplicar la migracion de identidad (`SCHEMA_VERSION=7`) hay que reconstruir el indice:
 
 ```bash
 make migrate
 make index-reset
+```
+
+Primera recolección de Andalucía:
+
+```bash
+make migrate
+make harvest fuente=andalucia q=cine pages=1 limit=5
+docker compose run --rm worker python -m mediateca discover --fuente andalucia --max-pages 1 --limit 20
+docker compose run --rm worker python -m mediateca enrich --fuente andalucia --limit 20
+docker compose run --rm worker python -m mediateca index --fuente andalucia
 ```
 
 En un despliegue normal el servicio `init` detecta el salto de version y ejecuta el reindexado con `--reset`.

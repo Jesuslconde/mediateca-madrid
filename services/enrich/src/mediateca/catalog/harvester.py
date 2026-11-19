@@ -145,16 +145,17 @@ class OpacClient:
     def from_fuente(cls, fuente: Fuente, **kwargs) -> OpacClient:
         profile = FuenteProfile.from_model(fuente)
         options = profile.options or {}
-        return cls(
-            base_url=profile.base_url,
-            path=profile.opac_path,
-            delay=profile.delay,
-            session_pattern=profile.session_pattern,
-            format_field=profile.format_field,
-            format_value=profile.format_value,
-            subcat=options.get("subcat"),
-            **kwargs,
-        )
+        params = {
+            "base_url": profile.base_url,
+            "path": profile.opac_path,
+            "delay": profile.delay,
+            "session_pattern": profile.session_pattern,
+            "format_field": profile.format_field,
+            "format_value": profile.format_value,
+            "subcat": options.get("subcat"),
+        }
+        params.update(kwargs)
+        return cls(**params)
 
     def close(self) -> None:
         self.client.close()

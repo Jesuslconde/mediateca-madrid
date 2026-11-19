@@ -217,3 +217,36 @@ def test_apply_tmdb_enrichment_es_idempotente_y_conserva_pais(dvd_fixture) -> No
     assert edicion.tmdb_enriched_at == segundo
     assert edicion.pais == pais_opac
     assert session.scalar(select(func.count(Edicion.id))) == 1
+
+
+def test_misma_titn_en_dos_fuentes_genera_dos_ediciones(dvd_fixture) -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.indexer import build_document
+
+    session = _session()
+    madrid = Fuente(codigo="madrid", nombre="Madrid", base_url="https://madrid.example")
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+    )
+    session.add_all([madrid, andalucia])
+    session.flush()
+
+    parsed = parse_file(str(dvd_fixture))
+    upsert_edicion(session, parsed, fuente=madrid)
+    upsert_edicion(session, parsed, fuente=andalucia)
+    session.commit()
+
+    ediciones = session.scalars(select(Edicion)).all()
+    assert {edicion.record_id for edicion in ediciones} == {
+        "madrid:2101557",
+        "andalucia:2101557",
+    }
+    assert len({edicion.id for edicion in ediciones}) == 2
+    documents = [build_document(edicion) for edicion in ediciones]
+    assert {document["id"] for document in documents} == {
+        "madrid:2101557",
+        "andalucia:2101557",
+    }
