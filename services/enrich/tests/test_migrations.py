@@ -184,3 +184,27 @@ def test_migraciones_sobre_esquema_nuevo_son_idempotentes(pg_connection) -> None
         "SELECT enabled, format_value, base_url FROM fuentes WHERE codigo = 'andalucia'"
     ).one() == (True, "05", "https://www.juntadeandalucia.es")
     assert conn.exec_driver_sql("SELECT count(*) FROM ediciones").scalar_one() == 0
+
+
+def test_migracion_configura_el_directorio_de_andalucia(pg_connection) -> None:
+    conn, _engine = pg_connection
+    Base.metadata.create_all(conn)
+
+    _run_migrations(conn)
+    _run_migrations(conn)
+
+    assert conn.exec_driver_sql(
+        "SELECT options->'directory'->>'kind', options->'directory'->>'mode', "
+        "options->'directory'->>'url', options->'directory'->>'format', "
+        "options->'directory'->'unit_types'->>0 "
+        "FROM fuentes WHERE codigo = 'andalucia'"
+    ).one() == (
+        "opendata",
+        "create",
+        "https://datos.juntadeandalucia.es/api/v0/libraries/all",
+        "json",
+        "Biblioteca",
+    )
+    assert conn.exec_driver_sql(
+        "SELECT options->>'directory' FROM fuentes WHERE codigo = 'madrid'"
+    ).scalar_one() is None

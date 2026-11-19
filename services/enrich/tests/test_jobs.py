@@ -404,12 +404,18 @@ def test_worker_ejecuta_el_handler_branches(monkeypatch) -> None:
         def __exit__(self, *args) -> None:
             pass
 
-    def fake_refresh(session, client, *, fuente=None, max_pages=None, only_known=False):  # noqa: ANN001
+    def fake_build_client(fuente, **kwargs):  # noqa: ANN001
+        return FakeDirectoryClient(delay=kwargs.get("delay", 1.0))
+
+    def fake_refresh(  # noqa: ANN001
+        session, client, *, fuente=None, max_pages=None, only_known=False, create_missing=False
+    ):
         visto["max_pages"] = max_pages
         visto["only_known"] = only_known
+        visto["create_missing"] = create_missing
         return RefreshStats(records=3, branches_matched=1, libraries_updated=1)
 
-    monkeypatch.setattr(directory_module, "DirectoryClient", FakeDirectoryClient)
+    monkeypatch.setattr(directory_module, "build_directory_client", fake_build_client)
     monkeypatch.setattr(directory_module, "refresh_sucursales", fake_refresh)
 
     processed, backoff = worker_tick(session)
@@ -421,7 +427,68 @@ def test_worker_ejecuta_el_handler_branches(monkeypatch) -> None:
     assert processed.stats["records"] == 3
     assert processed.stats["branches_matched"] == 1
     assert processed.stats["libraries_updated"] == 1
-    assert visto == {"delay": 0.25, "max_pages": 3, "only_known": True}
+    assert visto == {
+        "delay": 0.25,
+        "max_pages": 3,
+        "only_known": True,
+        "create_missing": False,
+    }
+    assert backoff == 0.0
+
+
+def test_worker_ejecuta_el_handler_branches_modo_create(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    import mediateca.catalog.directory as directory_module
+    from mediateca.catalog.directory import RefreshStats
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        options={
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        },
+    )
+    session.add(andalucia)
+    session.commit()
+    enqueue_branches_job(session, fuente=andalucia, delay=0.25, max_pages=3)
+    session.commit()
+
+    visto: dict[str, object] = {}
+
+    class FakeDirectoryClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    def fake_build_client(fuente, **kwargs):  # noqa: ANN001
+        return FakeDirectoryClient()
+
+    def fake_refresh(  # noqa: ANN001
+        session, client, *, fuente=None, max_pages=None, only_known=False, create_missing=False
+    ):
+        visto["only_known"] = only_known
+        visto["create_missing"] = create_missing
+        return RefreshStats(records=2, libraries_created=1, branches_created=1)
+
+    monkeypatch.setattr(directory_module, "build_directory_client", fake_build_client)
+    monkeypatch.setattr(directory_module, "refresh_sucursales", fake_refresh)
+
+    processed, backoff = worker_tick(session)
+    session.commit()
+
+    assert processed is not None
+    assert processed.status == "completed"
+    assert processed.stats["libraries_created"] == 1
+    assert visto == {"only_known": False, "create_missing": True}
     assert backoff == 0.0
 
 

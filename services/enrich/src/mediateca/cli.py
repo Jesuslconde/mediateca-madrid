@@ -15,9 +15,10 @@ from rich.table import Table
 from sqlalchemy import delete, func, select
 
 from mediateca.catalog.directory import (
-    DirectoryClient,
     DirectoryUnavailable,
-    directory_path,
+    build_directory_client,
+    directory_config,
+    directory_mode,
     refresh_sucursales,
 )
 from mediateca.catalog.fuentes import get_fuente, require_enabled_fuente, seed_default_fuente
@@ -58,13 +59,7 @@ def _opac_client(fuente, **kwargs):
 
 
 def _directory_client(fuente, **kwargs):
-    factory = getattr(DirectoryClient, "from_fuente", None)
-    if callable(factory):
-        return factory(fuente, **kwargs)
-    try:
-        return DirectoryClient(**kwargs)
-    except TypeError:
-        return DirectoryClient()
+    return build_directory_client(fuente, **kwargs)
 
 
 app = typer.Typer(
@@ -179,12 +174,15 @@ def refresh_branches_command(
             console.print(f"[yellow]{exc}[/yellow]")
             return
         with client:
+            create_missing = directory_mode(source) == "create"
             stats = refresh_sucursales(
                 session,
                 client,
                 fuente=source,
                 limit=limit,
                 max_pages=max_pages,
+                only_known=not create_missing,
+                create_missing=create_missing,
             )
 
     table = Table(title="Actualizacion de sucursales")
@@ -195,7 +193,9 @@ def refresh_branches_command(
     table.add_row("Con codigo postal", str(stats.with_postal_code))
     table.add_row("Con coordenadas", str(stats.with_coordinates))
     table.add_row("Sucursales emparejadas", str(stats.branches_matched))
+    table.add_row("Sucursales creadas", str(stats.branches_created))
     table.add_row("Bibliotecas actualizadas", str(stats.libraries_updated))
+    table.add_row("Bibliotecas creadas", str(stats.libraries_created))
     table.add_row("Bibliotecas moviles", str(stats.mobile))
     table.add_row("Omitidas", str(stats.omitted))
     console.print(table)
@@ -210,7 +210,7 @@ def enqueue_branches_command(
     with session_scope() as session:
         try:
             source = require_enabled_fuente(session, fuente)
-            if not directory_path(source):
+            if not directory_config(source):
                 console.print(
                     f"[yellow]La fuente {source.codigo} no tiene directorio disponible[/yellow]"
                 )

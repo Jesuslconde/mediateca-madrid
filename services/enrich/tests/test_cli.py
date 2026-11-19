@@ -456,11 +456,25 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
         def __exit__(self, *args) -> None:
             pass
 
-    seen: dict[str, int | None] = {}
+    seen: dict[str, object] = {}
 
-    def fake_refresh(session_arg, client, *, fuente=None, limit=None, max_pages=None):
+    def fake_build_client(fuente, **kwargs):  # noqa: ANN001
+        return FakeDirectoryClient()
+
+    def fake_refresh(  # noqa: ANN001
+        session_arg,
+        client,
+        *,
+        fuente=None,
+        limit=None,
+        max_pages=None,
+        only_known=False,
+        create_missing=False,
+    ):
         seen["limit"] = limit
         seen["max_pages"] = max_pages
+        seen["only_known"] = only_known
+        seen["create_missing"] = create_missing
         return RefreshStats(
             records=2,
             with_subc=2,
@@ -469,7 +483,7 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
             branches_matched=2,
         )
 
-    monkeypatch.setattr(cli_module, "DirectoryClient", FakeDirectoryClient)
+    monkeypatch.setattr(cli_module, "build_directory_client", fake_build_client)
     monkeypatch.setattr(cli_module, "refresh_sucursales", fake_refresh)
     monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
 
@@ -479,8 +493,78 @@ def test_cli_refresh_branches_invoca_la_actualizacion(monkeypatch) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert seen == {"limit": 2, "max_pages": 1}
+    assert seen == {
+        "limit": 2,
+        "max_pages": 1,
+        "only_known": True,
+        "create_missing": False,
+    }
     assert "Fichas leidas" in result.output
+
+
+def test_cli_refresh_branches_modo_create(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.directory import RefreshStats
+
+    session = _session()
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        options={
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        },
+    )
+    session.add(andalucia)
+    session.commit()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    class FakeDirectoryClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            pass
+
+    seen: dict[str, object] = {}
+
+    def fake_build_client(fuente, **kwargs):  # noqa: ANN001
+        return FakeDirectoryClient()
+
+    def fake_refresh(  # noqa: ANN001
+        session_arg,
+        client,
+        *,
+        fuente=None,
+        limit=None,
+        max_pages=None,
+        only_known=False,
+        create_missing=False,
+    ):
+        seen["only_known"] = only_known
+        seen["create_missing"] = create_missing
+        return RefreshStats(records=2, libraries_created=1, branches_created=2)
+
+    monkeypatch.setattr(cli_module, "build_directory_client", fake_build_client)
+    monkeypatch.setattr(cli_module, "refresh_sucursales", fake_refresh)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(
+        cli_module.app, ["refresh-branches", "--fuente", "andalucia", "--delay", "0"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen == {"only_known": False, "create_missing": True}
+    assert "Bibliotecas creadas" in result.output
 
 
 def test_cli_worker_usa_la_concurrencia_guardada(monkeypatch) -> None:

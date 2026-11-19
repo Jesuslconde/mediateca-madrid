@@ -1,0 +1,80 @@
+[
+  {
+    "id": 122,
+    "icmsId": "orbe_bibliotecas/122",
+    "name": "Biblioteca Pública Municipal \"Padre Luis de Coloma\" de Jerez de la Frontera",
+    "unit_type_name": "Biblioteca",
+    "municipality_name": "Jerez de la Frontera",
+    "province_name": "Cádiz",
+    "address_name": "Avenida Álvaro Domecq 10, 11402 Jerez de la Frontera (Cádiz)",
+    "postcode": 11402,
+    "latitude": "36,6917266",
+    "longitude": "-6,1334877",
+    "catalogue": "https://www.juntadeandalucia.es/cultura/rbpa/abnetcl.cgi?.&SUBC=CA/CA08/218"
+  },
+  {
+    "id": 123,
+    "icmsId": "orbe_bibliotecas/123",
+    "name": "Biblioteca Pública Municipal \"Ramón de Cala\"",
+    "unit_type_name": "Biblioteca",
+    "municipality_name": "Jerez de la Frontera",
+    "province_name": "Cádiz",
+    "address_name": "Calle Ramón de Cala, 1, 11402 Jerez de la Frontera (Cádiz)",
+    "postcode": "11402",
+    "latitude": "36,6812345",
+    "longitude": "-6,1212345",
+    "catalogue": "https://www.juntadeandalucia.es/cultura/rbpa/abnetcl.cgi?.&SUBC=CA/CA08/219"
+  },
+  {
+    "id": 300,
+    "icmsId": "orbe_bibliotecas/300",
+    "name": "Biblioteca de la Real Academia de Ciencias de Córdoba",
+    "unit_type_name": "Bib. Espec./Centro de Documentación",
+    "municipality_name": "Córdoba",
+    "province_name": "Córdoba",
+    "address_name": "Calle Histórica, 1, 14001 Córdoba (Córdoba)",
+    "postcode": 14001,
+    "latitude": "37,88",
+    "longitude": "-4,77",
+    "catalogue": "https://www.juntadeandalucia.es/cultura/idea/opacidea/abnetcl.cgi?.&SUBC=2107"
+  },
+  {
+    "id": 400,
+    "icmsId": "orbe_bibliotecas/400",
+    "name": "Bibliobús - Diputación de Cádiz",
+    "unit_type_name": "Biblioteca",
+    "municipality_name": "Cádiz",
+    "province_name": "Cádiz",
+    "address_name": "Plaza de San Antonio 3, 11003 Cádiz",
+    "postcode": 11003,
+    "latitude": "36,5350742",
+    "longitude": "-6,2988132",
+    "catalogue": "https://www.juntadeandalucia.es/cultura/rbpa/abnetcl.cgi?.&SUBC=CA/CA22/261"
+  },
+  {
+    "id": 500,
+    "icmsId": "orbe_bibliotecas/500",
+    "name": "Biblioteca Pública Municipal de Somontín",
+    "unit_type_name": "Biblioteca",
+    "municipality_name": "Somontín",
+    "province_name": "Almería",
+    "address_name": "Calle Real, 1, 04877 Somontín (Almería)",
+    "postcode": "04877",
+    "latitude": "37,39",
+    "longitude": "-2,39",
+    "catalogue": "https://www.juntadeandalucia.es/cultura/rbpa/abnetcl.cgi?.&SUBC=AL/AL01/101"
+  },
+  {
+    "id": 501,
+    "icmsId": "orbe_bibliotecas/501",
+    "name": "Biblioteca Auxiliar del Archivo Municipal",
+    "unit_type_name": "Biblioteca",
+    "municipality_name": "Mijas",
+    "province_name": "Málaga",
+    "address_name": "Calle Málaga, 2, 29650 Mijas (Málaga)",
+    "postcode": null,
+    "latitude": null,
+    "longitude": null,
+    "catalogue": null
+  }
+]

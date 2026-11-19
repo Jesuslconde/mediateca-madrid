@@ -1035,8 +1035,9 @@ def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
 
 def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
     from mediateca.catalog.directory import (
-        DirectoryClient,
         DirectoryUnavailable,
+        build_directory_client,
+        directory_mode,
         refresh_sucursales,
     )
 
@@ -1050,14 +1051,7 @@ def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
         session, session.get(Fuente, job.fuente_id).codigo if job.fuente_id else None
     )
     try:
-        factory = getattr(DirectoryClient, "from_fuente", None)
-        if callable(factory):
-            client = factory(fuente)
-        else:
-            try:
-                client = DirectoryClient(delay=float(delay))
-            except TypeError:
-                client = DirectoryClient()
+        client = build_directory_client(fuente, delay=float(delay))
     except DirectoryUnavailable as exc:
         logger.info("Directorio no disponible", extra={"fuente": fuente.codigo})
         return {
@@ -1066,12 +1060,14 @@ def _branches_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
             "message": str(exc),
         }
     with client:
+        create_missing = directory_mode(fuente) == "create"
         result = refresh_sucursales(
             session,
             client,
             fuente=fuente,
             max_pages=int(max_pages) if max_pages is not None else None,
-            only_known=True,
+            only_known=not create_missing,
+            create_missing=create_missing,
         )
     return asdict(result)
 

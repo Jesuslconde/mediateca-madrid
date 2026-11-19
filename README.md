@@ -64,6 +64,8 @@ Las pruebas se ejecutan en las imagenes correspondientes, de modo que API e inge
 
 `make branches` actualiza direcciones, codigos postales y coordenadas de las sucursales desde el Directorio de Bibliotecas de la Comunidad de Madrid. El comando es idempotente, no borra sucursales ausentes y no geocodifica direcciones: si una ficha no trae coordenadas, el portal usa el centroide de su codigo postal. Para una prueba limitada: `make branches branches_limit=20`.
 
+Para Andalucia, `make branches fuente=andalucia` lee el directorio abierto de la Junta (`datos.juntadeandalucia.es`) en lugar del OPAC: crea las bibliotecas y sucursales que falten y actualiza las existentes, sin crear ediciones ni ejemplares. La politica `create` se declara en `fuentes.options` mediante `migrate_andalucia_directory.sql`.
+
 La misma actualizacion puede encolarse como tarea manual con `make branches-enqueue` (o `python -m mediateca enqueue-branches`) y desde el boton "Recargar direcciones de bibliotecas" del dashboard. Esa tarea solo procesa bibliotecas que ya existen en el catalogo: actualiza sus direcciones y crea o actualiza sus sucursales. Las fichas de bibliotecas desconocidas se omiten y no se crean bibliotecas nuevas. El scheduler no la ejecuta automaticamente.
 
 En la ficha de un registro se puede elegir un codigo postal para ordenar las bibliotecas por cercania. Sin seleccion, el orden es alfabetico. La eleccion se guarda en `localStorage`; no se solicita geolocalizacion del navegador. Las distancias son aproximadas.
@@ -175,13 +177,19 @@ Si la sucursal no tiene coordenadas pero tiene codigo postal, `latitud` y `longi
 
 ## Fuentes y reindexado
 
-Las fuentes OPAC viven en la tabla `fuentes`. Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`; Andalucía se crea con `services/enrich/scripts/migrate_andalucia.sql` y su perfil AbsysNet (`abnetcl.cgi`, `select03=05`). Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
+Las fuentes OPAC viven en la tabla `fuentes`. Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`; Andalucía se crea con `services/enrich/scripts/migrate_andalucia.sql` y su perfil AbsysNet (`abnetcl.cgi`, `select03=05`). `migrate_andalucia_directory.sql` anade el directorio abierto de Andalucía a `fuentes.options`. Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
 
 Tras aplicar la migracion de identidad (`SCHEMA_VERSION=7`) hay que reconstruir el indice:
 
 ```bash
 make migrate
 make index-reset
+```
+
+El descubrimiento de Andalucía está operativo: el detector de captcha distingue un desafío real de reCAPTCHA del texto de ayuda `hmsgopa1075` que el OPAC incluye en todas sus páginas. Antes de lanzar un lote completo, verifica la primera página con el comando de humo; debe crear stubs y dejar los contadores de captcha a cero:
+
+```bash
+docker compose run --rm worker python -m mediateca discover --fuente andalucia --max-pages 1 --limit 5
 ```
 
 Primera recolección de Andalucía:

@@ -13,10 +13,19 @@ from sqlalchemy.pool import StaticPool
 from mediateca.catalog.directory import (
     DirectoryClient,
     DirectoryUnavailable,
+    OpenDataDirectoryClient,
     ParsedSucursal,
+    _extract_subc,
+    _identity,
+    _normalize_coords,
+    _normalize_postcode,
+    build_directory_client,
+    directory_config,
+    directory_mode,
     parse_directory_list,
     parse_directory_positions,
     parse_directory_record,
+    parse_opendata_record,
     refresh_sucursales,
 )
 from mediateca.catalog.repository import (
@@ -396,3 +405,381 @@ def test_fuente_sin_directorio_informa_sin_fallar() -> None:
 
     with pytest.raises(DirectoryUnavailable):
         DirectoryClient.from_fuente(fuente)
+
+
+ANDALUCIA_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "andalucia"
+
+
+def _andalucia_libraries() -> list[dict]:
+    import json
+
+    return json.loads((ANDALUCIA_FIXTURES / "libraries.json").read_text(encoding="utf-8"))
+
+
+def _fuente_andaluza(options: dict) -> Fuente:
+    return Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+        delay=1.0,
+        options=options,
+    )
+
+
+def test_directory_config_resuelve_opendata() -> None:
+    fuente = _fuente_andaluza(
+        {
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+                "unit_types": ["Biblioteca"],
+            }
+        }
+    )
+
+    assert directory_config(fuente)["kind"] == "opendata"
+    assert directory_mode(fuente) == "create"
+
+
+def test_directory_config_resuelve_html_por_directory_path() -> None:
+    fuente = _fuente_andaluza({"directory_path": "/directorio"})
+
+    assert directory_config(fuente) == {"kind": "html", "path": "/directorio"}
+    assert directory_mode(fuente) == "match"
+
+
+def test_directory_config_sin_directorio_es_vacio() -> None:
+    fuente = _fuente_andaluza({})
+
+    assert directory_config(fuente) == {}
+    assert directory_mode(fuente) == "match"
+
+
+def test_build_directory_client_elige_opendata() -> None:
+    fuente = _fuente_andaluza(
+        {
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        }
+    )
+
+    client = build_directory_client(fuente)
+
+    assert isinstance(client, OpenDataDirectoryClient)
+    client.close()
+
+
+def test_normaliza_codigo_postal() -> None:
+    assert _normalize_postcode(11402) == "11402"
+    assert _normalize_postcode("04001") == "04001"
+    assert _normalize_postcode("04877") == "04877"
+    assert _normalize_postcode(4001) == "04001"
+    assert _normalize_postcode(None) is None
+    assert _normalize_postcode("sin-cp") is None
+
+
+def test_normaliza_coordenadas() -> None:
+    assert _normalize_coords("36,6917266", "-6,1334877") == (36.6917266, -6.1334877)
+    assert _normalize_coords("37.0", "-6.0") == (37.0, -6.0)
+    assert _normalize_coords(None, "-6.0") == (None, None)
+    assert _normalize_coords("91", "-6.0") == (None, None)
+    assert _normalize_coords("0", "0") == (None, None)
+    assert _normalize_coords("hola", "-6.0") == (None, None)
+
+
+def test_identidad_desde_subc() -> None:
+    assert _identity("CA/CA08/218", None) == ("CA/CA08", "CA/CA08/218")
+    assert _identity("RBMALC/BMALC1", None) == ("RBMALC", "RBMALC/BMALC1")
+    assert _identity("1432", None) == ("1432", None)
+    assert _identity(None, "orbe_bibliotecas/9") == ("orbe_bibliotecas/9", None)
+    assert _identity(None, None) == ("", None)
+
+
+def test_extrae_subc_del_catalogo() -> None:
+    url = "https://www.juntadeandalucia.es/cultura/rbpa/abnetcl.cgi?.&SUBC=CA/CA08/218"
+    assert _extract_subc(url) == "CA/CA08/218"
+    assert _extract_subc(None) is None
+    assert _extract_subc("https://ejemplo/sin-subc") is None
+
+
+def test_parse_opendata_record_deriva_identidad() -> None:
+    item = {
+        "icmsId": "orbe_bibliotecas/122",
+        "name": "Biblioteca de prueba",
+        "unit_type_name": "Biblioteca",
+        "municipality_name": "Jerez de la Frontera",
+        "address_name": "Avenida 10, 11402 Jerez",
+        "postcode": 11402,
+        "latitude": "36,6917266",
+        "longitude": "-6,1334877",
+        "catalogue": "https://x?SUBC=CA/CA08/218",
+    }
+
+    parsed = parse_opendata_record(item)
+
+    assert parsed is not None
+    assert parsed.biblioteca_codigo == "CA/CA08"
+    assert parsed.sucursal_codigo == "CA/CA08/218"
+    assert parsed.codigo_postal == "11402"
+    assert parsed.latitud == 36.6917266
+    assert parsed.longitud == -6.1334877
+    assert parsed.movil is False
+
+
+def test_parse_opendata_record_sin_subc_usa_icms_id() -> None:
+    item = {
+        "icmsId": "orbe_bibliotecas/501",
+        "name": "Biblioteca Auxiliar",
+        "unit_type_name": "Biblioteca",
+        "postcode": None,
+        "latitude": None,
+        "longitude": None,
+        "catalogue": None,
+    }
+
+    parsed = parse_opendata_record(item)
+
+    assert parsed is not None
+    assert parsed.biblioteca_codigo == "orbe_bibliotecas/501"
+    assert parsed.sucursal_codigo is None
+    assert parsed.codigo_postal is None
+    assert parsed.latitud is None
+
+
+def test_parse_opendata_record_filtra_centros_de_documentacion() -> None:
+    item = {
+        "icmsId": "orbe_bibliotecas/300",
+        "name": "Centro de documentación",
+        "unit_type_name": "Bib. Espec./Centro de Documentación",
+    }
+
+    assert parse_opendata_record(item) is None
+    assert parse_opendata_record(item, unit_types=["Bib. Espec./Centro de Documentación"]) is not None
+
+
+def test_parse_opendata_record_movil_sin_coordenadas() -> None:
+    item = {
+        "icmsId": "orbe_bibliotecas/400",
+        "name": "Bibliobús - Diputación de Cádiz",
+        "unit_type_name": "Biblioteca",
+        "municipality_name": "Cádiz",
+        "postcode": 11003,
+        "latitude": "36,5350742",
+        "longitude": "-6,2988132",
+        "catalogue": "https://x?SUBC=CA/CA22/261",
+    }
+
+    parsed = parse_opendata_record(item)
+
+    assert parsed is not None
+    assert parsed.movil is True
+    assert parsed.latitud is None
+    assert parsed.longitud is None
+    assert parsed.municipio == "Cádiz"
+    assert parsed.codigo_postal == "11003"
+
+
+def test_cliente_opendata_lee_el_fixture() -> None:
+    data = _andalucia_libraries()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["format"] == "json"
+        return httpx.Response(200, json=data)
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.Client(transport=transport)
+    client = OpenDataDirectoryClient(
+        url="https://example.test/libraries/all", delay=0, client=http_client
+    )
+    try:
+        parsed = list(client.iter_records())
+    finally:
+        client.close()
+        http_client.close()
+
+    assert len(parsed) == 6
+    non_null = [p for p in parsed if p is not None]
+    assert len(non_null) == 5
+    assert parsed[0] is not None
+    assert parsed[0].biblioteca_codigo == "CA/CA08"
+    assert parsed[0].sucursal_codigo == "CA/CA08/218"
+    assert parsed[0].codigo_postal == "11402"
+    assert parsed[0].latitud == 36.6917266
+
+
+def test_refresh_sucursales_create_crea_bibliotecas_y_sucursales() -> None:
+    session = _session()
+    andalucia = _fuente_andaluza(
+        {
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        }
+    )
+    session.add(andalucia)
+    session.commit()
+
+    records = [
+        ParsedSucursal(
+            biblioteca_codigo="CA/CA08",
+            sucursal_codigo="CA/CA08/218",
+            nombre="Coloma",
+            municipio="Jerez de la Frontera",
+            direccion="Avenida 10",
+            codigo_postal="11402",
+            latitud=36.6,
+            longitud=-6.1,
+        ),
+        ParsedSucursal(
+            biblioteca_codigo="CA/CA08",
+            sucursal_codigo="CA/CA08/219",
+            nombre="Ramón de Cala",
+            municipio="Jerez de la Frontera",
+            direccion="Calle 1",
+            codigo_postal="11402",
+            latitud=36.6,
+            longitud=-6.1,
+        ),
+    ]
+
+    stats = refresh_sucursales(
+        session, _FakeDirectoryClient(records), fuente=andalucia, create_missing=True
+    )
+    session.commit()
+
+    assert stats.libraries_created == 1
+    assert stats.branches_created == 2
+    assert stats.branches_matched == 2
+    assert session.scalar(
+        select(func.count(Biblioteca.id)).where(Biblioteca.fuente_id == andalucia.id)
+    ) == 1
+    assert session.scalar(
+        select(func.count(Sucursal.id)).where(Sucursal.fuente_id == andalucia.id)
+    ) == 2
+    assert session.scalar(select(func.count(Edicion.id))) == 0
+    assert session.scalar(select(func.count(Ejemplar.id))) == 0
+
+    biblioteca = session.scalars(
+        select(Biblioteca).where(
+            Biblioteca.fuente_id == andalucia.id,
+            Biblioteca.codigo == "CA/CA08",
+        )
+    ).one()
+    assert biblioteca.nombre == "Jerez de la Frontera"
+
+
+def test_refresh_sucursales_create_es_idempotente_y_no_borra() -> None:
+    session = _session()
+    andalucia = _fuente_andaluza(
+        {
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        }
+    )
+    session.add(andalucia)
+    session.commit()
+
+    def rec(codigo: str) -> ParsedSucursal:
+        return ParsedSucursal(
+            biblioteca_codigo="CA/CA08",
+            sucursal_codigo=codigo,
+            nombre=codigo,
+            municipio="Jerez de la Frontera",
+            codigo_postal="11402",
+        )
+
+    first = refresh_sucursales(
+        session,
+        _FakeDirectoryClient([rec("CA/CA08/218"), rec("CA/CA08/219")]),
+        fuente=andalucia,
+        create_missing=True,
+    )
+    session.commit()
+
+    second = refresh_sucursales(
+        session,
+        _FakeDirectoryClient([rec("CA/CA08/218")]),
+        fuente=andalucia,
+        create_missing=True,
+    )
+    session.commit()
+
+    assert first.libraries_created == 1
+    assert first.branches_created == 2
+    assert second.libraries_created == 0
+    assert second.branches_created == 0
+    assert session.scalar(
+        select(func.count(Sucursal.id)).where(Sucursal.fuente_id == andalucia.id)
+    ) == 2
+
+
+def test_refresh_sucursales_create_no_toca_madrid() -> None:
+    session = _session()
+    madrid = _fuente(session)
+    madrid_bib = Biblioteca(
+        fuente_id=madrid.id,
+        codigo="RBMALC",
+        nombre="Bibliotecas Municipales Alcalá",
+        municipio="Alcalá de Henares",
+    )
+    session.add(madrid_bib)
+    session.commit()
+    madrid_suc = Sucursal(
+        fuente_id=madrid.id,
+        biblioteca=madrid_bib,
+        codigo="RBMALC/BMALC1",
+        nombre="Cardenal Cisneros",
+        municipio="Alcalá de Henares",
+    )
+    session.add(madrid_suc)
+    session.commit()
+
+    andalucia = _fuente_andaluza(
+        {
+            "directory": {
+                "kind": "opendata",
+                "url": "https://datos.example/all",
+                "mode": "create",
+            }
+        }
+    )
+    session.add(andalucia)
+    session.commit()
+
+    records = [
+        ParsedSucursal(
+            biblioteca_codigo="CA/CA08",
+            sucursal_codigo="CA/CA08/218",
+            nombre="Coloma",
+            municipio="Jerez de la Frontera",
+            codigo_postal="11402",
+        )
+    ]
+    refresh_sucursales(
+        session, _FakeDirectoryClient(records), fuente=andalucia, create_missing=True
+    )
+    session.commit()
+
+    assert session.scalar(
+        select(func.count(Biblioteca.id)).where(Biblioteca.fuente_id == madrid.id)
+    ) == 1
+    assert session.scalar(
+        select(func.count(Sucursal.id)).where(Sucursal.fuente_id == madrid.id)
+    ) == 1
+    assert session.scalar(
+        select(func.count(Biblioteca.id)).where(Biblioteca.fuente_id == andalucia.id)
+    ) == 1
+    assert session.scalar(
+        select(func.count(Sucursal.id)).where(Sucursal.fuente_id == andalucia.id)
+    ) == 1
+    assert madrid_bib.nombre == "Bibliotecas Municipales Alcalá"
+    assert madrid_suc.codigo == "RBMALC/BMALC1"

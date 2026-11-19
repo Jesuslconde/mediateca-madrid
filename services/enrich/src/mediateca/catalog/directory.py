@@ -9,7 +9,7 @@ from urllib.parse import unquote
 import httpx
 from bs4 import BeautifulSoup
 from mediateca_shared.fuentes import FuenteProfile
-from mediateca_shared.models import Biblioteca, Fuente
+from mediateca_shared.models import Biblioteca, Fuente, Sucursal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -43,6 +43,39 @@ def directory_path(fuente: Fuente) -> str | None:
     return (profile.options or {}).get("directory_path")
 
 
+def directory_config(fuente: Fuente) -> dict[str, object]:
+    """Devuelve la configuracion normalizada del directorio de una fuente.
+
+    Si la fuente declara ``options.directory`` se devuelve tal cual; si solo
+    declara ``options.directory_path`` se devuelve un directorio HTML. Si no
+    declara directorio, se devuelve un diccionario vacio.
+    """
+    options = FuenteProfile.from_model(fuente).options or {}
+    config = options.get("directory")
+    if isinstance(config, dict) and config:
+        return dict(config)
+    path = options.get("directory_path")
+    if path:
+        return {"kind": "html", "path": path}
+    return {}
+
+
+def directory_mode(fuente: Fuente) -> str:
+    """Política de recolección del directorio: ``create`` o ``match``."""
+    config = directory_config(fuente)
+    return "create" if config.get("mode") == "create" else "match"
+
+
+def build_directory_client(
+    fuente: Fuente, **kwargs: object
+) -> DirectoryClient | OpenDataDirectoryClient:
+    """Construye el cliente de directorio adecuado al tipo declarado."""
+    config = directory_config(fuente)
+    if config.get("kind") == "opendata":
+        return OpenDataDirectoryClient.from_fuente(fuente, **kwargs)
+    return DirectoryClient.from_fuente(fuente, **kwargs)
+
+
 @dataclass(slots=True)
 class ParsedSucursal:
     biblioteca_codigo: str
@@ -64,7 +97,9 @@ class RefreshStats:
     with_postal_code: int = 0
     with_coordinates: int = 0
     branches_matched: int = 0
+    branches_created: int = 0
     libraries_updated: int = 0
+    libraries_created: int = 0
     omitted: int = 0
     mobile: int = 0
 
@@ -217,11 +252,12 @@ class DirectoryClient:
             raise DirectoryUnavailable(
                 f"La fuente {fuente.codigo} no tiene directorio configurado"
             )
-        return cls(
-            base_url=profile.base_url.rstrip("/") + str(path),
-            delay=profile.delay,
-            **kwargs,
-        )
+        params: dict[str, object] = {
+            "base_url": profile.base_url.rstrip("/") + str(path),
+            "delay": profile.delay,
+        }
+        params.update(kwargs)
+        return cls(**params)
 
     def __enter__(self) -> DirectoryClient:
         return self
@@ -292,6 +328,220 @@ class DirectoryClient:
                 yield None
 
 
+def _text(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value).strip() or None
+
+
+def _extract_subc(catalogue: object) -> str | None:
+    if not catalogue:
+        return None
+    match = SUBC_RE.search(str(catalogue))
+    if not match:
+        return None
+    return unquote(match.group(1)).strip() or None
+
+
+def _identity(subc: str | None, icms_id: object) -> tuple[str, str | None]:
+    if subc:
+        parts = [part.strip().upper() for part in subc.split("/") if part.strip()]
+        if not parts:
+            return "", None
+        if len(parts) >= 2:
+            return "/".join(parts[:-1]), "/".join(parts)
+        return parts[0], None
+    if icms_id:
+        return str(icms_id), None
+    return "", None
+
+
+def _normalize_postcode(value: object) -> str | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        digits = str(int(value))
+    else:
+        digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if digits.isdigit() and len(digits) in (4, 5):
+        return digits.zfill(5)
+    return None
+
+
+def _parse_coord(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        if isinstance(value, str):
+            value = value.replace(",", ".")
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number
+
+
+def _normalize_coords(
+    latitude: object, longitude: object
+) -> tuple[float | None, float | None]:
+    lat = _parse_coord(latitude)
+    lon = _parse_coord(longitude)
+    if lat is None or lon is None:
+        return None, None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None, None
+    if lat == 0.0 and lon == 0.0:
+        return None, None
+    return lat, lon
+
+
+def _is_mobile(nombre: str) -> bool:
+    fold = nombre.casefold()
+    return (
+        "bibliobus" in fold
+        or "bibliobús" in fold
+        or "móvil" in fold
+        or "movil" in fold
+    )
+
+
+def parse_opendata_record(
+    item: object, *, unit_types: list[str] | None = None
+) -> ParsedSucursal | None:
+    """Convierte una unidad del directorio abierto en ParsedSucursal."""
+    if not isinstance(item, dict):
+        return None
+
+    unit_type = item.get("unit_type_name")
+    allowed = unit_types or ["Biblioteca"]
+    if unit_type not in allowed:
+        return None
+
+    nombre = _text(item.get("name"))
+    if not nombre:
+        return None
+
+    subc = _extract_subc(item.get("catalogue"))
+    biblioteca_codigo, sucursal_codigo = _identity(subc, item.get("icmsId"))
+    if not biblioteca_codigo:
+        return None
+
+    codigo_postal = _normalize_postcode(item.get("postcode"))
+    latitud, longitud = _normalize_coords(item.get("latitude"), item.get("longitude"))
+    movil = _is_mobile(nombre)
+    if movil:
+        latitud = None
+        longitud = None
+
+    return ParsedSucursal(
+        biblioteca_codigo=biblioteca_codigo,
+        sucursal_codigo=sucursal_codigo,
+        nombre=nombre,
+        municipio=_text(item.get("municipality_name")),
+        direccion=_text(item.get("address_name")),
+        codigo_postal=codigo_postal,
+        latitud=latitud,
+        longitud=longitud,
+        tipo_biblioteca=_text(unit_type),
+        movil=movil,
+    )
+
+
+class OpenDataDirectoryClient:
+    """Cliente del directorio de datos abiertos servido por una API JSON."""
+
+    def __init__(
+        self,
+        *,
+        url: str,
+        delay: float = 1.0,
+        timeout: float = 30.0,
+        client: httpx.Client | None = None,
+        unit_types: list[str] | None = None,
+        format: str = "json",
+    ) -> None:
+        self.url = url.rstrip("/")
+        self.delay = max(0.0, delay)
+        self.unit_types = unit_types or ["Biblioteca"]
+        self.format = format
+        self._own_client = client is None
+        self.client = client or httpx.Client(
+            timeout=timeout,
+            headers={"User-Agent": settings.user_agent},
+        )
+        self._last_request_at: float | None = None
+
+    @classmethod
+    def from_fuente(cls, fuente: Fuente, **kwargs: object) -> OpenDataDirectoryClient:
+        config = directory_config(fuente)
+        if config.get("kind") != "opendata" or not config.get("url"):
+            raise DirectoryUnavailable(
+                f"La fuente {fuente.codigo} no tiene directorio opendata configurado"
+            )
+        profile = FuenteProfile.from_model(fuente)
+        unit_types = config.get("unit_types")
+        if isinstance(unit_types, list):
+            unit_types = [str(t) for t in unit_types]
+        else:
+            unit_types = None
+        params: dict[str, object] = {
+            "url": str(config["url"]),
+            "delay": profile.delay,
+            "unit_types": unit_types,
+            "format": str(config.get("format") or "json"),
+        }
+        params.update(kwargs)
+        return cls(**params)
+
+    def __enter__(self) -> OpenDataDirectoryClient:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._own_client:
+            self.client.close()
+
+    def _wait(self) -> None:
+        if self.delay <= 0 or self._last_request_at is None:
+            return
+        remaining = self.delay - (time.monotonic() - self._last_request_at)
+        if remaining > 0:
+            time.sleep(remaining)
+
+    @retry(
+        retry=retry_if_exception_type((_TransientDirectoryError, httpx.TransportError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=4.0),
+        reraise=True,
+    )
+    def _get_items(self) -> list[object]:
+        self._wait()
+        response = self.client.get(self.url, params={"format": self.format})
+        self._last_request_at = time.monotonic()
+        if response.status_code >= 500:
+            raise _TransientDirectoryError(
+                f"Error temporal {response.status_code} en {self.url}"
+            )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, dict):
+            data = data.get("data") or data.get("items") or data.get("results") or []
+        if not isinstance(data, list):
+            raise DirectoryUnavailable(
+                f"Respuesta inesperada del directorio {self.url}"
+            )
+        return data
+
+    def iter_records(
+        self, *, limit: int | None = None, max_pages: int | None = None
+    ) -> Iterator[ParsedSucursal | None]:
+        for index, item in enumerate(self._get_items()):
+            if limit is not None and index >= limit:
+                break
+            yield parse_opendata_record(item, unit_types=self.unit_types)
+
+
 def refresh_sucursales(
     session: Session,
     client: DirectoryClient,
@@ -300,12 +550,13 @@ def refresh_sucursales(
     limit: int | None = None,
     max_pages: int | None = None,
     only_known: bool = False,
+    create_missing: bool = False,
 ) -> RefreshStats:
     """Actualiza las sucursales desde el directorio y devuelve la cobertura.
 
     Con ``only_known=True`` solo se procesan fichas de bibliotecas que ya
-    existen en el catalogo. Se crean o actualizan sus sucursales, pero nunca se
-    crean bibliotecas nuevas: las fichas de bibliotecas desconocidas se omiten.
+    existen en el catalogo. Con ``create_missing=True`` se crean las bibliotecas
+    y sucursales que falten a partir del directorio.
     """
     stats = RefreshStats()
     known_libraries: set[str] | None = None
@@ -343,19 +594,39 @@ def refresh_sucursales(
                 Biblioteca.codigo == parsed.biblioteca_codigo,
             )
         ).first()
+        created = False
         if biblioteca is None:
-            stats.omitted += 1
-            logger.warning(
-                "Biblioteca desconocida para SUBC %s/%s",
-                parsed.biblioteca_codigo,
-                parsed.sucursal_codigo or "",
+            if not create_missing:
+                stats.omitted += 1
+                logger.warning(
+                    "Biblioteca desconocida para SUBC %s/%s",
+                    parsed.biblioteca_codigo,
+                    parsed.sucursal_codigo or "",
+                )
+                continue
+            biblioteca = Biblioteca(
+                fuente_id=fuente.id,
+                codigo=parsed.biblioteca_codigo,
+                nombre=parsed.municipio or parsed.nombre,
             )
-            continue
+            session.add(biblioteca)
+            session.flush()
+            stats.libraries_created += 1
+            created = True
 
         if parsed.sucursal_codigo is None:
             update_biblioteca_location(session, biblioteca, parsed)
-            stats.libraries_updated += 1
+            if not created:
+                stats.libraries_updated += 1
         else:
+            exists = session.scalars(
+                select(Sucursal.id).where(
+                    Sucursal.fuente_id == fuente.id,
+                    Sucursal.codigo == parsed.sucursal_codigo,
+                )
+            ).first()
+            if exists is None:
+                stats.branches_created += 1
             upsert_sucursal(session, biblioteca, parsed)
             stats.branches_matched += 1
 
