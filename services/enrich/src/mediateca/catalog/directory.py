@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from mediateca.catalog.parser import BS_PARSER, clean
-from mediateca.catalog.repository import update_biblioteca_location, upsert_sucursal
+from mediateca.catalog.repository import (
+    normalize_name,
+    update_biblioteca_location,
+    upsert_sucursal,
+)
 from mediateca.core.config import settings
 from mediateca.core.logging import get_logger
 
@@ -25,7 +29,12 @@ DIRECTORY_PATH = "/directorio_publicacion/i18n/comunidades"
 RECORD_LINK_RE = re.compile(r"registro\.cmd\?id=(\d+)")
 POSITION_RE = re.compile(r"posicion=(\d+)")
 SUBC_RE = re.compile(r"SUBC=([^&\"'\s]+)")
-LL_RE = re.compile(r"[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)")
+LL_RE = re.compile(r"[?&]ll=\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)")
+Q_COORDS_RE = re.compile(
+    r"[?&]q=\s*(-?\d+(?:\.\d+)?)[\s+]*,[\s+]*(-?\d+(?:\.\d+)?)"
+)
+MAPS_PLACE_RE = re.compile(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)")
+MAPS_AT_RE = re.compile(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)")
 CP_LINE_RE = re.compile(r"^(\d{5})\s+(.+?)(?:\s*\(([^)]+)\))?\s*$")
 TIPO_RE = re.compile(r"Tipo biblioteca:\s*([^\n]+)")
 
@@ -164,18 +173,21 @@ def _tipo_biblioteca(soup: BeautifulSoup) -> str | None:
 
 
 def _coordinates(soup: BeautifulSoup) -> tuple[float | None, float | None]:
-    for anchor in soup.find_all("a", href=True):
-        href = str(anchor["href"])
-        if not any(
-            token in href
+    hrefs = [
+        str(anchor["href"])
+        for anchor in soup.find_all("a", href=True)
+        if any(
+            token in str(anchor["href"])
             for token in ("maps.google", "google.com/maps", "maps.app.goo.gl")
-        ):
-            continue
-        matches = LL_RE.findall(href)
-        if not matches:
-            continue
-        latitud, longitud = matches[-1]
-        return float(latitud), float(longitud)
+        )
+    ]
+    for pattern in (LL_RE, Q_COORDS_RE, MAPS_PLACE_RE, MAPS_AT_RE):
+        for href in hrefs:
+            matches = pattern.findall(href)
+            if not matches:
+                continue
+            latitud, longitud = matches[-1]
+            return float(latitud), float(longitud)
     return None, None
 
 
@@ -188,13 +200,13 @@ def parse_directory_record(html: str) -> ParsedSucursal | None:
         return None
 
     subc = _subc(soup)
-    if not subc:
-        return None
-    parts = [part.strip().upper() for part in subc.split("/") if part.strip()]
-    if not parts:
-        return None
-    biblioteca_codigo = parts[0]
-    sucursal_codigo = parts[1] if len(parts) > 1 else None
+    biblioteca_codigo = ""
+    sucursal_codigo = None
+    if subc:
+        parts = [part.strip().upper() for part in subc.split("/") if part.strip()]
+        if parts:
+            biblioteca_codigo = parts[0]
+            sucursal_codigo = parts[1] if len(parts) > 1 else None
 
     direccion, municipio, codigo_postal = _address_parts(soup)
     tipo_biblioteca = _tipo_biblioteca(soup)
@@ -542,6 +554,32 @@ class OpenDataDirectoryClient:
             yield parse_opendata_record(item, unit_types=self.unit_types)
 
 
+def _match_biblioteca_by_name(
+    parsed: ParsedSucursal,
+    known_by_name: dict[str, list[Biblioteca]] | None,
+) -> Biblioteca | None:
+    if known_by_name is None or not parsed.nombre:
+        return None
+    candidates = known_by_name.get(normalize_name(parsed.nombre), [])
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        return None
+    if parsed.municipio:
+        target = normalize_name(parsed.municipio)
+        filtered = [
+            biblioteca
+            for biblioteca in candidates
+            if biblioteca.municipio
+            and normalize_name(biblioteca.municipio) == target
+        ]
+        if len(filtered) == 1:
+            return filtered[0]
+        if filtered:
+            candidates = filtered
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def refresh_sucursales(
     session: Session,
     client: DirectoryClient,
@@ -560,12 +598,17 @@ def refresh_sucursales(
     """
     stats = RefreshStats()
     known_libraries: set[str] | None = None
+    known_by_name: dict[str, list[Biblioteca]] | None = None
     if only_known:
-        known_libraries = set(
-            session.scalars(
-                select(Biblioteca.codigo).where(Biblioteca.fuente_id == fuente.id)
-            )
-        )
+        bibliotecas = session.scalars(
+            select(Biblioteca).where(Biblioteca.fuente_id == fuente.id)
+        ).all()
+        known_libraries = {biblioteca.codigo for biblioteca in bibliotecas}
+        known_by_name = {}
+        for biblioteca in bibliotecas:
+            normalized = normalize_name(biblioteca.nombre or "")
+            if normalized:
+                known_by_name.setdefault(normalized, []).append(biblioteca)
 
     for parsed in client.iter_records(limit=limit, max_pages=max_pages):
         stats.records += 1
@@ -573,7 +616,8 @@ def refresh_sucursales(
             stats.omitted += 1
             continue
 
-        stats.with_subc += 1
+        if parsed.biblioteca_codigo:
+            stats.with_subc += 1
         if parsed.codigo_postal:
             stats.with_postal_code += 1
         if parsed.latitud is not None and parsed.longitud is not None:
@@ -581,19 +625,29 @@ def refresh_sucursales(
         if parsed.movil:
             stats.mobile += 1
 
-        if (
-            known_libraries is not None
-            and parsed.biblioteca_codigo not in known_libraries
-        ):
-            stats.omitted += 1
-            continue
+        biblioteca: Biblioteca | None = None
+        if parsed.biblioteca_codigo:
+            if (
+                known_libraries is not None
+                and parsed.biblioteca_codigo not in known_libraries
+            ):
+                stats.omitted += 1
+                continue
+            biblioteca = session.scalars(
+                select(Biblioteca).where(
+                    Biblioteca.fuente_id == fuente.id,
+                    Biblioteca.codigo == parsed.biblioteca_codigo,
+                )
+            ).first()
+        else:
+            biblioteca = _match_biblioteca_by_name(parsed, known_by_name)
+            if biblioteca is None:
+                stats.omitted += 1
+                logger.debug(
+                    "Biblioteca sin SUBC no reconocida por nombre: %s", parsed.nombre
+                )
+                continue
 
-        biblioteca = session.scalars(
-            select(Biblioteca).where(
-                Biblioteca.fuente_id == fuente.id,
-                Biblioteca.codigo == parsed.biblioteca_codigo,
-            )
-        ).first()
         created = False
         if biblioteca is None:
             if not create_missing:

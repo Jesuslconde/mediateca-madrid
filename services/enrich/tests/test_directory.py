@@ -101,8 +101,63 @@ def test_parsea_ficha_sin_coordenadas() -> None:
     assert parsed.longitud is None
 
 
-def test_omite_ficha_sin_subc() -> None:
-    assert parse_directory_record(_fixture("record_no_subc.html")) is None
+def test_parsea_ficha_sin_subc_sin_codigo_de_biblioteca() -> None:
+    parsed = parse_directory_record(_fixture("record_no_subc.html"))
+
+    assert parsed is not None
+    assert parsed.biblioteca_codigo == ""
+    assert parsed.sucursal_codigo is None
+    assert parsed.nombre == "Biblioteca de Empresarios Agrupados Internacional"
+    assert parsed.codigo_postal == "28015"
+    assert parsed.latitud == 40.433311
+    assert parsed.longitud == -3.705332
+
+
+def test_parsea_coordenadas_desde_q_sin_ll() -> None:
+    html = """
+    <html><body>
+      <div class="ficha">
+        <h2>Biblioteca Regional de Madrid "Joaquín Leguina"</h2>
+        <div class="direccion"><p class="ficha_valor"><span class="valor">
+          C/ Ramírez de Prado, 3<br />28045 Madrid (Madrid)<br />
+          <a href="http://maps.google.es/maps?q=40.399559++++,++++-3.6905689999999822&amp;hl=es">
+            Mapa Localización
+          </a>
+        </span></p></div>
+      </div>
+    </body></html>
+    """
+
+    parsed = parse_directory_record(html)
+
+    assert parsed is not None
+    assert parsed.biblioteca_codigo == ""
+    assert parsed.sucursal_codigo is None
+    assert parsed.codigo_postal == "28045"
+    assert parsed.latitud == 40.399559
+    assert parsed.longitud == -3.6905689999999822
+
+
+def test_parsea_coordenadas_desde_mapa_moderno_sin_ll() -> None:
+    html = """
+    <html><body>
+      <div class="ficha">
+        <h2>Biblioteca de prueba</h2>
+        <div class="direccion"><p class="ficha_valor"><span class="valor">
+          Calle Mayor, 1<br />28001 Madrid (Madrid)<br />
+          <a href="https://www.google.com/maps/place/Calle+Mayor/@40.4155,-3.7074,17z/data=!3m1!4b1!4m5!3m4!1s0x0:0x0!8m2!3d40.4156!4d-3.7075">
+            Mapa Localización
+          </a>
+        </span></p></div>
+      </div>
+    </body></html>
+    """
+
+    parsed = parse_directory_record(html)
+
+    assert parsed is not None
+    assert parsed.latitud == 40.4156
+    assert parsed.longitud == -3.7075
 
 
 def test_omite_ficha_cerrada() -> None:
@@ -360,6 +415,46 @@ def test_refresh_sucursales_solo_conocidas_crea_sus_sucursales() -> None:
     assert creada.biblioteca.codigo == "RBMALC"
     assert sucursal.direccion == "Nueva dirección, 1"
     assert biblioteca.direccion == "Plaza de San Julián, 1"
+
+
+def test_refresh_sucursales_empareja_por_nombre_si_falta_subc() -> None:
+    session = _session()
+    biblioteca = Biblioteca(
+        fuente_id=_fuente(session).id,
+        codigo="BRCM",
+        nombre="Biblioteca Regional de Madrid Joaquín Leguina",
+    )
+    session.add(biblioteca)
+    session.commit()
+
+    parsed = ParsedSucursal(
+        biblioteca_codigo="",
+        sucursal_codigo=None,
+        nombre='Biblioteca Regional de Madrid "Joaquín Leguina"',
+        municipio="Madrid",
+        direccion="C/ Ramírez de Prado, 3",
+        codigo_postal="28045",
+        latitud=40.399559,
+        longitud=-3.6905689999999822,
+    )
+    sin_emparejar = replace(parsed, nombre="Biblioteca Desconocida")
+
+    stats = refresh_sucursales(
+        session,
+        _FakeDirectoryClient([parsed, sin_emparejar]),
+        fuente=_fuente(session),
+        only_known=True,
+    )
+    session.commit()
+
+    assert stats.records == 2
+    assert stats.with_subc == 0
+    assert stats.libraries_updated == 1
+    assert stats.omitted == 1
+    assert biblioteca.direccion == "C/ Ramírez de Prado, 3"
+    assert biblioteca.codigo_postal == "28045"
+    assert biblioteca.latitud == 40.399559
+    assert biblioteca.longitud == -3.6905689999999822
 
 
 def test_refresh_sucursales_y_cobertura() -> None:
