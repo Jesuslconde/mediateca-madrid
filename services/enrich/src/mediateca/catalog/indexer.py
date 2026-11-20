@@ -11,6 +11,7 @@ from mediateca_shared.models import (
     EdicionPersona,
     Ejemplar,
 )
+from mediateca_shared.soportes import detect_audiovisual
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -82,6 +83,28 @@ def _dedupe(values: list[str]) -> list[str]:
 
 def _meili_id(record_id: str) -> str:
     return record_id.replace(":", "_")
+
+
+def _descripcion_fisica(edicion: Edicion) -> str | None:
+    marc = edicion.marc or {}
+    value = marc.get("T300a")
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if value:
+        return str(value)
+    notas = edicion.notas or {}
+    for key in ("Descripción física", "Extensión"):
+        if notas.get(key):
+            return str(notas[key])
+    return None
+
+
+def _edicion_es_audiovisual(edicion: Edicion) -> bool:
+    """Excluye del indice los registros que no son material audiovisual."""
+    if edicion.soportes:
+        return True
+    soportes = [ejemplar.soporte for ejemplar in edicion.ejemplares if ejemplar.soporte]
+    return detect_audiovisual(_descripcion_fisica(edicion), soportes) is not False
 
 
 def build_document(edicion: Edicion) -> dict[str, Any]:
@@ -303,7 +326,11 @@ class MeiliIndexer:
                     selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
                 )
             )
-            documents = [build_document(edicion) for edicion in session.scalars(stmt)]
+            documents = [
+                build_document(edicion)
+                for edicion in session.scalars(stmt)
+                if _edicion_es_audiovisual(edicion)
+            ]
             self._add_batch(documents)
             total += len(documents)
         return total
@@ -376,7 +403,9 @@ def iter_ediciones(
     )
     if fuente_id is not None:
         stmt = stmt.where(Edicion.fuente_id == fuente_id)
-    yield from session.scalars(stmt).yield_per(200)
+    for edicion in session.scalars(stmt).yield_per(200):
+        if _edicion_es_audiovisual(edicion):
+            yield edicion
 
 
 def iter_documents(

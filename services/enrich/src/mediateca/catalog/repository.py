@@ -446,6 +446,29 @@ def record_enrich_failure(
     session.flush()
 
 
+def mark_non_audiovisual(
+    session: Session,
+    record_id: str,
+    *,
+    at: datetime | None = None,
+) -> None:
+    """Descarta una ficha que no es material audiovisual sin reintentarla."""
+    normalized = normalize_record_id(record_id)
+    edicion = session.scalars(
+        select(Edicion).where(Edicion.record_id == normalized)
+    ).first()
+    if edicion is None:
+        return
+    timestamp = at or datetime.now(UTC)
+    edicion.enrich_status = "skipped"
+    edicion.enrich_last_attempt_at = timestamp
+    edicion.enrich_last_error = None
+    edicion.detail_fetched_at = timestamp
+    edicion.missing_at = timestamp
+    session.flush()
+
+
+
 def record_tmdb_outcome(
     session: Session,
     edicion: Edicion,

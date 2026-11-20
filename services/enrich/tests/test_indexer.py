@@ -11,9 +11,10 @@ from mediateca.catalog.indexer import (
     MeiliIndexer,
     build_document,
     build_filters,
+    iter_documents,
 )
 from mediateca.catalog.jobs import create_stub
-from mediateca.catalog.parser import parse_file
+from mediateca.catalog.parser import parse_detail, parse_file
 from mediateca.catalog.repository import upsert_edicion
 from mediateca.core.db import Base
 
@@ -87,6 +88,24 @@ def test_detail_complete_distingue_stub_de_ficha_enriquecida(dvd_fixture) -> Non
 
     assert complete["detail_complete"] is True
     assert complete["is_stub"] is False
+
+
+def test_indexador_excluye_ediciones_no_audiovisuales(dvd_fixture) -> None:
+    session = _session()
+    upsert_edicion(session, parse_file(str(dvd_fixture)))
+    non_video = """
+    <html><body>
+      <span class="js-TITN">1071730</span>
+      <span class="doc_title">La épica</span>
+      <span class="js-T300a">56 p. ;</span>
+    </body></html>
+    """
+    upsert_edicion(session, parse_detail(non_video))
+    session.commit()
+
+    documents = list(iter_documents(session))
+
+    assert [document["record_id"] for document in documents] == ["madrid:2101557"]
 
 
 def test_index_titns_solo_actualiza_los_titn_indicados(dvd_fixture) -> None:

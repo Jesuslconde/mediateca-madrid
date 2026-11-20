@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -220,6 +221,50 @@ def _cell_text(td: Tag) -> str | None:
     return clean(td.get_text(" ", strip=True))
 
 
+def _fold_label(value: str | None) -> str:
+    if not value:
+        return ""
+    text = unicodedata.normalize("NFKD", value)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", text.casefold()).strip()
+
+
+def _header_index(headers: list[str], *needles: str) -> int | None:
+    for index, label in enumerate(headers):
+        if any(needle in label for needle in needles):
+            return index
+    return None
+
+
+def _cell(tds: list[Tag], index: int | None) -> Tag | None:
+    if index is None or index >= len(tds):
+        return None
+    return tds[index]
+
+
+def _signature_from_cell(cell: Tag | None) -> tuple[str | None, str | None]:
+    if cell is None:
+        return None, None
+    anchor = cell.select_one("a[data-sign]")
+    if anchor is not None:
+        signatura = clean(anchor.get("data-sign"))
+        codigo_barras = clean(anchor.get("data-bc"))
+        return signatura, codigo_barras
+    return _cell_text(cell), None
+
+
+def _location_and_signature(cell: Tag | None) -> tuple[str | None, str | None, str | None]:
+    if cell is None:
+        return None, None, None
+    localizacion = _text(cell.select_one(".icm_locSign span"))
+    signatura, codigo_barras = _signature_from_cell(cell)
+    if not signatura:
+        loc_spans = cell.select(".icm_locSign span")
+        if len(loc_spans) > 1:
+            signatura = _text(loc_spans[-1])
+    return localizacion, signatura, codigo_barras
+
+
 def _parse_ejemplares(soup: BeautifulSoup) -> list[ParsedEjemplar]:
     ejemplares: list[ParsedEjemplar] = []
 
@@ -234,26 +279,50 @@ def _parse_ejemplares(soup: BeautifulSoup) -> list[ParsedEjemplar]:
             if table is None:
                 continue
 
+            headers = [
+                _fold_label(th.get_text(" ", strip=True))
+                for th in table.select("thead th")
+            ]
+            loc_idx = _header_index(headers, "localizacion")
+            sig_idx = _header_index(headers, "signatura")
+            tipo_idx = _header_index(headers, "tipo de ejemplar")
+            soporte_idx = _header_index(headers, "soporte")
+            combined = (
+                loc_idx is not None
+                and sig_idx == loc_idx
+                and "signatura" in headers[loc_idx]
+            )
+
             rows = table.select("tbody tr") or table.find_all("tr")[1:]
             for tr in rows:
                 tds = tr.find_all("td", recursive=False)
                 if len(tds) < 4:
                     tds = tr.find_all("td")
-                if len(tds) < 4:
+                if len(tds) < 2:
                     continue
 
-                loc_el = tds[0].select_one(".icm_locSign span")
-                localizacion = _text(loc_el)
-                sign_a = tds[0].select_one("a[data-sign]")
-                signatura = clean(sign_a.get("data-sign")) if sign_a else None
-                codigo_barras = clean(sign_a.get("data-bc")) if sign_a else None
-                if not signatura:
-                    loc_spans = tds[0].select(".icm_locSign span")
-                    if len(loc_spans) > 1:
-                        signatura = _text(loc_spans[-1])
+                if headers:
+                    localizacion = None
+                    signatura = None
+                    codigo_barras = None
+                    if combined:
+                        localizacion, signatura, codigo_barras = (
+                            _location_and_signature(_cell(tds, loc_idx))
+                        )
+                    else:
+                        localizacion = _cell_text(_cell(tds, loc_idx))
+                        signatura, codigo_barras = _signature_from_cell(
+                            _cell(tds, sig_idx)
+                        )
+                    tipo_ejemplar = _cell_text(_cell(tds, tipo_idx))
+                    soporte_raw = _cell_text(_cell(tds, soporte_idx))
+                else:
+                    localizacion, signatura, codigo_barras = (
+                        _location_and_signature(tds[0])
+                    )
+                    tipo_ejemplar = _cell_text(tds[1])
+                    soporte_raw = _cell_text(tds[2]) if len(tds) > 2 else None
 
-                tipo_ejemplar = _cell_text(tds[1])
-                soporte_raw = _cell_text(tds[2])
                 soporte = canonical_soporte(soporte_raw)
 
                 ejemplares.append(

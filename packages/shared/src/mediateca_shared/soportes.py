@@ -5,6 +5,12 @@ import unicodedata
 
 SUPPORT_ORDER = ["4K UHD", "Blu-ray", "DVD", "VHS"]
 
+AUDIOVISUAL_HINT_RE = re.compile(
+    r"video-?casete|video-?cinta|videodisco|videograbaci|videorecording|"
+    r"\bvideo\b|dvd|blu-?ray|vhs|4k|uhd|betacam|betamax|laserdisc|hd-?dvd|umd|"
+    r"disco versatil digital"
+)
+
 
 def normalize_text(value: str | None) -> str:
     if not value:
@@ -58,6 +64,34 @@ def detect_soportes(
             _add(found, "VHS")
 
     return [item for item in SUPPORT_ORDER if item in found]
+
+
+def detect_audiovisual(
+    descripcion_fisica: str | None = None,
+    soportes_ejemplar: list[str] | tuple[str, ...] | None = None,
+) -> bool | None:
+    """Indica si un registro es material audiovisual.
+
+    Devuelve ``True`` si se detecta un soporte audiovisual, ``False`` si la
+    descripcion o el soporte existen pero no son audiovisuales y ``None`` si no
+    hay informacion suficiente para decidir.
+    """
+    if detect_soportes(descripcion_fisica, soportes_ejemplar):
+        return True
+
+    texts = [descripcion_fisica or ""]
+    texts.extend(soportes_ejemplar or [])
+    texts = [text for text in texts if text and text.strip()]
+    if not texts:
+        return None
+
+    hay_pista = False
+    for raw in texts:
+        text = re.sub(r"dvd[-\s]?rom", " ", normalize_text(raw))
+        if AUDIOVISUAL_HINT_RE.search(text):
+            hay_pista = True
+            break
+    return True if hay_pista else False
 
 
 def canonical_soporte(value: str | None) -> str | None:

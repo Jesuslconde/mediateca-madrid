@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from mediateca_shared.fuentes import FuenteProfile
 from mediateca_shared.identity import compose_record_id
 from mediateca_shared.models import Edicion, Fuente, HarvestJob, HarvestRun
+from mediateca_shared.soportes import detect_audiovisual
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from mediateca.catalog.parser import BS_PARSER, parse_detail, parse_search_resul
 from mediateca.catalog.repository import (
     apply_tmdb_enrichment,
     mark_absent_since,
+    mark_non_audiovisual,
     record_enrich_failure,
     record_tmdb_outcome,
     select_pending_titns,
@@ -63,6 +65,14 @@ OPAC_CONTENT_SELECTOR = (
     "li.c-docs_unit, span.js-TITN, span.doc_title, .c-docs, "
     "form#abnform, form[name='abnform']"
 )
+
+
+def _es_audiovisual(parsed) -> bool | None:
+    """Clasifica un registro parseado como audiovisual, no audiovisual o dudoso."""
+    return detect_audiovisual(
+        parsed.descripcion_fisica,
+        [ejemplar.soporte for ejemplar in parsed.ejemplares if ejemplar.soporte],
+    )
 
 
 def is_captcha_response(text: str) -> bool:
@@ -645,6 +655,7 @@ class Harvester:
 
         processed = 0
         errors = 0
+        filtered = 0
         try:
             page = self.client.search(query)
             pages = 0
@@ -655,6 +666,13 @@ class Harvester:
                     try:
                         html, final_url = self.client.fetch_detail(item.url)
                         parsed = parse_detail(html, final_url)
+                        if _es_audiovisual(parsed) is False:
+                            filtered += 1
+                            logger.info(
+                                "Ficha %s descartada: no es material audiovisual",
+                                parsed.titn,
+                            )
+                            continue
                         self._save(parsed)
                         processed += 1
                         logger.info("Ficha %s guardada (%s)", parsed.titn, parsed.titulo)
@@ -672,6 +690,7 @@ class Harvester:
 
             stats = {
                 "processed": processed,
+                "filtered": filtered,
                 "errors": errors,
                 "pages": pages,
                 **self._opac_metrics(),
@@ -687,7 +706,7 @@ class Harvester:
             run.finished_at = datetime.now(UTC)
             self.session.commit()
 
-    def _enrich_titn(self, titn: str, *, delay: float) -> None:
+    def _enrich_titn(self, titn: str, *, delay: float) -> str:
         attempts = max(
             1, int(getattr(self.client, "max_retries", settings.crawl_max_retries))
         )
@@ -696,9 +715,14 @@ class Harvester:
             try:
                 html, final_url = self.client.fetch_by_titn(titn)
                 parsed = parse_detail(html, final_url)
+                if _es_audiovisual(parsed) is False:
+                    record_id = compose_record_id(self.fuente.codigo, parsed.titn)
+                    mark_non_audiovisual(self.session, record_id)
+                    self.session.commit()
+                    return "filtered"
                 edicion = self._save(parsed)
                 self._enrich_tmdb(edicion)
-                return
+                return "enriched"
             except CaptchaRequired:
                 self.session.rollback()
                 raise
@@ -747,9 +771,10 @@ class Harvester:
         self.session.add(run)
         self.session.commit()
 
-        processed = errors = 0
+        processed = errors = filtered = 0
         failed: list[str] = []
         processed_titns: list[str] = []
+        filtered_titns: list[str] = []
         self.processed_titns = processed_titns
         self._reset_tmdb_counters()
         last_titn = cursor_titn
@@ -767,7 +792,7 @@ class Harvester:
                 titn = record_id.split(":", 1)[-1]
                 started = time.monotonic()
                 try:
-                    self._enrich_titn(titn, delay=delay)
+                    status = self._enrich_titn(titn, delay=delay)
                 except CaptchaRequired:
                     raise
                 except Exception as exc:  # noqa: BLE001
@@ -788,20 +813,36 @@ class Harvester:
                         },
                     )
                 else:
-                    processed += 1
-                    processed_titns.append(record_id)
-                    logger.info(
-                        "Ficha enriquecida",
-                        extra={
-                            "job_id": job.id,
-                            "job_type": job.job_type,
-                            "titn": titn,
-                            "result": "enriched",
-                            "duration_ms": round(
-                                (time.monotonic() - started) * 1000, 2
-                            ),
-                        },
-                    )
+                    if status == "filtered":
+                        filtered += 1
+                        filtered_titns.append(record_id)
+                        logger.info(
+                            "Ficha descartada: no es material audiovisual",
+                            extra={
+                                "job_id": job.id,
+                                "job_type": job.job_type,
+                                "titn": titn,
+                                "result": "filtered",
+                                "duration_ms": round(
+                                    (time.monotonic() - started) * 1000, 2
+                                ),
+                            },
+                        )
+                    else:
+                        processed += 1
+                        processed_titns.append(record_id)
+                        logger.info(
+                            "Ficha enriquecida",
+                            extra={
+                                "job_id": job.id,
+                                "job_type": job.job_type,
+                                "titn": titn,
+                                "result": "enriched",
+                                "duration_ms": round(
+                                    (time.monotonic() - started) * 1000, 2
+                                ),
+                            },
+                        )
 
                 last_titn = titn
                 self.session.commit()
@@ -813,6 +854,7 @@ class Harvester:
                         "fuente": self.fuente.codigo,
                         "selected": len(pending),
                         "processed": processed,
+                        "filtered": filtered,
                         "errors": errors,
                         "failed": failed,
                         **({"since": since.isoformat()} if since else {}),
@@ -828,10 +870,12 @@ class Harvester:
                 "fuente": self.fuente.codigo,
                 "selected": len(pending),
                 "processed": processed,
+                "filtered": filtered,
                 "errors": errors,
                 "failed": failed,
                 "cursor_titn": last_titn,
                 "processed_titns": processed_titns,
+                "filtered_titns": filtered_titns,
                 **({"since": since.isoformat()} if since else {}),
                 **({"reason": reason} if reason else {}),
                 **self._opac_metrics(),
@@ -954,7 +998,7 @@ class Harvester:
 
         seen: set[str] = set()
         self.processed_titns = []
-        processed = pages = errors = missing = 0
+        processed = pages = errors = filtered = missing = 0
         resume_titn = cursor_titn if cursor_doc is not None else None
         first_page = True
         limit_reached = False
@@ -984,6 +1028,22 @@ class Harvester:
                     if limit is not None and processed >= limit:
                         limit_reached = True
                         break
+                    if _es_audiovisual(parsed) is False:
+                        filtered += 1
+                        last_titn = parsed.titn
+                        if parsed.doc is not None:
+                            last_doc = parsed.doc
+                        logger.info(
+                            "Stub descartado: no es material audiovisual",
+                            extra={
+                                "job_id": job.id,
+                                "job_type": job.job_type,
+                                "titn": parsed.titn,
+                                "doc": parsed.doc,
+                                "result": "filtered",
+                            },
+                        )
+                        continue
                     started = time.monotonic()
                     try:
                         with self.session.begin_nested():
@@ -1036,6 +1096,7 @@ class Harvester:
                     cursor_titn=last_titn,
                     stats={
                         "processed": processed,
+                        "filtered": filtered,
                         "pages": pages,
                         "errors": errors,
                         "mode": mode,
@@ -1059,6 +1120,7 @@ class Harvester:
             stats = {
                 "fuente": self.fuente.codigo,
                 "processed": processed,
+                "filtered": filtered,
                 "pages": pages,
                 "errors": errors,
                 "missing": missing,

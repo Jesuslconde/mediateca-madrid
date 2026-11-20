@@ -215,3 +215,84 @@ def test_parser_fixture_andaluz_primera_pagina_sin_captcha() -> None:
         "/cultura/absys/abnopac/abnetcl.cgi/SESIONANDA/" in (item.source_url or "")
         for item in listing
     )
+
+
+def test_parser_ejemplares_andaluces_con_columnas_propias() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">1071730</span>
+      <span class="doc_title">La épica [Material gráfico proyectable] /</span>
+      <span class="js-T300a">56 p. ;</span>
+      <div class="copias_data">
+        <p><span class="bicobi">GR25</span><span class="bidesc">Órgiva</span></p>
+        <div class="c-accordion_item" data-sucosu="434">
+          <p><span class="sucosu">434</span><span class="sudesc">B.P.M. Órgiva</span></p>
+          <table>
+            <thead><tr>
+              <th>Localización</th><th>Tipo de ejemplar</th><th>Signatura / supl.</th>
+              <th>Vol.</th><th>Disponibilidad</th><th>Soporte</th><th>Novedad</th>
+            </tr></thead>
+            <tbody><tr>
+              <td><span class="copias_label">Localización</span><span>Obras literarias</span></td>
+              <td><span class="copias_label">Tipo de ejemplar</span><span>Prestable Libros</span></td>
+              <td><span class="copias_label">Signatura</span>
+                <a data-bc="1000516123" data-sign="860 FRA epi" href="#">860 FRA epi</a>
+              </td>
+              <td><span class="copias_label">Identificador de volumen</span></td>
+              <td class="copias_tableDisp"><span class="copias_label">Disponibilidad</span><span>Disponible</span></td>
+              <td><span class="copias_label">Soporte</span></td>
+              <td></td>
+            </tr></tbody>
+          </table>
+        </div>
+      </div>
+    </body></html>
+    """
+
+    parsed = parse_detail(html)
+
+    assert parsed.soportes == []
+    assert len(parsed.ejemplares) == 1
+    ejemplar = parsed.ejemplares[0]
+    assert ejemplar.localizacion == "Obras literarias"
+    assert ejemplar.signatura == "860 FRA epi"
+    assert ejemplar.codigo_barras == "1000516123"
+    assert ejemplar.tipo_ejemplar == "Prestable Libros"
+    assert ejemplar.soporte is None
+
+
+def test_parser_ejemplares_andaluces_lee_el_soporte() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">533</span>
+      <span class="doc_title">101 dálmatas</span>
+      <span class="js-T300a">1 videocasete (VHS) (108 min.)</span>
+      <div class="copias_data">
+        <p><span class="bicobi">GR11</span><span class="bidesc">Loja</span></p>
+        <div class="c-accordion_item" data-sucosu="418">
+          <table>
+            <thead><tr>
+              <th>Localización</th><th>Tipo de ejemplar</th><th>Signatura</th>
+              <th>Vol.</th><th>Disponibilidad</th><th>Soporte</th>
+            </tr></thead>
+            <tbody><tr>
+              <td><span class="copias_label">Localización</span><span>Audiovisuales</span></td>
+              <td><span class="copias_label">Tipo de ejemplar</span><span>Prestable no Librario</span></td>
+              <td><span class="copias_label">Signatura</span>
+                <a data-bc="1000" data-sign="VHS 12" href="#">VHS 12</a>
+              </td>
+              <td><span class="copias_label">Vol.</span></td>
+              <td><span class="copias_label">Disponibilidad</span><span>Disponible</span></td>
+              <td><span class="copias_label">Soporte</span><span>Vídeo (VHS)</span></td>
+            </tr></tbody>
+          </table>
+        </div>
+      </div>
+    </body></html>
+    """
+
+    parsed = parse_detail(html)
+
+    assert parsed.soportes == ["VHS"]
+    assert parsed.ejemplares[0].soporte == "VHS"
+    assert parsed.ejemplares[0].signatura == "VHS 12"

@@ -182,6 +182,77 @@ def test_harvest_discovery_guarda_checkpoint_y_reanuda_sin_duplicar(
     assert nuevo.missing_at is None
 
 
+def _listing_html(entries: list[tuple[int, str, str, str]]) -> str:
+    items = []
+    for doc, titn, titulo, t300 in entries:
+        items.append(
+            f"""
+            <li class="c-docs_unit">
+              <a class="c-docs_title" href="?ACC=165&amp;DOC={doc}&amp;TITN={titn}">
+                {titulo}
+              </a>
+              <p class="c-docs_marc">
+                <span class="js-TITN">{titn}</span>
+                <span class="js-T245a">{titulo}</span>
+                <span class="js-T300a">{t300}</span>
+              </p>
+            </li>
+            """
+        )
+    return f"<html><body><ul>{''.join(items)}</ul></body></html>"
+
+
+def test_discovery_descarta_registros_no_audiovisuales() -> None:
+    session = _session()
+    html = _listing_html(
+        [
+            (1, "100", "La épica", "56 p. ; 23 cm + 60 diapositivas col."),
+            (2, "101", "Una película", "1 DVD-Video (ca. 90 min)"),
+        ]
+    )
+    client = _PageFeedClient([_page(next_url=None, doc=2, html=html)])
+
+    stats = Harvester(session, client=client).harvest_discovery(max_pages=1)
+
+    assert stats["processed"] == 1
+    assert stats["filtered"] == 1
+    assert list(session.scalars(select(Edicion.record_id))) == ["madrid:101"]
+
+
+class _EnrichClient:
+    def __init__(self, html: str) -> None:
+        self.delay = 0.0
+        self.max_retries = 1
+        self.html = html
+
+    def fetch_by_titn(self, titn: str):
+        return self.html, f"https://opac.example?TITN={titn}"
+
+
+def test_enrichment_descarta_registros_no_audiovisuales() -> None:
+    from mediateca.catalog.jobs import create_stub
+
+    session = _session()
+    create_stub(session, "1071730")
+    session.commit()
+    html = """
+    <html><body>
+      <span class="js-TITN">1071730</span>
+      <span class="doc_title">La épica</span>
+      <span class="js-T300a">56 p. ;</span>
+    </body></html>
+    """
+
+    stats = Harvester(session, client=_EnrichClient(html)).harvest_enrichment(limit=10)
+
+    assert stats["processed"] == 0
+    assert stats["filtered"] == 1
+    edicion = session.scalars(select(Edicion)).one()
+    assert edicion.enrich_status == "skipped"
+    assert edicion.detail_fetched_at is not None
+    assert edicion.missing_at is not None
+
+
 class _FakeSolver:
     def __init__(
         self,

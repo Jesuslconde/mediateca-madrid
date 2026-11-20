@@ -282,7 +282,7 @@ def test_app_responde_y_muestra_los_datos(monkeypatch, tmp_path) -> None:
 
 def test_api_dashboard_inicio_devuelve_datos(monkeypatch, tmp_path) -> None:
     session = _session()
-    running = create_job(session, "enrich")
+    create_job(session, "enrich")
     claim_job(session)
     failed = create_job(session, "index")
     finish_job(session, failed, status="failed", error="error visible")
