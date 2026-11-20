@@ -448,7 +448,7 @@ La página de Configuración MUST agrupar la programación, la concurrencia del 
 
 ### Requirement: Página de Catálogo
 
-El dashboard MUST exponer una página `/catalogo` de solo lectura con un resumen de ediciones por estado de enriquecimiento OPAC y TMDB y una tabla paginada de ediciones. La página SHALL NOT crear, modificar ni eliminar datos.
+El dashboard MUST exponer una página `/catalogo` de consulta con un resumen de ediciones por estado de enriquecimiento OPAC y TMDB y una tabla paginada. La página SHALL NOT crear ni eliminar ediciones; su única escritura SHALL ser la asignación manual de TMDB, protegida por el token de administración cuando esté configurado.
 
 #### Scenario: Acceso a la página
 
@@ -461,6 +461,13 @@ El dashboard MUST exponer una página `/catalogo` de solo lectura con un resumen
 - **WHEN** no existen ediciones
 - **THEN** el resumen muestra cero en todos los estados
 - **AND** la tabla indica que no hay resultados sin dividir por cero
+
+#### Scenario: Asignación manual de TMDB
+
+- **WHEN** una edición está en estado TMDB `unmatched`
+- **THEN** la fila ofrece un campo para introducir un ID de TMDB y confirmarlo
+- **AND** la acción solo está disponible con administración desbloqueada y token de TMDB configurado
+- **AND** al confirmar un ID válido la edición pasa a `matched` y vuelve a la misma página con sus filtros
 
 #### Scenario: Base de datos no disponible
 
@@ -520,7 +527,7 @@ El sistema MUST permitir filtrar las ediciones por estado OPAC, estado TMDB, des
 
 ### Requirement: Columnas de la tabla del catálogo
 
-La tabla SHALL mostrar, por edición, `TITN`, título, año, soporte principal, estado e intentos OPAC, último error OPAC, estado e intentos TMDB, último error TMDB, fechas de descubrimiento, ficha y TMDB, y la marca de desaparición.
+La tabla SHALL mostrar, por edición, `TITN`, título, año, soporte principal, estado e intentos OPAC, último error OPAC, estado e intentos TMDB, último error TMDB, fechas de descubrimiento, ficha y TMDB, la marca de desaparición y, cuando el estado TMDB sea `unmatched`, el control de asignación manual de un ID de TMDB.
 
 #### Scenario: Edición pendiente
 

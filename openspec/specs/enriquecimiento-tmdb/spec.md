@@ -220,3 +220,26 @@ Cada edición MUST conservar el resultado de su enriquecimiento TMDB con `tmdb_s
 - **WHEN** una edición con estado `unmatched` o `error` se vuelve a procesar
 - **THEN** `tmdb_attempts` se incrementa
 - **AND** el estado se actualiza con el nuevo resultado
+
+### Requirement: Asignación manual del ID de TMDB
+
+El operador SHALL poder asignar manualmente un ID de TMDB a una edición cuyo estado sea `unmatched`, validando el identificador contra TMDB antes de guardarlo. La asignación MUST NOT ejecutarse sobre ediciones en otros estados ni sin token de TMDB, y SHALL conservar la edición, sus ejemplares y sus datos OPAC.
+
+#### Scenario: Asignación correcta
+
+- **WHEN** el operador introduce un ID de TMDB existente para una edición `unmatched`
+- **THEN** la edición pasa a `matched`
+- **AND** se guardan `tmdb_id`, `paises_origen`, la portada, el enlace público y `tmdb_enriched_at`
+- **AND** `tmdb_attempts` se incrementa y `tmdb_last_error` queda vacío
+
+#### Scenario: ID inexistente
+
+- **WHEN** el operador introduce un ID que no existe en TMDB
+- **THEN** la edición conserva su estado y sus datos previos
+- **AND** el dashboard informa del error sin crear ni eliminar registros
+
+#### Scenario: Edición no elegible
+
+- **WHEN** la edición no está en estado `unmatched` o no hay token de TMDB configurado
+- **THEN** la asignación se rechaza con un mensaje comprensible
+- **AND** la edición no se modifica

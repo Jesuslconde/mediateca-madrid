@@ -10,7 +10,8 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from mediateca_shared.constants import ENRICH_STATUSES, JOB_TYPES, TMDB_STATUSES
-from sqlalchemy import text
+from mediateca_shared.models import Edicion
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from mediateca.api.routers.ingest import router as ingest_router
 from mediateca.catalog.fuentes import enabled_fuentes, get_fuente
 from mediateca.catalog.jobs import (
     JobAlreadyActive,
+    build_tmdb_client,
     enqueue_branches_job,
     enqueue_discover_job,
     enqueue_enrich_job,
@@ -26,7 +28,19 @@ from mediateca.catalog.jobs import (
     has_active_job,
     ingest_metrics,
 )
-from mediateca.catalog.repository import count_pending_titns
+from mediateca.catalog.repository import (
+    apply_tmdb_enrichment,
+    count_pending_titns,
+    record_tmdb_outcome,
+)
+from mediateca.catalog.tmdb import (
+    TmdbAuthError,
+    TmdbError,
+    TmdbNotFoundError,
+    build_movie_url,
+    build_poster_url,
+    resolve_countries,
+)
 from mediateca.core.config import settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
@@ -100,6 +114,15 @@ def _safe_next(value: str | None, default: str = "/") -> str:
     return candidate if candidate in NEXT_PATHS else default
 
 
+def _safe_catalog_next(value: str | None) -> str:
+    candidate = (value or "").strip()
+    if candidate == "/catalogo":
+        return candidate
+    if candidate.startswith("/catalogo?"):
+        return candidate
+    return "/catalogo"
+
+
 def _redirect_with(
     path: str,
     *,
@@ -111,8 +134,10 @@ def _redirect_with(
         params["message"] = message
     if error:
         params["error"] = error
-    query = f"?{urlencode(params)}" if params else ""
-    return RedirectResponse(f"{path}{query}", status_code=303)
+    if not params:
+        return RedirectResponse(path, status_code=303)
+    separator = "&" if "?" in path else "?"
+    return RedirectResponse(f"{path}{separator}{urlencode(params)}", status_code=303)
 
 
 def _admin_error(next_path: str | None = None) -> RedirectResponse:
@@ -247,6 +272,15 @@ def _page_query(request: Request, page: int) -> str:
     return urlencode(params)
 
 
+def _catalog_next(request: Request) -> str:
+    params = [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key not in {"message", "error"}
+    ]
+    return f"/catalogo?{urlencode(params)}" if params else "/catalogo"
+
+
 def _catalogo_context(request: Request, session: Session) -> dict[str, Any]:
     filtro = _parse_catalog_filter(request)
     summary = catalog_summary(session, filtro)
@@ -266,9 +300,11 @@ def _catalogo_context(request: Request, session: Session) -> dict[str, Any]:
             "has_next": page < pages,
             "prev_query": _page_query(request, page - 1),
             "next_query": _page_query(request, page + 1),
+            "next_path": _catalog_next(request),
             "estados_enrich": ENRICH_STATUSES,
             "estados_tmdb": TMDB_STATUSES,
             "fuentes": enabled_fuentes(session),
+            "tmdb_available": bool(effective_tmdb_api_token(session)),
         }
     )
     return context
@@ -356,6 +392,92 @@ def catalogo(
         request=request,
         name="catalogo.html",
         context=context,
+    )
+
+
+@app.post("/catalogo/tmdb")
+async def assign_manual_tmdb_id(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_catalog_next((values.get("next") or [""])[0])
+    if not _has_write_access(request):
+        return _redirect_with(
+            next_path,
+            error="Token de administracion requerido o incorrecto",
+        )
+
+    record_id = (values.get("record_id") or [""])[0].strip()
+    raw_tmdb_id = (values.get("tmdb_id") or [""])[0].strip()
+    try:
+        tmdb_id = int(raw_tmdb_id)
+        if tmdb_id <= 0:
+            raise ValueError
+    except ValueError:
+        return _redirect_with(
+            next_path,
+            error="El ID de TMDB debe ser un numero entero positivo",
+        )
+
+    edicion = session.scalars(
+        select(Edicion).where(Edicion.record_id == record_id)
+    ).first()
+    if edicion is None:
+        return _redirect_with(next_path, error="No se encontro la edicion indicada")
+    if edicion.tmdb_status != "unmatched":
+        return _redirect_with(
+            next_path,
+            error="Solo se puede asignar un TMDB manual a una edicion unmatched",
+        )
+
+    client = build_tmdb_client(session, delay=0)
+    if client is None:
+        return _redirect_with(
+            next_path,
+            error="No hay token de TMDB configurado; guardalo en Configuracion",
+        )
+
+    try:
+        with client:
+            detail = client.get_movie(tmdb_id)
+        apply_tmdb_enrichment(
+            session,
+            edicion,
+            paises_origen=resolve_countries(detail),
+            tmdb_id=detail.id,
+            poster_url=build_poster_url(detail.poster_path),
+            tmdb_url=build_movie_url(detail.id),
+        )
+        record_tmdb_outcome(session, edicion, "matched")
+        session.commit()
+    except TmdbNotFoundError:
+        session.rollback()
+        return _redirect_with(
+            next_path,
+            error=f"No existe la pelicula {tmdb_id} en TMDB",
+        )
+    except TmdbAuthError:
+        session.rollback()
+        return _redirect_with(
+            next_path,
+            error="El token de TMDB no es valido",
+        )
+    except TmdbError as exc:
+        session.rollback()
+        logger.warning("No se pudo validar el TMDB %s: %s", tmdb_id, exc)
+        return _redirect_with(next_path, error=f"No se pudo consultar TMDB: {exc}")
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo guardar el ID de TMDB manual")
+        return _redirect_with(
+            next_path,
+            error="No se pudo guardar el ID de TMDB",
+        )
+
+    return _redirect_with(
+        next_path,
+        message=f"ID TMDB {detail.id} asignado a {edicion.titn}",
     )
 
 

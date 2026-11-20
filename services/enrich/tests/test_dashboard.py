@@ -1557,3 +1557,188 @@ def test_dashboard_muestra_y_encola_andalucia(monkeypatch, tmp_path) -> None:
     assert job is not None
     assert job.fuente_id == fuente.id
     assert job.job_type == "discover"
+
+
+class _FakeTmdbClient:
+    def __init__(self, detail=None, error: Exception | None = None) -> None:
+        self.detail = detail
+        self.error = error
+        self.requested: list[int] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        return None
+
+    def get_movie(self, movie_id: int):
+        self.requested.append(movie_id)
+        if self.error is not None:
+            raise self.error
+        return self.detail
+
+
+def _fake_tmdb_detail(movie_id: int = 550):
+    from mediateca.catalog.tmdb import TmdbMovieDetail
+
+    return TmdbMovieDetail(
+        id=movie_id,
+        title="El club de la lucha",
+        original_title="Fight Club",
+        release_date="1999-10-15",
+        production_countries=["US"],
+        poster_path="/fight-club.jpg",
+    )
+
+
+def test_catalogo_muestra_formulario_tmdb_manual_solo_unmatched(monkeypatch, tmp_path) -> None:
+    session = _session()
+    manual = create_stub(session, "1")
+    manual.tmdb_status = "unmatched"
+    ya_emparejada = create_stub(session, "2")
+    ya_emparejada.tmdb_status = "matched"
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "tmdb_api_token", "token-123456")
+    client = _client_for(session)
+    try:
+        response = client.get("/catalogo?tmdb_status=unmatched")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert response.text.count('action="/catalogo/tmdb"') == 1
+    assert f'name="record_id" value="{manual.record_id}"' in response.text
+    assert 'placeholder="ID TMDB"' in response.text
+    assert 'name="next" value="/catalogo?tmdb_status=unmatched"' in response.text
+
+
+def test_catalogo_tmdb_manual_oculto_sin_token(monkeypatch, tmp_path) -> None:
+    session = _session()
+    edicion = create_stub(session, "1")
+    edicion.tmdb_status = "unmatched"
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "tmdb_api_token", None)
+    client = _client_for(session)
+    try:
+        response = client.get("/catalogo")
+    finally:
+        _clear_overrides()
+
+    assert 'action="/catalogo/tmdb"' not in response.text
+    assert "Sin token TMDB" in response.text
+
+
+def test_post_catalogo_tmdb_asigna_id_manual(monkeypatch, tmp_path) -> None:
+    session = _session()
+    edicion = create_stub(session, "1")
+    edicion.tmdb_status = "unmatched"
+    edicion.tmdb_attempts = 1
+    session.commit()
+    fake = _FakeTmdbClient(detail=_fake_tmdb_detail(550))
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(dashboard_module, "build_tmdb_client", lambda *a, **k: fake)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/catalogo/tmdb",
+            data={
+                "record_id": edicion.record_id,
+                "tmdb_id": "550",
+                "next": "/catalogo?tmdb_status=unmatched&page=2",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith(
+        "/catalogo?tmdb_status=unmatched&page=2&message="
+    )
+    assert fake.requested == [550]
+    assert edicion.tmdb_id == 550
+    assert edicion.tmdb_status == "matched"
+    assert edicion.tmdb_attempts == 2
+    assert edicion.tmdb_last_error is None
+    assert edicion.tmdb_enriched_at is not None
+    assert edicion.paises_origen == ["US"]
+    assert edicion.tmdb_poster_url == "https://image.tmdb.org/t/p/w500/fight-club.jpg"
+    assert edicion.tmdb_url == "https://www.themoviedb.org/movie/550"
+
+
+def test_post_catalogo_tmdb_rechaza_edicion_no_unmatched(monkeypatch, tmp_path) -> None:
+    session = _session()
+    edicion = create_stub(session, "1")
+    edicion.tmdb_status = "matched"
+    edicion.tmdb_id = 10
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/catalogo/tmdb",
+            data={"record_id": edicion.record_id, "tmdb_id": "550", "next": "/catalogo"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "unmatched" in unquote_plus(response.headers["location"])
+    assert edicion.tmdb_id == 10
+
+
+def test_post_catalogo_tmdb_rechaza_id_invalido(monkeypatch, tmp_path) -> None:
+    session = _session()
+    edicion = create_stub(session, "1")
+    edicion.tmdb_status = "unmatched"
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/catalogo/tmdb",
+            data={"record_id": edicion.record_id, "tmdb_id": "abc", "next": "/catalogo"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "numero entero positivo" in unquote_plus(response.headers["location"])
+    assert edicion.tmdb_id is None
+
+
+def test_post_catalogo_tmdb_exige_administracion(monkeypatch, tmp_path) -> None:
+    session = _session()
+    edicion = create_stub(session, "1")
+    edicion.tmdb_status = "unmatched"
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", "secreto")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/catalogo/tmdb",
+            data={"record_id": edicion.record_id, "tmdb_id": "550", "next": "/catalogo"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "Token de administracion" in unquote_plus(response.headers["location"])
+    assert edicion.tmdb_id is None

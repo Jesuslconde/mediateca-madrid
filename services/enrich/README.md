@@ -92,9 +92,11 @@ La vista web se divide en cuatro paginas con un menu lateral comun:
 
 - `Inicio` (`/`): salud del worker, trabajos por estado y tipo, cobertura del
   catalogo y metricas de ingesta.
-- `Catálogo` (`/catalogo`): vista de solo lectura del estado de enriquecimiento
-  por edicion, con resumen por estado y tabla paginada filtrable por estado OPAC,
-  estado TMDB, desaparicion, texto, soporte, biblioteca, año, idioma y país.
+- `Catálogo` (`/catalogo`): vista del estado de enriquecimiento por edicion, con
+  resumen por estado y tabla paginada filtrable por estado OPAC, estado TMDB,
+  desaparicion, texto, soporte, biblioteca, año, idioma y país. Las ediciones en
+  estado TMDB `unmatched` permiten asignar manualmente un ID de TMDB, que se
+  valida contra TMDB antes de guardar la coincidencia.
 - `Tareas` (`/tareas`): tabla de trabajos recientes y acciones de descubrimiento,
   enriquecimiento, indexacion y actualizacion de metadatos TMDB.
 - `Configuracion` (`/configuracion`): programacion, concurrencia del worker, URL
@@ -107,10 +109,11 @@ guardada) o `failed` (ultimo intento fallido). El estado TMDB puede ser `pending
 el numero de intentos y el ultimo error de cada capa.
 
 Inicio y Tareas se refrescan automaticamente; Configuracion y Catálogo no, para
-no perder los formularios ni los filtros. Las unicas escrituras son las secciones
-de configuracion y el encolado de trabajos; no crea ni modifica ediciones,
-ejemplares ni entradas del indice. Los mensajes de exito y error vuelven a la
-pagina donde se origino la accion.
+no perder los formularios ni los filtros. Las escrituras se limitan a las secciones
+de configuracion, el encolado de trabajos y la asignacion manual de TMDB a
+ediciones `unmatched`; no crea ni elimina ediciones, ejemplares ni entradas del
+indice. Los mensajes de exito y error vuelven a la pagina donde se origino la
+accion.
 
 ```bash
 make dashboard        # Levanta el servicio dashboard en segundo plano

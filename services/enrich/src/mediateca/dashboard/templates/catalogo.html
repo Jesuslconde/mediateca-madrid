@@ -61,6 +61,9 @@
     </form>
     <style>
       select, input[type="text"] { padding: .45rem .6rem; border: 1px solid #cfd6df; border-radius: 6px; }
+      .tmdb-manual { margin-top: .35rem; gap: .3rem; }
+      .tmdb-manual input[type="number"] { width: 90px; min-width: 0; padding: .3rem .4rem; }
+      .tmdb-manual button { padding: .3rem .55rem; font-size: .8rem; }
     </style>
   </section>
 
@@ -104,7 +107,21 @@
               <td class="error">{{ edicion.tmdb_last_error or '' }}</td>
               <td>{{ edicion.discovery_seen_at.strftime('%Y-%m-%d') if edicion.discovery_seen_at else '—' }}</td>
               <td>{{ edicion.detail_fetched_at.strftime('%Y-%m-%d') if edicion.detail_fetched_at else '—' }}</td>
-              <td>{{ edicion.tmdb_enriched_at.strftime('%Y-%m-%d') if edicion.tmdb_enriched_at else '—' }}</td>
+              <td>
+                {{ edicion.tmdb_enriched_at.strftime('%Y-%m-%d') if edicion.tmdb_enriched_at else '—' }}
+                {% if edicion.tmdb_status == 'unmatched' %}
+                  {% if is_admin and tmdb_available %}
+                    <form method="post" action="/catalogo/tmdb" class="tmdb-manual">
+                      <input type="hidden" name="record_id" value="{{ edicion.record_id }}">
+                      <input type="hidden" name="next" value="{{ next_path }}">
+                      <input type="number" name="tmdb_id" min="1" step="1" placeholder="ID TMDB" required aria-label="ID TMDB para {{ edicion.titn }}">
+                      <button type="submit">Asignar</button>
+                    </form>
+                  {% elif not tmdb_available %}
+                    <span class="muted">Sin token TMDB</span>
+                  {% endif %}
+                {% endif %}
+              </td>
               <td>{{ edicion.missing_at.strftime('%Y-%m-%d') if edicion.missing_at else '—' }}</td>
             </tr>
           {% endfor %}
