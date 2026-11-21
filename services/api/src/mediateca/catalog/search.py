@@ -104,6 +104,11 @@ class CatalogSearch:
             biblioteca=biblioteca,
             fuente=fuente,
         )
+        active_filters = [ENRICHED_FILTER]
+        if filters:
+            active_filters.append(filters)
+        active_filter = " AND ".join(active_filters)
+
         options: dict[str, Any] = {
             "page": max(1, page),
             "hitsPerPage": max(1, min(limit, 100)),
@@ -111,25 +116,38 @@ class CatalogSearch:
             "attributesToHighlight": ["titulo", "sinopsis"],
             "highlightPreTag": "<mark>",
             "highlightPostTag": "</mark>",
+            "filter": active_filter,
+            "distinct": "obra_key",
         }
-        active_filters = [ENRICHED_FILTER]
-        if filters:
-            active_filters.append(filters)
-        options["filter"] = " AND ".join(active_filters)
         if sort:
             options["sort"] = sort
 
         result = self.index.search(query or "", options)
         hits = result.get("hits", [])
         total = result.get("estimatedTotalHits", result.get("totalHits", len(hits)))
+
+        facet_options: dict[str, Any] = {
+            "page": 1,
+            "hitsPerPage": 1,
+            "facets": FACET_FIELDS,
+            "filter": active_filter,
+        }
+        if sort:
+            facet_options["sort"] = sort
+        facet_result = self.index.search(query or "", facet_options)
+        total_ediciones = facet_result.get(
+            "estimatedTotalHits", facet_result.get("totalHits", total)
+        )
+
         return {
             "query": query or "",
             "page": max(1, page),
             "limit": max(1, min(limit, 100)),
             "total": total,
+            "total_ediciones": total_ediciones,
             "total_pages": max(1, math.ceil(total / max(1, limit))),
             "took_ms": result.get("processingTimeMs", 0),
-            "facets": result.get("facetDistribution", {}),
+            "facets": facet_result.get("facetDistribution", {}),
             "hits": hits,
         }
 

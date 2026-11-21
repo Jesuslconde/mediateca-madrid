@@ -33,8 +33,27 @@ def _ubicacion(ejemplar: Ejemplar) -> dict[str, Any] | None:
     return datos
 
 
-def serialize_record(edicion: Edicion) -> dict[str, Any]:
+def _serialize_obra_edicion(edicion: Edicion) -> dict[str, Any]:
     profile = _profile(edicion)
+    return {
+        "record_id": edicion.record_id,
+        "fuente": profile.codigo,
+        "fuente_nombre": profile.nombre,
+        "titn": edicion.titn,
+        "titulo": edicion.titulo,
+        "anio": edicion.anio,
+        "soportes": edicion.soportes or [],
+        "ean": edicion.ean,
+        "ejemplares": len(edicion.ejemplares),
+        "source_url": profile.source_url(edicion.titn),
+    }
+
+
+def serialize_record(
+    edicion: Edicion, *, ediciones_obra: list[Edicion] | None = None
+) -> dict[str, Any]:
+    profile = _profile(edicion)
+    hermanas = ediciones_obra if ediciones_obra is not None else [edicion]
     return {
         "record_id": edicion.record_id,
         "fuente": profile.codigo,
@@ -87,6 +106,9 @@ def serialize_record(edicion: Edicion) -> dict[str, Any]:
                 "titulo_uniforme": edicion.obra.titulo_uniforme,
                 "anio": edicion.obra.anio,
                 "director_principal": edicion.obra.director_principal,
+                "ediciones": [
+                    _serialize_obra_edicion(hermana) for hermana in hermanas
+                ],
             }
             if edicion.obra
             else None

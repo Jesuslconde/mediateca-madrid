@@ -275,12 +275,16 @@ def upsert_edicion(
         from mediateca.catalog.fuentes import ensure_default_fuente
 
         fuente = ensure_default_fuente(session)
-    obra = get_or_create_obra(session, parsed)
-
     record_id = compose_record_id(fuente.codigo, parsed.titn)
     edicion = session.scalars(
         select(Edicion).where(Edicion.record_id == record_id)
     ).first()
+
+    manual_preserved = bool(
+        edicion is not None and edicion.obra_manual and edicion.obra_id is not None
+    )
+    obra = edicion.obra if manual_preserved else get_or_create_obra(session, parsed)
+
     if edicion is None:
         edicion = Edicion(
             fuente_id=fuente.id,
@@ -293,7 +297,11 @@ def upsert_edicion(
 
     edicion.fuente_id = fuente.id
     edicion.record_id = record_id
-    edicion.obra = obra
+    if not manual_preserved:
+        edicion.obra = obra
+        if obra.manual:
+            edicion.obra_manual = True
+            edicion.obra_manual_at = edicion.obra_manual_at or datetime.now(UTC)
     edicion.titulo = parsed.titulo
     edicion.titulo_uniforme = parsed.titulo_uniforme
     edicion.publicacion = parsed.publicacion

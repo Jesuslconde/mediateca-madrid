@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from mediateca_shared.db import Base
-from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Sucursal
+from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Obra, Sucursal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -585,3 +586,182 @@ def test_search_envia_criterios_de_orden_estables() -> None:
         assert response.status_code == 200
         assert index.options is not None
         assert index.options["sort"] == criterios
+
+
+@pytest.fixture(autouse=True)
+def _default_db_override():
+    session = _sqlite_session()
+    app.dependency_overrides[get_db] = lambda: session
+    yield
+    app.dependency_overrides.clear()
+    session.close()
+
+
+class _TwoPassIndex:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def search(self, query, options):  # noqa: ANN001
+        self.calls.append(dict(options))
+        if options.get("distinct") == "obra_key":
+            return {
+                "hits": [{"id": "madrid_1", "record_id": "madrid:1"}],
+                "estimatedTotalHits": 1,
+                "processingTimeMs": 2,
+                "facetDistribution": {},
+            }
+        return {
+            "hits": [],
+            "estimatedTotalHits": 4,
+            "processingTimeMs": 3,
+            "facetDistribution": {"soportes": {"DVD": 4}},
+        }
+
+
+def test_catalog_search_usa_distinct_y_separa_totales() -> None:
+    index = _TwoPassIndex()
+    search = CatalogSearch.__new__(CatalogSearch)
+    search.client = object()
+    search.index = index
+
+    result = search.search("vida padre")
+
+    assert index.calls[0]["distinct"] == "obra_key"
+    assert "distinct" not in index.calls[1]
+    assert index.calls[1]["hitsPerPage"] == 1
+    assert result["total"] == 1
+    assert result["total_ediciones"] == 4
+    assert result["facets"] == {"soportes": {"DVD": 4}}
+
+
+def _session_with_obra(ediciones: int = 4):
+    session = _sqlite_session()
+    obra = Obra(titulo_uniforme="La vida padre", anio=2022)
+    session.add(obra)
+    session.flush()
+    for number in range(1, ediciones + 1):
+        biblioteca = Biblioteca(
+            fuente_id=_fuente(session).id,
+            codigo=f"B{number}",
+            nombre=f"Biblioteca {number}",
+        )
+        edicion = Edicion(
+            fuente_id=_fuente(session).id,
+            record_id=f"madrid:{number}",
+            titn=str(number),
+            titulo="La vida padre",
+            titulo_uniforme="La vida padre",
+            anio=2022,
+            obra=obra,
+            soportes=["DVD"] if number % 2 else ["Blu-ray"],
+        )
+        session.add_all([biblioteca, edicion])
+        session.flush()
+        session.add(
+            Ejemplar(
+                fuente_id=_fuente(session).id,
+                edicion=edicion,
+                biblioteca=biblioteca,
+                external_key=f"k{number}",
+            )
+        )
+    session.commit()
+    return session, obra
+
+
+class _ObraHitIndexer:
+    def __init__(self, obra_id: int) -> None:
+        self.obra_id = obra_id
+
+    def search(self, query, **kwargs):  # noqa: ANN001, ANN003
+        return {
+            "query": query,
+            "page": 1,
+            "limit": 20,
+            "total": 1,
+            "total_ediciones": 4,
+            "total_pages": 1,
+            "took_ms": 1,
+            "facets": {"soportes": {"DVD": 4}},
+            "hits": [
+                {
+                    "id": "madrid_1",
+                    "record_id": "madrid:1",
+                    "fuente": "madrid",
+                    "titn": "1",
+                    "titulo": "La vida padre",
+                    "obra_id": self.obra_id,
+                    "obra_titulo": "La vida padre",
+                    "ediciones_count": 1,
+                    "soportes": [],
+                    "bibliotecas": [],
+                    "ejemplares": 0,
+                }
+            ],
+        }
+
+
+def test_search_agrega_las_ediciones_de_una_obra() -> None:
+    session, obra = _session_with_obra(4)
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[get_indexer] = lambda: _ObraHitIndexer(obra.id)
+    try:
+        response = TestClient(app).get("/api/search", params={"q": "vida padre"})
+    finally:
+        app.dependency_overrides.clear()
+        session.close()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["total_ediciones"] == 4
+    assert len(body["hits"]) == 1
+    hit = body["hits"][0]
+    assert hit["obra_id"] == obra.id
+    assert hit["obra_titulo"] == "La vida padre"
+    assert hit["ediciones_count"] == 4
+    assert hit["soportes"] == ["Blu-ray", "DVD"]
+    assert hit["bibliotecas"] == [
+        "Biblioteca 1",
+        "Biblioteca 2",
+        "Biblioteca 3",
+        "Biblioteca 4",
+    ]
+    assert hit["ejemplares"] == 4
+
+
+def test_record_incluye_las_ediciones_de_la_obra() -> None:
+    session, obra = _session_with_obra(2)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).get("/api/records/madrid:1")
+    finally:
+        app.dependency_overrides.clear()
+        session.close()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["obra"]["id"] == obra.id
+    ediciones = body["obra"]["ediciones"]
+    assert [edicion["record_id"] for edicion in ediciones] == [
+        "madrid:1",
+        "madrid:2",
+    ]
+    first = ediciones[0]
+    assert first["fuente"] == "madrid"
+    assert first["titn"] == "1"
+    assert first["soportes"] == ["DVD"]
+    assert first["ejemplares"] == 1
+    assert first["source_url"]
+
+
+def test_openapi_incluye_campos_de_agrupacion() -> None:
+    schema = app.openapi()
+    search_hit = schema["components"]["schemas"]["SearchHit"]
+    assert "obra_id" in search_hit["properties"]
+    assert "obra_titulo" in search_hit["properties"]
+    assert "ediciones_count" in search_hit["properties"]
+    search_response = schema["components"]["schemas"]["SearchResponse"]
+    assert "total_ediciones" in search_response["properties"]
+    obra = schema["components"]["schemas"]["ObraOut"]
+    assert "ediciones" in obra["properties"]

@@ -75,7 +75,11 @@ class Obra(Base):
     titulo_uniforme: Mapped[str] = mapped_column(String(1000), index=True)
     anio: Mapped[int | None] = mapped_column(Integer, index=True)
     director_principal: Mapped[str | None] = mapped_column(String(500))
+    manual: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     ediciones: Mapped[list[Edicion]] = relationship(back_populates="obra")
 
@@ -98,6 +102,8 @@ class Edicion(Base):
     obra_id: Mapped[int | None] = mapped_column(
         ForeignKey("obras.id", ondelete="CASCADE"), index=True
     )
+    obra_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+    obra_manual_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     titulo: Mapped[str] = mapped_column(String(1000))
     titulo_uniforme: Mapped[str | None] = mapped_column(String(1000))

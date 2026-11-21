@@ -253,3 +253,68 @@ def test_index_editions_por_fuente_no_reconstruye_documentos() -> None:
     assert index.documents["andalucia_1"]["personas"] == [
         {"nombre": "Dirección de prueba", "rol": "director"}
     ]
+
+
+def test_build_document_incluye_referencia_de_obra(dvd_fixture) -> None:
+    session = _session()
+    edicion = upsert_edicion(session, parse_file(str(dvd_fixture)))
+    session.commit()
+
+    document = build_document(edicion)
+
+    assert document["obra_id"] == edicion.obra_id
+    assert document["obra_key"] == f"obra:{edicion.obra_id}"
+    assert document["obra_titulo"] == edicion.obra.titulo_uniforme
+
+
+def test_build_document_sin_obra_usa_el_record_id() -> None:
+    session = _session()
+    stub = create_stub(session, "sin-obra")
+    session.commit()
+
+    document = build_document(stub)
+
+    assert document["obra_id"] is None
+    assert document["obra_key"] == "edicion:madrid:sin-obra"
+    assert document["obra_titulo"] is None
+
+
+def test_referencia_de_obra_es_filtrable() -> None:
+    assert "obra_id" in FILTERABLE_ATTRIBUTES
+    assert "obra_key" in FILTERABLE_ATTRIBUTES
+    assert "obra_titulo" in FILTERABLE_ATTRIBUTES
+
+
+def test_index_titns_actualiza_solo_las_ediciones_agrupadas() -> None:
+    from mediateca_shared.models import Obra
+
+    from mediateca.catalog.grouping import group_editions_into_obra
+
+    session = _session()
+    primera = create_stub(session, "1")
+    segunda = create_stub(session, "2")
+    tercera = create_stub(session, "3")
+    obra = Obra(titulo_uniforme="Agrupada", anio=2024, manual=True)
+    session.add(obra)
+    session.flush()
+    group_editions_into_obra(session, [primera, segunda], obra)
+    session.commit()
+
+    indexer, index = _fake_indexer()
+    index.documents["madrid_3"] = {
+        "id": "madrid_3",
+        "obra_key": "edicion:madrid:3",
+    }
+
+    total = indexer.index_titns(
+        session, [primera.record_id, segunda.record_id]
+    )
+
+    assert total == 2
+    assert index.documents["madrid_1"]["obra_key"] == f"obra:{obra.id}"
+    assert index.documents["madrid_2"]["obra_key"] == f"obra:{obra.id}"
+    assert index.documents["madrid_3"] == {
+        "id": "madrid_3",
+        "obra_key": "edicion:madrid:3",
+    }
+    assert tercera.obra_id is None

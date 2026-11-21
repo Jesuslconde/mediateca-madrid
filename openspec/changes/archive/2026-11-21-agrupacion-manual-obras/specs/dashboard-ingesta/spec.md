@@ -59,16 +59,22 @@ El dashboard MUST mostrar un menú lateral persistente en las páginas de Inicio
 
 ### Requirement: Página de Agrupación
 
-El dashboard MUST exponer una página `/agrupacion` para consultar ediciones y corregir manualmente su obra. La página SHALL permitir agrupar varias ediciones en una obra existente o nueva, y SHALL permitir devolver una edición al comportamiento automático.
+El dashboard MUST exponer una página `/agrupacion` para consultar ediciones y corregir manualmente su obra. La página SHALL permitir agrupar varias ediciones en una obra existente o nueva, y SHALL permitir devolver una edición al comportamiento automático. La obra destino MUST buscarse por texto reutilizando el filtro `q`, mostrando solo las coincidencias.
 
 #### Scenario: Consulta de ediciones
 - **WHEN** el operador abre `/agrupacion`
 - **THEN** ve una tabla paginada de ediciones con título, año, soporte, fuente, TITN, obra actual y marca manual
-- **AND** puede filtrar por texto, fuente, soporte y estado de agrupación
+- **AND** puede filtrar por texto (`q`), fuente, soporte y estado de agrupación
 - **AND** la carga no modifica datos
 
+#### Scenario: Búsqueda de la obra destino
+- **WHEN** el operador escribe texto en el filtro `q`
+- **THEN** el formulario muestra únicamente las obras cuyo título uniforme o año coincide con ese texto, hasta un máximo de 20
+- **AND** no se ofrece un desplegable con la totalidad de las obras
+- **AND** si `q` está vacío, no se listan obras candidatas
+
 #### Scenario: Agrupar en una obra existente
-- **WHEN** el operador selecciona varias ediciones, elige una obra destino y confirma
+- **WHEN** el operador selecciona varias ediciones, elige una obra destino de las coincidencias de texto y confirma
 - **THEN** las ediciones seleccionadas pasan a esa obra
 - **AND** todas las ediciones de la obra destino quedan marcadas como manuales
 - **AND** las obras antiguas que quedan sin ediciones se eliminan

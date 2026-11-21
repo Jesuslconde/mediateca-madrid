@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section>
+    <h2>Resumen de agrupación</h2>
+    <div class="grid">
+      <div class="metric"><span class="muted">Ediciones</span><strong>{{ summary.total }}</strong></div>
+      <div class="metric"><span class="muted">Sin obra</span><strong>{{ summary.sin_obra }}</strong></div>
+      <div class="metric"><span class="muted">Manual</span><strong>{{ summary.manual }}</strong></div>
+      <div class="metric"><span class="muted">Automática</span><strong>{{ summary.automatica }}</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Filtros</h2>
+    <form method="get" action="/agrupacion">
+      <label>Texto
+        <input type="text" name="q" value="{{ filter.texto or '' }}" placeholder="Título, TITN o título uniforme">
+      </label>
+      <label>Fuente
+        <select name="fuente">
+          <option value="">Todas</option>
+          {% for fuente in fuentes %}
+            <option value="{{ fuente.codigo }}" {% if filter.fuente == fuente.codigo %}selected{% endif %}>{{ fuente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Soporte
+        <input type="text" name="soporte" value="{{ filter.soporte or '' }}">
+      </label>
+      <label>Estado
+        <select name="estado">
+          <option value="" {% if not filter.estado %}selected{% endif %}>Todos</option>
+          <option value="sin_obra" {% if filter.estado == 'sin_obra' %}selected{% endif %}>Sin obra</option>
+          <option value="manual" {% if filter.estado == 'manual' %}selected{% endif %}>Manual</option>
+          <option value="automatica" {% if filter.estado == 'automatica' %}selected{% endif %}>Automática</option>
+        </select>
+      </label>
+      <button type="submit">Filtrar</button>
+      <a href="/agrupacion" class="muted">Limpiar</a>
+    </form>
+    <style>
+      select, input[type="text"], input[type="number"] { padding: .45rem .6rem; border: 1px solid #cfd6df; border-radius: 6px; }
+      .candidate-list { display: grid; gap: .5rem; margin: .75rem 0; }
+      .candidate {
+        display: flex; align-items: flex-start; gap: .6rem;
+        border: 1px solid #e5e9ef; border-radius: 8px; padding: .6rem .75rem;
+        background: var(--surface-muted);
+      }
+      .candidate label { cursor: pointer; }
+      .candidate small { color: var(--ink-muted); }
+      .grouping-actions { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid #e5e9ef; }
+      .danger { color: var(--warn); }
+    </style>
+  </section>
+
+  <section>
+    <h2>Ediciones</h2>
+    <p class="muted">{{ total }} edición{% if total != 1 %}es{% endif %} coincidentes · Página {{ page }} de {{ pages }}</p>
+    {% if rows %}
+      {% if admin_required and not is_admin %}
+        <p class="error">Desbloquea la administración desde el menú lateral para agrupar ediciones.</p>
+      {% else %}
+        <form method="post" action="/agrupacion/agrupar">
+          <input type="hidden" name="next" value="{{ next_path }}">
+          <div class="table-frame">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sel.</th>
+                  <th>Título</th>
+                  <th>Año</th>
+                  <th>Soporte</th>
+                  <th>Fuente</th>
+                  <th>TITN</th>
+                  <th>Obra actual</th>
+                  <th>Manual</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for edicion in rows %}
+                  <tr>
+                    <td>
+                      <input type="checkbox" name="record_id" value="{{ edicion.record_id }}" aria-label="Seleccionar {{ edicion.titulo }}">
+                    </td>
+                    <td>{{ edicion.titulo }}</td>
+                    <td>{{ edicion.anio if edicion.anio is not none else '—' }}</td>
+                    <td>{{ edicion.soporte_principal or '—' }}</td>
+                    <td>{{ edicion.fuente.codigo if edicion.fuente else '—' }}</td>
+                    <td>{{ edicion.titn }}</td>
+                    <td>{{ edicion.obra.titulo_uniforme if edicion.obra else '—' }}</td>
+                    <td>{{ 'Sí' if edicion.obra_manual else 'No' }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grouping-actions">
+            <h3>Obra destino</h3>
+            {% if filter.texto %}
+              {% if candidates %}
+                <div class="candidate-list">
+                  {% for candidate in candidates %}
+                    <div class="candidate">
+                      <input type="radio" name="obra_id" id="obra-{{ candidate.obra.id }}" value="{{ candidate.obra.id }}">
+                      <label for="obra-{{ candidate.obra.id }}">
+                        <strong>{{ candidate.obra.titulo_uniforme }}</strong>
+                        {% if candidate.obra.anio is not none %}<span> · {{ candidate.obra.anio }}</span>{% endif %}
+                        <br>
+                        <small>{{ candidate.ediciones_count }} edición{% if candidate.ediciones_count != 1 %}es{% endif %}{% if candidate.obra.manual %} · manual{% endif %}</small>
+                      </label>
+                    </div>
+                  {% endfor %}
+                </div>
+                <button type="submit" formaction="/agrupacion/agrupar">Agrupar en obra existente</button>
+              {% else %}
+                <p class="muted">No hay obras que coincidan con el texto «{{ filter.texto }}».</p>
+              {% endif %}
+            {% else %}
+              <p class="muted">Escribe un texto en el filtro para buscar la obra destino. Solo se muestran las coincidencias.</p>
+            {% endif %}
+
+            <h3 style="margin-top: 1rem">Obra nueva</h3>
+            <label>Título uniforme
+              <input type="text" name="titulo_uniforme" value="{{ filter.texto or '' }}">
+            </label>
+            <label>Año
+              <input type="number" name="anio" min="1900" max="2100" step="1">
+            </label>
+            <button type="submit" formaction="/agrupacion/agrupar-nueva">Agrupar en obra nueva</button>
+
+            <h3 style="margin-top: 1rem">Desvincular</h3>
+            <p class="muted">Devuelve las ediciones seleccionadas a la agrupación automática por título uniforme y año.</p>
+            <button type="submit" formaction="/agrupacion/desvincular" class="danger">Volver a automático</button>
+          </div>
+        </form>
+      {% endif %}
+
+      <div class="actions">
+        {% if has_prev %}<a href="/agrupacion?{{ prev_query }}"><button type="button">Anterior</button></a>{% endif %}
+        {% if has_next %}<a href="/agrupacion?{{ next_query }}"><button type="button">Siguiente</button></a>{% endif %}
+      </div>
+    {% else %}
+      <p class="muted">No hay ediciones para los filtros indicados.</p>
+    {% endif %}
+  </section>
+{% endblock %}

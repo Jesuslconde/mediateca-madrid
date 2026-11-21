@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import unquote_plus
 
 from fastapi.testclient import TestClient
-from mediateca_shared.models import Edicion, HarvestJob
+from mediateca_shared.models import Edicion, HarvestJob, Obra
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -1849,3 +1849,214 @@ def test_inicio_usa_rejilla_compacta_que_cabe_en_la_pantalla(
     assert 'class="panel dashboard-span-6"' in html
     assert 'class="panel dashboard-span-3"' in html
     assert 'class="grid grid-compact" id="grid-coverage"' in html
+
+
+class _FakeGroupingIndexer:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def index_titns(self, session, record_ids):  # noqa: ANN001
+        self.calls.append(list(record_ids))
+        return len(self.calls[-1])
+
+
+def _agrupacion_session():
+    session = _session()
+    obra = Obra(titulo_uniforme="La vida padre", anio=2022, manual=False)
+    session.add(obra)
+    session.flush()
+    primera = create_stub(session, "1")
+    primera.titulo = "La vida padre"
+    primera.titulo_uniforme = "La vida padre (DVD)"
+    primera.anio = 2022
+    primera.obra = obra
+    segunda = create_stub(session, "2")
+    segunda.titulo = "La vida padre"
+    segunda.titulo_uniforme = "La vida padre (Blu-ray)"
+    segunda.anio = 2022
+    session.commit()
+    return session, obra, primera, segunda
+
+
+def test_agrupacion_responde_y_muestra_candidatas_sin_select_gigante(
+    monkeypatch, tmp_path
+) -> None:
+    session, _obra, _primera, _segunda = _agrupacion_session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.get("/agrupacion?q=vida")
+        sin_texto = client.get("/agrupacion")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    html = response.text
+    assert "La vida padre" in html
+    assert 'name="record_id" value="madrid:1"' in html
+    assert "Obra destino" in html
+    assert 'name="obra_id"' in html
+    assert '<div class="candidate-list">' in html
+    assert '<select name="obra_id"' not in html
+    assert 'href="/agrupacion"' in html
+    assert 'class="nav-link active" aria-current="page">Agrupación</a>' in html
+    assert "Escribe un texto en el filtro" in sin_texto.text
+    assert '<div class="candidate-list">' not in sin_texto.text
+
+
+def test_agrupacion_es_de_solo_lectura(monkeypatch, tmp_path) -> None:
+    session, _obra, _primera, _segunda = _agrupacion_session()
+    before = session.scalar(select(func.count(Edicion.id)))
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        assert client.get("/agrupacion?q=vida").status_code == 200
+    finally:
+        _clear_overrides()
+
+    assert session.scalar(select(func.count(Edicion.id))) == before
+
+
+def test_post_agrupar_en_obra_existente(monkeypatch, tmp_path) -> None:
+    session, obra, primera, segunda = _agrupacion_session()
+    fake = _FakeGroupingIndexer()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(dashboard_module, "MeiliIndexer", lambda: fake)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/agrupacion/agrupar",
+            data={
+                "record_id": [primera.record_id, segunda.record_id],
+                "obra_id": str(obra.id),
+                "next": "/agrupacion?q=vida",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/agrupacion?q=vida&message=")
+    assert primera.obra_id == obra.id
+    assert segunda.obra_id == obra.id
+    assert primera.obra_manual is True
+    assert segunda.obra_manual is True
+    assert obra.manual is True
+    assert fake.calls == [[primera.record_id, segunda.record_id]]
+
+
+def test_post_agrupar_en_obra_nueva_reutiliza_clave(monkeypatch, tmp_path) -> None:
+    session, obra, primera, segunda = _agrupacion_session()
+    fake = _FakeGroupingIndexer()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(dashboard_module, "MeiliIndexer", lambda: fake)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/agrupacion/agrupar-nueva",
+            data={
+                "record_id": [primera.record_id, segunda.record_id],
+                "titulo_uniforme": "La vida padre",
+                "anio": "2022",
+                "next": "/agrupacion",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert session.scalar(select(func.count(Obra.id))) == 1
+    assert primera.obra_id == obra.id
+    assert obra.manual is True
+    assert fake.calls == [[primera.record_id, segunda.record_id]]
+
+
+def test_post_desvincular_vuelve_a_automatico(monkeypatch, tmp_path) -> None:
+    session, obra, primera, _segunda = _agrupacion_session()
+    primera.obra_manual = True
+    primera.obra_manual_at = datetime.now(UTC)
+    obra.manual = True
+    session.commit()
+    fake = _FakeGroupingIndexer()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(dashboard_module, "MeiliIndexer", lambda: fake)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/agrupacion/desvincular",
+            data={
+                "record_id": primera.record_id,
+                "next": "/agrupacion?estado=manual",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith(
+        "/agrupacion?estado=manual&message="
+    )
+    assert primera.obra_manual is False
+    assert primera.obra.titulo_uniforme == "La vida padre (DVD)"
+    assert fake.calls == [[primera.record_id]]
+
+
+def test_post_agrupacion_rechaza_seleccion_inexistente(monkeypatch, tmp_path) -> None:
+    session, obra, _primera, _segunda = _agrupacion_session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/agrupacion/agrupar",
+            data={
+                "record_id": "madrid:no-existe",
+                "obra_id": str(obra.id),
+                "next": "/agrupacion",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "no existe" in unquote_plus(response.headers["location"])
+    assert obra.manual is False
+
+
+def test_post_agrupacion_exige_token(monkeypatch, tmp_path) -> None:
+    session, obra, primera, _segunda = _agrupacion_session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", "secreto")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/agrupacion/agrupar",
+            data={
+                "record_id": primera.record_id,
+                "obra_id": str(obra.id),
+                "next": "/agrupacion",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "Token de administracion" in unquote_plus(response.headers["location"])
+    assert primera.obra_manual is False

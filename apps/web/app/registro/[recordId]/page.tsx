@@ -184,6 +184,60 @@ export default async function RecordPage({
             </section>
           ) : null}
 
+          {(record.obra?.ediciones?.length ?? 0) > 1 ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+              <h2 className="text-lg font-bold text-ink">Ediciones de la misma obra</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {record.obra?.ediciones?.length} ediciones comparten esta obra.
+              </p>
+              <ul className="mt-4 space-y-2">
+                {(record.obra?.ediciones ?? []).map((edicion) => {
+                  const actual = edicion.record_id === record.record_id;
+                  return (
+                    <li
+                      key={edicion.record_id}
+                      className={`rounded-xl border p-3 ${
+                        actual
+                          ? "border-accent/40 bg-rose-50/40"
+                          : "border-slate-200 bg-slate-50/40"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/registro/${encodeURIComponent(edicion.record_id)}?volver=${encodeURIComponent(volver)}`}
+                            className="text-sm font-semibold text-ink underline-offset-4 hover:text-accent hover:underline"
+                          >
+                            {edicion.titulo}
+                          </Link>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {[edicion.fuente_nombre || edicion.fuente, edicion.anio]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {actual ? (
+                            <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-white">
+                              Edición actual
+                            </span>
+                          ) : null}
+                          {edicion.soportes.map((soporte) => (
+                            <SupportBadge key={soporte} support={soporte} />
+                          ))}
+                          <span className="text-xs text-slate-500">
+                            {edicion.ejemplares} ejemplar
+                            {edicion.ejemplares === 1 ? "" : "es"}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink">Bibliotecas con ejemplares</h2>
             <p className="mb-4 mt-1 text-xs text-slate-400">

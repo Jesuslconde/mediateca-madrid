@@ -288,24 +288,32 @@ guarda en una cookie `HttpOnly` con `SameSite=Strict`.
 
 ## Dashboard de administracion
 
-El dashboard sirve cuatro paginas con un menu lateral comun: Inicio (`/`),
-Catálogo (`/catalogo`), Tareas (`/tareas`) y Configuracion (`/configuracion`).
-Inicio muestra la salud del worker, el resumen de trabajos por estado y tipo, la
-cobertura y las metricas. Catálogo es una vista de solo lectura del estado de
-enriquecimiento por edicion, con resumen por estado OPAC y TMDB, filtros (estado,
-texto, soporte, biblioteca, año, idioma y país, desaparición) y tabla paginada.
-Tareas separa el lanzamiento y la cola en dos pestañas: "Lanzar trabajos" agrupa
-las acciones por finalidad, con una tarjeta por tarea, la explicacion de sus
-parametros y el estado de la cola; "Trabajos recientes" muestra la tabla en un
-marco con scroll propio. El dashboard ocupa la ventana completa y solo scrollean
-las zonas internas que lo necesitan. Configuracion agrupa la programacion, la URL
-de FlareSolverr y el token de TMDB.
+El dashboard sirve cinco paginas con un menu lateral comun: Inicio (`/`),
+Catálogo (`/catalogo`), Agrupación (`/agrupacion`), Tareas (`/tareas`) y
+Configuracion (`/configuracion`). Inicio muestra la salud del worker, el resumen
+de trabajos por estado y tipo, la cobertura y las metricas. Catálogo es una vista
+de solo lectura del estado de enriquecimiento por edicion, con resumen por estado
+OPAC y TMDB, filtros (estado, texto, soporte, biblioteca, año, idioma y país,
+desaparición) y tabla paginada. Agrupación permite seleccionar ediciones y
+asignarlas a una obra existente, crear una obra nueva o devolverlas al
+comportamiento automatico. La obra destino se busca reutilizando el texto `q`
+del apartado Filtros: solo se muestran las coincidencias por titulo uniforme o
+año, nunca un desplegable con todas las obras. Tras agrupar o desvincular se
+reindexan las ediciones afectadas; si Meilisearch falla, la decision manual queda
+guardada y la pagina avisa de que hay que ejecutar `make index`. Tareas separa el
+lanzamiento y la cola en dos pestañas: "Lanzar trabajos" agrupa las acciones por
+finalidad, con una tarjeta por tarea, la explicacion de sus parametros y el estado
+de la cola; "Trabajos recientes" muestra la tabla en un marco con scroll propio.
+El dashboard ocupa la ventana completa y solo scrollean las zonas internas que lo
+necesitan. Configuracion agrupa la programacion, la URL de FlareSolverr y el token
+de TMDB.
 
-Inicio y Tareas se refrescan consultando la API de observabilidad; Configuracion
-y Catálogo no lo hacen para no perder los formularios ni los filtros. Las rutas POST
-conservan su URL y redirigen a la pagina de origen con `message` o `error`; el
-campo `next` se valida contra `/`, `/catalogo`, `/tareas` y `/configuracion`. El
-estado de administracion y el login/logout viven en el menu lateral.
+Inicio y Tareas se refrescan consultando la API de observabilidad; Configuracion,
+Catálogo y Agrupación no lo hacen para no perder los formularios ni los filtros.
+Las rutas POST conservan su URL y redirigen a la pagina de origen con `message` o
+`error`; el campo `next` se valida contra `/`, `/catalogo`, `/agrupacion`,
+`/tareas` y `/configuracion`. El estado de administracion y el login/logout viven
+en el menu lateral.
 
 ## Observabilidad de la ingesta
 

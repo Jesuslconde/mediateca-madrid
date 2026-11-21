@@ -7,6 +7,7 @@ from pathlib import Path
 import mediateca_shared.models  # noqa: F401  (registra las tablas)
 import pytest
 from mediateca_shared.models import Fuente
+from mediateca_shared.version import SCHEMA_VERSION
 from sqlalchemy import create_engine
 
 from mediateca.core.db import Base
@@ -39,8 +40,9 @@ def _run_migrations(conn) -> None:
     for migration in sorted(MIGRATIONS_DIR.glob("migrate_*.sql")):
         conn.exec_driver_sql(migration.read_text(encoding="utf-8"))
     conn.exec_driver_sql(
-        "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '7') "
-        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+        "INSERT INTO schema_meta (key, value) VALUES ('schema_version', %s) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (SCHEMA_VERSION,),
     )
 
 
@@ -164,7 +166,14 @@ def test_migraciones_dos_veces_sobre_esquema_legacy(pg_connection) -> None:
     ).scalar_one() == "madrid:2101557"
     assert conn.exec_driver_sql(
         "SELECT value FROM schema_meta WHERE key = 'schema_version'"
-    ).scalar_one() == "7"
+    ).scalar_one() == SCHEMA_VERSION
+    assert {
+        row[0]
+        for row in conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'ediciones'"
+        )
+    } >= {"obra_manual", "obra_manual_at"}
 
 
 def test_migraciones_sobre_esquema_nuevo_son_idempotentes(pg_connection) -> None:
@@ -184,6 +193,20 @@ def test_migraciones_sobre_esquema_nuevo_son_idempotentes(pg_connection) -> None
         "SELECT enabled, format_value, base_url FROM fuentes WHERE codigo = 'andalucia'"
     ).one() == (True, "05", "https://www.juntadeandalucia.es")
     assert conn.exec_driver_sql("SELECT count(*) FROM ediciones").scalar_one() == 0
+    assert {
+        row[0]
+        for row in conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'obras'"
+        )
+    } >= {"manual", "updated_at"}
+    assert {
+        row[0]
+        for row in conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'ediciones'"
+        )
+    } >= {"obra_manual", "obra_manual_at"}
 
 
 def test_migracion_configura_el_directorio_de_andalucia(pg_connection) -> None:

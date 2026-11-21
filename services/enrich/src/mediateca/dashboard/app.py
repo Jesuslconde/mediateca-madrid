@@ -10,13 +10,19 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from mediateca_shared.constants import ENRICH_STATUSES, JOB_TYPES, TMDB_STATUSES
-from mediateca_shared.models import Edicion
+from mediateca_shared.models import Edicion, Obra
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from mediateca.api.routers.ingest import router as ingest_router
 from mediateca.catalog.fuentes import enabled_fuentes, get_fuente
+from mediateca.catalog.grouping import (
+    create_obra_and_group,
+    group_editions_into_obra,
+    ungroup_edition,
+)
+from mediateca.catalog.indexer import MeiliIndexer
 from mediateca.catalog.jobs import (
     JobAlreadyActive,
     build_tmdb_client,
@@ -64,6 +70,13 @@ from mediateca.core.scheduling import (
     save_schedule_settings,
 )
 
+from .agrupacion_queries import (
+    AgrupacionFilter,
+    agrupacion_rows,
+    agrupacion_summary,
+    agrupacion_total,
+    obra_candidates,
+)
 from .catalog_queries import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -98,7 +111,7 @@ DEGRADED_MESSAGE = (
 
 ADMIN_COOKIE = "mediateca_admin"
 ADMIN_COOKIE_MAX_AGE = 8 * 60 * 60
-NEXT_PATHS = {"/", "/catalogo", "/tareas", "/configuracion"}
+NEXT_PATHS = {"/", "/catalogo", "/agrupacion", "/tareas", "/configuracion"}
 
 
 def _has_write_access(request: Request) -> bool:
@@ -121,6 +134,15 @@ def _safe_catalog_next(value: str | None) -> str:
     if candidate.startswith("/catalogo?"):
         return candidate
     return "/catalogo"
+
+
+def _safe_agrupacion_next(value: str | None) -> str:
+    candidate = (value or "").strip()
+    if candidate == "/agrupacion":
+        return candidate
+    if candidate.startswith("/agrupacion?"):
+        return candidate
+    return "/agrupacion"
 
 
 def _redirect_with(
@@ -310,6 +332,101 @@ def _catalogo_context(request: Request, session: Session) -> dict[str, Any]:
     return context
 
 
+def _parse_agrupacion_filter(request: Request) -> AgrupacionFilter:
+    q = request.query_params
+
+    def _int(name: str, default: int) -> int:
+        raw = q.get(name)
+        if raw is None or raw == "":
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+
+    estado = q.get("estado") or None
+    if estado not in {"sin_obra", "manual", "automatica"}:
+        estado = None
+    return AgrupacionFilter(
+        texto=q.get("q") or None,
+        fuente=q.get("fuente") or None,
+        soporte=q.get("soporte") or None,
+        estado=estado,
+        page=max(_int("page", 1), 1),
+        limit=min(max(_int("limit", DEFAULT_LIMIT), 1), MAX_LIMIT),
+    )
+
+
+def _agrupacion_next(request: Request) -> str:
+    params = [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key not in {"message", "error"}
+    ]
+    return f"/agrupacion?{urlencode(params)}" if params else "/agrupacion"
+
+
+def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
+    filtro = _parse_agrupacion_filter(request)
+    summary = agrupacion_summary(session, filtro)
+    total = agrupacion_total(session, filtro)
+    rows = agrupacion_rows(session, filtro)
+    page = filtro.page
+    limit = filtro.limit
+    pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
+    context = _base_context(request, "agrupacion", refresh_seconds=None)
+    context.update(
+        {
+            "filter": filtro,
+            "summary": summary,
+            "total": total,
+            "rows": rows,
+            "page": page,
+            "pages": pages,
+            "has_prev": page > 1,
+            "has_next": page < pages,
+            "prev_query": _page_query(request, page - 1),
+            "next_query": _page_query(request, page + 1),
+            "next_path": _agrupacion_next(request),
+            "candidates": obra_candidates(session, filtro.texto),
+            "fuentes": enabled_fuentes(session),
+        }
+    )
+    return context
+
+
+def _form_records(values: dict[str, list[str]]) -> list[str]:
+    unique: list[str] = []
+    for raw in values.get("record_id") or []:
+        record_id = raw.strip()
+        if record_id and record_id not in unique:
+            unique.append(record_id)
+    return unique
+
+
+def _load_ediciones(session: Session, record_ids: list[str]) -> list[Edicion]:
+    if not record_ids:
+        raise ValueError("No hay ediciones seleccionadas")
+    ediciones = list(
+        session.scalars(select(Edicion).where(Edicion.record_id.in_(record_ids)))
+    )
+    if len(ediciones) != len(record_ids):
+        raise ValueError("Alguna edicion seleccionada no existe")
+    by_id = {edicion.record_id: edicion for edicion in ediciones}
+    return [by_id[record_id] for record_id in record_ids]
+
+
+def _reindex_grouping(session: Session, record_ids: list[str]) -> str | None:
+    if not record_ids:
+        return None
+    try:
+        MeiliIndexer().index_titns(session, record_ids)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("No se pudieron reindexar las ediciones agrupadas: %s", exc)
+        return "Agrupacion guardada, pero no se pudo actualizar el indice; ejecuta make index"
+    return None
+
+
 def _degraded(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
@@ -392,6 +509,143 @@ def catalogo(
         request=request,
         name="catalogo.html",
         context=context,
+    )
+
+
+@app.get("/agrupacion", response_class=HTMLResponse)
+def agrupacion(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    try:
+        context = _agrupacion_context(request, session)
+    except SQLAlchemyError:
+        logger.exception("No se pudo leer la agrupacion manual")
+        return _degraded(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="agrupacion.html",
+        context=context,
+    )
+
+
+@app.post("/agrupacion/agrupar")
+async def group_into_existing_obra(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_agrupacion_next((values.get("next") or [""])[0])
+    if not _has_write_access(request):
+        return _redirect_with(
+            next_path,
+            error="Token de administracion requerido o incorrecto",
+        )
+
+    try:
+        obra_id = int((values.get("obra_id") or [""])[0].strip())
+        if obra_id <= 0:
+            raise ValueError
+    except ValueError:
+        return _redirect_with(next_path, error="Selecciona una obra destino valida")
+    obra = session.get(Obra, obra_id)
+    if obra is None:
+        return _redirect_with(next_path, error="La obra destino no existe")
+
+    record_ids = _form_records(values)
+    try:
+        ediciones = _load_ediciones(session, record_ids)
+        affected = group_editions_into_obra(session, ediciones, obra)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo agrupar las ediciones")
+        return _redirect_with(next_path, error="No se pudo guardar la agrupacion")
+
+    warning = _reindex_grouping(session, affected)
+    return _redirect_with(
+        next_path,
+        message=f"{len(affected)} ediciones agrupadas en {obra.titulo_uniforme}",
+        error=warning,
+    )
+
+
+@app.post("/agrupacion/agrupar-nueva")
+async def group_into_new_obra(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_agrupacion_next((values.get("next") or [""])[0])
+    if not _has_write_access(request):
+        return _redirect_with(
+            next_path,
+            error="Token de administracion requerido o incorrecto",
+        )
+
+    titulo = (values.get("titulo_uniforme") or [""])[0].strip()
+    if not titulo:
+        return _redirect_with(next_path, error="Introduce el titulo uniforme")
+    raw_anio = (values.get("anio") or [""])[0].strip()
+    try:
+        anio = int(raw_anio) if raw_anio else None
+    except ValueError:
+        return _redirect_with(next_path, error="El anio debe ser un numero entero")
+
+    record_ids = _form_records(values)
+    try:
+        ediciones = _load_ediciones(session, record_ids)
+        obra, affected = create_obra_and_group(session, ediciones, titulo, anio)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo crear la obra y agrupar las ediciones")
+        return _redirect_with(next_path, error="No se pudo guardar la agrupacion")
+
+    warning = _reindex_grouping(session, affected)
+    return _redirect_with(
+        next_path,
+        message=f"{len(affected)} ediciones agrupadas en {obra.titulo_uniforme}",
+        error=warning,
+    )
+
+
+@app.post("/agrupacion/desvincular")
+async def ungroup_from_obra(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_agrupacion_next((values.get("next") or [""])[0])
+    if not _has_write_access(request):
+        return _redirect_with(
+            next_path,
+            error="Token de administracion requerido o incorrecto",
+        )
+
+    record_ids = _form_records(values)
+    try:
+        ediciones = _load_ediciones(session, record_ids)
+        affected = [ungroup_edition(session, edicion) for edicion in ediciones]
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo desvincular las ediciones")
+        return _redirect_with(next_path, error="No se pudo guardar la desvinculacion")
+
+    warning = _reindex_grouping(session, affected)
+    return _redirect_with(
+        next_path,
+        message=f"{len(affected)} ediciones devueltas a la agrupacion automatica",
+        error=warning,
     )
 
 

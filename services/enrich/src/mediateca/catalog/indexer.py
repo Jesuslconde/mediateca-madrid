@@ -45,6 +45,9 @@ FILTERABLE_ATTRIBUTES = [
     "duracion_min",
     "detail_complete",
     "is_stub",
+    "obra_id",
+    "obra_key",
+    "obra_titulo",
 ]
 
 SEARCHABLE_ATTRIBUTES = [
@@ -146,12 +149,21 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
             if ejemplar.sucursal_nombre:
                 ubicaciones_texto.add(ejemplar.sucursal_nombre)
     materias = [relacion.materia.termino for relacion in edicion.materias]
+    obra = edicion.obra
+    obra_id = edicion.obra_id
+    obra_key = (
+        f"obra:{obra_id}" if obra_id is not None else f"edicion:{edicion.record_id}"
+    )
+    obra_titulo = obra.titulo_uniforme if obra is not None else None
 
     return {
         "id": _meili_id(edicion.record_id),
         "record_id": edicion.record_id,
         "fuente": fuente_codigo,
         "fuente_nombre": fuente_nombre,
+        "obra_id": obra_id,
+        "obra_key": obra_key,
+        "obra_titulo": obra_titulo,
         "titn": edicion.titn,
         "titulo": edicion.titulo,
         "titulo_uniforme": edicion.titulo_uniforme,
@@ -326,6 +338,7 @@ class MeiliIndexer:
                 .where(Edicion.record_id.in_(chunk))
                 .options(
                     selectinload(Edicion.fuente),
+                    selectinload(Edicion.obra),
                     selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
                     selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
                     selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
@@ -402,6 +415,7 @@ def iter_ediciones(
 ) -> Iterable[Edicion]:
     stmt = select(Edicion).options(
         selectinload(Edicion.fuente),
+        selectinload(Edicion.obra),
         selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
         selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
         selectinload(Edicion.materias).selectinload(EdicionMateria.materia),

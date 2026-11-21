@@ -205,7 +205,7 @@ async function SearchBody({
         <header className="flex flex-wrap items-end justify-between gap-3">
           <p className="text-sm text-slate-500">
             {result
-              ? `${result.total.toLocaleString("es-ES")} ediciones · ${result.took_ms} ms`
+              ? `${result.total.toLocaleString("es-ES")} obras · ${result.total_ediciones.toLocaleString("es-ES")} ediciones · ${result.took_ms} ms`
               : "No se pudo consultar el índice"}
           </p>
           {result && result.total_pages > 1 ? (
