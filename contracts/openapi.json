@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.5.1"
+    "version": "0.7.8"
   },
   "paths": {
     "/api/search": {
@@ -1094,6 +1094,80 @@
         ],
         "title": "LocationOut"
       },
+      "ObraEdicionOut": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "title": "Record Id"
+          },
+          "fuente": {
+            "type": "string",
+            "title": "Fuente"
+          },
+          "titn": {
+            "type": "string",
+            "title": "Titn"
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "anio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anio"
+          },
+          "soportes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Soportes",
+            "default": []
+          },
+          "ean": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ean"
+          },
+          "ejemplares": {
+            "type": "integer",
+            "title": "Ejemplares",
+            "default": 0
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "fuente",
+          "titn",
+          "titulo"
+        ],
+        "title": "ObraEdicionOut"
+      },
       "ObraOut": {
         "properties": {
           "id": {
@@ -1125,6 +1199,14 @@
               }
             ],
             "title": "Director Principal"
+          },
+          "ediciones": {
+            "items": {
+              "$ref": "#/components/schemas/ObraEdicionOut"
+            },
+            "type": "array",
+            "title": "Ediciones",
+            "default": []
           }
         },
         "type": "object",
@@ -1673,6 +1755,33 @@
             "title": "Guionistas",
             "default": []
           },
+          "obra_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obra Id"
+          },
+          "obra_titulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obra Titulo"
+          },
+          "ediciones_count": {
+            "type": "integer",
+            "title": "Ediciones Count",
+            "default": 1
+          },
           "_formatted": {
             "anyOf": [
               {
@@ -1739,6 +1848,10 @@
             "type": "integer",
             "title": "Total"
           },
+          "total_ediciones": {
+            "type": "integer",
+            "title": "Total Ediciones"
+          },
           "total_pages": {
             "type": "integer",
             "title": "Total Pages"
@@ -1771,6 +1884,7 @@
           "page",
           "limit",
           "total",
+          "total_ediciones",
           "total_pages",
           "took_ms",
           "facets",

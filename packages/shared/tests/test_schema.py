@@ -76,8 +76,22 @@ def test_sucursal_incluye_ubicacion() -> None:
     assert hasattr(Ejemplar, "sucursal")
 
 
-def test_esquema_version_7() -> None:
-    assert SCHEMA_VERSION == "7"
+def test_esquema_version_8() -> None:
+    assert SCHEMA_VERSION == "8"
+
+
+def test_edicion_incluye_agrupacion_manual() -> None:
+    columnas = {columna.name for columna in Edicion.__table__.columns}
+    assert "obra_manual" in columnas
+    assert "obra_manual_at" in columnas
+
+
+def test_obra_incluye_marca_manual() -> None:
+    from mediateca_shared.models import Obra
+
+    columnas = {columna.name for columna in Obra.__table__.columns}
+    assert "manual" in columnas
+    assert "updated_at" in columnas
 
 
 def test_fuente_valida_codigo() -> None:

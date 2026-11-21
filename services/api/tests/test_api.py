@@ -236,6 +236,7 @@ class _CapturingIndexer:
             "page": 1,
             "limit": 20,
             "total": 0,
+            "total_ediciones": 0,
             "total_pages": 1,
             "took_ms": 0,
             "facets": {},

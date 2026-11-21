@@ -119,17 +119,28 @@ class CatalogSearch:
         if sort:
             options["sort"] = sort
 
-        result = self.index.search(query or "", options)
+        # Consulta de hits agrupados por obra. La segunda consulta, sin distinct,
+        # calcula las facetas y el total de ediciones sin colapsar.
+        hits_options = {**options, "distinct": "obra_key"}
+        hits_options.pop("facets", None)
+        result = self.index.search(query or "", hits_options)
         hits = result.get("hits", [])
         total = result.get("estimatedTotalHits", result.get("totalHits", len(hits)))
+
+        facets_result = self.index.search(query or "", options)
+        total_ediciones = facets_result.get(
+            "estimatedTotalHits", facets_result.get("totalHits", 0)
+        )
+
         return {
             "query": query or "",
             "page": max(1, page),
             "limit": max(1, min(limit, 100)),
             "total": total,
+            "total_ediciones": total_ediciones,
             "total_pages": max(1, math.ceil(total / max(1, limit))),
             "took_ms": result.get("processingTimeMs", 0),
-            "facets": result.get("facetDistribution", {}),
+            "facets": facets_result.get("facetDistribution", {}),
             "hits": hits,
         }
 

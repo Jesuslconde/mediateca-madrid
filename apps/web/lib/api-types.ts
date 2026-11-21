@@ -355,6 +355,33 @@ export interface components {
             /** Ejemplares */
             ejemplares: number;
         };
+        /** ObraEdicionOut */
+        ObraEdicionOut: {
+            /** Record Id */
+            record_id: string;
+            /** Fuente */
+            fuente: string;
+            /** Titn */
+            titn: string;
+            /** Titulo */
+            titulo: string;
+            /** Anio */
+            anio?: number | null;
+            /**
+             * Soportes
+             * @default []
+             */
+            soportes: string[];
+            /** Ean */
+            ean?: string | null;
+            /**
+             * Ejemplares
+             * @default 0
+             */
+            ejemplares: number;
+            /** Source Url */
+            source_url?: string | null;
+        };
         /** ObraOut */
         ObraOut: {
             /** Id */
@@ -365,6 +392,11 @@ export interface components {
             anio?: number | null;
             /** Director Principal */
             director_principal?: string | null;
+            /**
+             * Ediciones
+             * @default []
+             */
+            ediciones: components["schemas"]["ObraEdicionOut"][];
         };
         /** PersonaOut */
         PersonaOut: {
@@ -547,6 +579,15 @@ export interface components {
              * @default []
              */
             guionistas: string[];
+            /** Obra Id */
+            obra_id?: number | null;
+            /** Obra Titulo */
+            obra_titulo?: string | null;
+            /**
+             * Ediciones Count
+             * @default 1
+             */
+            ediciones_count: number;
             _formatted?: components["schemas"]["SearchHitFormatted"] | null;
         };
         /** SearchHitFormatted */
@@ -568,6 +609,8 @@ export interface components {
             limit: number;
             /** Total */
             total: number;
+            /** Total Ediciones */
+            total_ediciones: number;
             /** Total Pages */
             total_pages: number;
             /** Took Ms */

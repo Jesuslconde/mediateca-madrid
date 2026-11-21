@@ -73,27 +73,43 @@ def _director_principal(parsed: ParsedEdicion) -> str | None:
     return None
 
 
-def get_or_create_obra(session: Session, parsed: ParsedEdicion) -> Obra:
-    titulo = parsed.titulo_uniforme or parsed.titulo
-    stmt = select(Obra).where(Obra.titulo_uniforme == titulo)
-    if parsed.anio is None:
-        stmt = stmt.where(Obra.anio.is_(None))
-    else:
-        stmt = stmt.where(Obra.anio == parsed.anio)
-
+def get_or_create_obra_by_key(
+    session: Session,
+    titulo_uniforme: str,
+    anio: int | None,
+    *,
+    director_principal: str | None = None,
+) -> Obra:
+    """Devuelve la obra con la clave ``(titulo_uniforme, anio)`` o la crea."""
     with session.no_autoflush:
+        stmt = select(Obra).where(Obra.titulo_uniforme == titulo_uniforme)
+        if anio is None:
+            stmt = stmt.where(Obra.anio.is_(None))
+        else:
+            stmt = stmt.where(Obra.anio == anio)
+
         obra = session.scalars(stmt).first()
         if obra is None:
             obra = Obra(
-                titulo_uniforme=titulo,
-                anio=parsed.anio,
-                director_principal=_director_principal(parsed),
+                titulo_uniforme=titulo_uniforme,
+                anio=anio,
+                director_principal=director_principal,
             )
             session.add(obra)
             session.flush()
-        elif obra.director_principal is None:
-            obra.director_principal = _director_principal(parsed)
+        elif obra.director_principal is None and director_principal is not None:
+            obra.director_principal = director_principal
     return obra
+
+
+def get_or_create_obra(session: Session, parsed: ParsedEdicion) -> Obra:
+    titulo = parsed.titulo_uniforme or parsed.titulo
+    return get_or_create_obra_by_key(
+        session,
+        titulo,
+        parsed.anio,
+        director_principal=_director_principal(parsed),
+    )
 
 
 def get_or_create_biblioteca(
@@ -275,12 +291,18 @@ def upsert_edicion(
         from mediateca.catalog.fuentes import ensure_default_fuente
 
         fuente = ensure_default_fuente(session)
-    obra = get_or_create_obra(session, parsed)
 
     record_id = compose_record_id(fuente.codigo, parsed.titn)
     edicion = session.scalars(
         select(Edicion).where(Edicion.record_id == record_id)
     ).first()
+
+    if edicion is not None and edicion.obra_manual and edicion.obra is not None:
+        # La agrupacion manual prevalece: no se reasigna la obra.
+        obra = edicion.obra
+    else:
+        obra = get_or_create_obra(session, parsed)
+
     if edicion is None:
         edicion = Edicion(
             fuente_id=fuente.id,
@@ -321,6 +343,11 @@ def upsert_edicion(
     _sync_materias(session, edicion, parsed)
     _sync_enlaces(edicion, parsed)
     _sync_ejemplares(session, edicion, parsed, fuente.id)
+
+    # Las ediciones que caen en una obra manual quedan marcadas como manuales.
+    if obra.manual and not edicion.obra_manual:
+        edicion.obra_manual = True
+        edicion.obra_manual_at = datetime.now(UTC)
 
     timestamp = datetime.now(UTC)
     if edicion.discovery_seen_at is None:

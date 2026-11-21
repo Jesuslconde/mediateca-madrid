@@ -41,4 +41,19 @@ def get_record(record_id: str, session: Session = Depends(get_db)) -> RecordDeta
     edicion = session.scalars(stmt).first()
     if edicion is None:
         raise HTTPException(status_code=404, detail=f"No existe el registro {record_id}")
-    return RecordDetail(**serialize_record(edicion))
+
+    hermanas: list[Edicion] = []
+    if edicion.obra_id is not None:
+        hermanas = list(
+            session.scalars(
+                select(Edicion)
+                .where(Edicion.obra_id == edicion.obra_id)
+                .options(
+                    selectinload(Edicion.fuente),
+                    selectinload(Edicion.ejemplares),
+                )
+                .order_by(Edicion.record_id)
+            )
+        )
+
+    return RecordDetail(**serialize_record(edicion, hermanas=hermanas))

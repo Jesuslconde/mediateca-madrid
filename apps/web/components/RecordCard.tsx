@@ -98,6 +98,7 @@ export function RecordCard({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
         <span className="text-slate-600">
+          {hit.ediciones_count ?? 1} edición{(hit.ediciones_count ?? 1) === 1 ? "" : "es"} ·{" "}
           {hit.ejemplares ?? 0} ejemplar{hit.ejemplares === 1 ? "" : "es"}
         </span>
         <div className="flex items-center gap-3">

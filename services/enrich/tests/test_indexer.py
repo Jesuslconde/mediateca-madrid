@@ -219,6 +219,35 @@ def test_index_reset_reconstruye_paises_origen(dvd_fixture) -> None:
     assert index.documents[edicion.record_id.replace(":", "_")]["paises_origen"] == ["ES"]
 
 
+def test_build_document_incluye_referencia_de_obra(dvd_fixture) -> None:
+    session = _session()
+    edicion = upsert_edicion(session, parse_file(str(dvd_fixture)))
+    session.commit()
+
+    document = build_document(edicion)
+
+    assert document["obra_id"] == edicion.obra_id
+    assert document["obra_key"] == f"obra:{edicion.obra_id}"
+    assert document["obra_titulo"] == edicion.obra.titulo_uniforme
+
+
+def test_build_document_sin_obra_usa_record_id() -> None:
+    session = _session()
+    stub = create_stub(session, "123")
+    session.commit()
+
+    document = build_document(stub)
+
+    assert document["obra_id"] is None
+    assert document["obra_key"] == "edicion:madrid:123"
+    assert document["obra_titulo"] is None
+
+
+def test_obra_id_y_obra_key_son_filtrables() -> None:
+    assert "obra_id" in FILTERABLE_ATTRIBUTES
+    assert "obra_key" in FILTERABLE_ATTRIBUTES
+
+
 def test_index_editions_por_fuente_no_reconstruye_documentos() -> None:
     session = _session()
     madrid = Fuente(codigo="madrid", nombre="Madrid", base_url="https://madrid.example")

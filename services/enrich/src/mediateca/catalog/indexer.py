@@ -45,6 +45,8 @@ FILTERABLE_ATTRIBUTES = [
     "duracion_min",
     "detail_complete",
     "is_stub",
+    "obra_id",
+    "obra_key",
 ]
 
 SEARCHABLE_ATTRIBUTES = [
@@ -147,6 +149,16 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
                 ubicaciones_texto.add(ejemplar.sucursal_nombre)
     materias = [relacion.materia.termino for relacion in edicion.materias]
 
+    obra = edicion.obra
+    if obra is not None:
+        obra_id = obra.id
+        obra_key = f"obra:{obra.id}"
+        obra_titulo = obra.titulo_uniforme
+    else:
+        obra_id = None
+        obra_key = f"edicion:{edicion.record_id}"
+        obra_titulo = None
+
     return {
         "id": _meili_id(edicion.record_id),
         "record_id": edicion.record_id,
@@ -155,6 +167,9 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
         "titn": edicion.titn,
         "titulo": edicion.titulo,
         "titulo_uniforme": edicion.titulo_uniforme,
+        "obra_id": obra_id,
+        "obra_key": obra_key,
+        "obra_titulo": obra_titulo,
         "publicacion": edicion.publicacion,
         "anio": edicion.anio,
         "idioma": edicion.idioma,
@@ -326,6 +341,7 @@ class MeiliIndexer:
                 .where(Edicion.record_id.in_(chunk))
                 .options(
                     selectinload(Edicion.fuente),
+                    selectinload(Edicion.obra),
                     selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
                     selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
                     selectinload(Edicion.materias).selectinload(EdicionMateria.materia),
@@ -402,6 +418,7 @@ def iter_ediciones(
 ) -> Iterable[Edicion]:
     stmt = select(Edicion).options(
         selectinload(Edicion.fuente),
+        selectinload(Edicion.obra),
         selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
         selectinload(Edicion.personas).selectinload(EdicionPersona.persona),
         selectinload(Edicion.materias).selectinload(EdicionMateria.materia),

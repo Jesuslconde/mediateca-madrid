@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.orm import Session
 
-from mediateca.api.deps import get_indexer
+from mediateca.api.aggregation import aggregate_hits
+from mediateca.api.deps import get_db, get_indexer
 from mediateca.api.schemas import SearchResponse
 from mediateca.catalog.search import CatalogSearch
 
@@ -39,6 +41,7 @@ def search(
     limit: int = Query(default=20, ge=1, le=100),
     sort: str = Query(default="relevancia"),
     indexer: CatalogSearch = Depends(get_indexer),
+    session: Session = Depends(get_db),
 ) -> SearchResponse:
     if "disponible" in request.query_params:
         raise HTTPException(
@@ -80,4 +83,5 @@ def search(
             detail="El indice de busqueda no esta disponible",
         ) from exc
 
+    result["hits"] = aggregate_hits(session, result.get("hits", []))
     return SearchResponse(**result)
