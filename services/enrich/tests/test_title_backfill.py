@@ -167,7 +167,7 @@ def test_cli_reindexa_solo_los_titn_cambiados(monkeypatch) -> None:
     )
 
     assert resultado.exit_code == 0
-    assert capturados == ["1"]
+    assert capturados == ["madrid:1"]
 
 
 def test_cli_reindex_sin_apply_no_indexa(monkeypatch) -> None:
@@ -311,5 +311,5 @@ def test_cli_material_only_filtra_por_fuente_y_reindexa(monkeypatch) -> None:
     )
 
     assert resultado.exit_code == 0
-    assert capturados == ["2"]
+    assert capturados == ["andalucia:2"]
     assert edicion_andalucia.titulo == "Título Andalucía"

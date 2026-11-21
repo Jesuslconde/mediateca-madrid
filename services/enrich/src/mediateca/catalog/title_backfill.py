@@ -32,6 +32,7 @@ class BackfillStats:
     unchanged: int = 0
     samples: list[TitleChange] = field(default_factory=list)
     changed_titns: list[str] = field(default_factory=list)
+    changed_record_ids: list[str] = field(default_factory=list)
 
 
 def _first(value: Any) -> str | None:
@@ -95,6 +96,7 @@ def backfill_titles(
 
         stats.changed += 1
         stats.changed_titns.append(edicion.titn)
+        stats.changed_record_ids.append(edicion.record_id)
         if len(stats.samples) < SAMPLE_LIMIT:
             stats.samples.append(
                 TitleChange(

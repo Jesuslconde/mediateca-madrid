@@ -403,8 +403,8 @@ def normalize_titles_command(
             fuente=fuente,
             material_only=material_only,
         )
-        if apply and reindex and stats.changed_titns:
-            indexed = MeiliIndexer().index_titns(session, stats.changed_titns)
+        if apply and reindex and stats.changed_record_ids:
+            indexed = MeiliIndexer().index_titns(session, stats.changed_record_ids)
 
     table = Table(title="Normalizacion de titulos")
     table.add_column("Metrica")
