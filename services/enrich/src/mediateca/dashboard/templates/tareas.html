@@ -1,58 +1,170 @@
 {% extends "base.html" %}
 
+{% set default_tab = 'trabajos' if message and message.startswith('Trabajo') else 'lanzar' %}
+
 {% block content %}
-  <section>
-    <h2>Tareas bajo demanda</h2>
-    <div class="actions">
-      <form method="post" action="/jobs">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="discover">
-        <input type="hidden" name="mode" value="incremental">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <button type="submit" data-job-type="discover" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Buscar novedades</button>
-      </form>
-      <form method="post" action="/jobs" onsubmit="return confirm('El descubrimiento completo recorre todo el catalogo y puede tardar horas. ¿Continuar?');">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="discover">
-        <input type="hidden" name="mode" value="full">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <button type="submit" data-job-type="discover" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Descubrimiento completo</button>
-      </form>
-      <form method="post" action="/jobs">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="enrich">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
-        <button type="submit" data-job-type="enrich" {% if active_jobs['enrich'] or not is_admin %}disabled{% endif %}>Enriquecer pendientes</button>
-      </form>
-      <form method="post" action="/jobs">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="index">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <button type="submit" data-job-type="index" {% if active_jobs['index'] or not is_admin %}disabled{% endif %}>Reindexar</button>
-      </form>
-      <form method="post" action="/jobs">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="branches">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <button type="submit" data-job-type="branches" {% if active_jobs['branches'] or not is_admin %}disabled{% endif %}>Recargar direcciones de bibliotecas</button>
-        <span class="muted">Actualiza bibliotecas conocidas y sus sucursales</span>
-      </form>
-      <form method="post" action="/jobs">
-        <input type="hidden" name="next" value="/tareas">
-        <input type="hidden" name="job_type" value="tmdb">
-        <label>Fuente <select name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select></label>
-        <label>Lote <input type="number" name="limit" value="5000" min="1" max="50000"></label>
-        <label><input type="checkbox" name="refresh" value="true"> Reactualizar también las ya sincronizadas</label>
-        <button type="submit" data-job-type="tmdb" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>
-      </form>
+  <div class="tabs" role="tablist" aria-label="Secciones de tareas" data-tabs data-default-tab="{{ default_tab }}">
+    <button type="button" role="tab" id="tab-lanzar" aria-controls="panel-lanzar" aria-selected="{{ 'true' if default_tab == 'lanzar' else 'false' }}" tabindex="{{ '0' if default_tab == 'lanzar' else '-1' }}">Lanzar trabajos</button>
+    <button type="button" role="tab" id="tab-trabajos" aria-controls="panel-trabajos" aria-selected="{{ 'true' if default_tab == 'trabajos' else 'false' }}" tabindex="{{ '0' if default_tab == 'trabajos' else '-1' }}">Trabajos recientes <span class="tab-count" id="jobs-count">{{ jobs|length }}</span></button>
+  </div>
+
+  <section id="panel-lanzar" class="tab-panel panel" role="tabpanel" aria-labelledby="tab-lanzar" {% if default_tab != 'lanzar' %}hidden{% endif %}>
+    <div class="panel-head">
+      <div>
+        <h2>Lanzar trabajos</h2>
+        <p class="muted">Tareas bajo demanda y cola del worker. Cada tarjeta explica qué hace y qué parámetros admite.</p>
+      </div>
+      <div class="flow" aria-label="Flujo recomendado">
+        <span>1 Descubrir</span><span class="flow-arrow">→</span>
+        <span>2 Enriquecer</span><span class="flow-arrow">→</span>
+        <span>3 TMDB</span><span class="flow-arrow">→</span>
+        <span>4 Reindexar</span>
+      </div>
     </div>
-    <p class="muted">El worker ejecuta hasta {{ worker_concurrency }} tareas compatibles a la vez. Nunca se ejecutan dos del mismo tipo ni combinaciones con dependencia (discover/enrich, enrich/tmdb, enrich/index y tmdb/index). Si un trabajo choca, queda en cola hasta que termine el que lo bloquea.</p>
+
+    <div class="panel-body">
+      <p class="notice notice-info">
+        <strong>Cómo funciona la cola.</strong>
+        El worker ejecuta hasta {{ worker_concurrency }} trabajos compatibles a la vez. Nunca se ejecutan dos del mismo tipo
+        ni las parejas con dependencia (descubrir/enriquecer, enriquecer/TMDB, enriquecer/indexar y TMDB/indexar).
+        Si lanzas un trabajo incompatible, queda en cola hasta que termine el que lo bloquea.
+      </p>
+      {% if not is_admin %}
+        <p class="notice notice-warning">
+          <strong>Administración bloqueada.</strong>
+          Desbloquea la administración desde el menú lateral para poder lanzar tareas.
+        </p>
+      {% endif %}
+
+      <div class="job-grid">
+        <h3 class="job-group-title">Captación y enriquecimiento</h3>
+
+        <article class="job-card job-card--wide">
+          <div class="job-card-head">
+            <div><span class="job-step">1</span><h3>Descubrir catálogo</h3></div>
+            <span class="status-pill {{ 'status-active' if active_jobs['discover'] else '' }}" data-job-badge="discover">{{ 'Activo' if active_jobs['discover'] else 'Disponible' }}</span>
+          </div>
+          <p class="job-desc">Recorre el catálogo para localizar fichas nuevas, cambios y desapariciones. Es el primer paso del flujo.</p>
+          <form method="post" action="/jobs">
+            <input type="hidden" name="next" value="/tareas">
+            <input type="hidden" name="job_type" value="discover">
+            <label class="field" for="fuente-discover">Fuente
+              <select id="fuente-discover" name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select>
+            </label>
+            <p class="field-help">Catálogo de origen que se va a recorrer.</p>
+            <div class="button-row">
+              <button type="submit" name="mode" value="incremental" data-job-type="discover" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Buscar novedades</button>
+              <button type="submit" name="mode" value="full" class="btn-secondary" data-job-type="discover" onclick="return confirm('El descubrimiento completo recorre todo el catálogo y puede tardar horas. ¿Continuar?');" {% if active_jobs['discover'] or not is_admin %}disabled{% endif %}>Barrido completo</button>
+            </div>
+            <p class="hint"><strong>Buscar novedades</strong> continúa desde la última ficha procesada y es la opción habitual. <strong>Barrido completo</strong> recorre todo el catálogo desde el principio; úsalo para una revisión a fondo.</p>
+          </form>
+        </article>
+
+        <article class="job-card">
+          <div class="job-card-head">
+            <div><span class="job-step">2</span><h3>Enriquecer fichas</h3></div>
+            <span class="status-pill {{ 'status-active' if active_jobs['enrich'] else '' }}" data-job-badge="enrich">{{ 'Activo' if active_jobs['enrich'] else 'Disponible' }}</span>
+          </div>
+          <p class="job-desc">Descarga la ficha completa de cada edición descubierta: título, año, soporte, bibliotecas y disponibilidad.</p>
+          <form method="post" action="/jobs">
+            <input type="hidden" name="next" value="/tareas">
+            <input type="hidden" name="job_type" value="enrich">
+            <label class="field" for="fuente-enrich">Fuente
+              <select id="fuente-enrich" name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select>
+            </label>
+            <p class="field-help">Catálogo cuyas fichas se van a enriquecer.</p>
+            <label class="field" for="lote-enrich">Lote
+              <input id="lote-enrich" type="number" name="limit" value="5000" min="1" max="50000">
+            </label>
+            <p class="field-help">Máximo de fichas que se procesarán en esta ejecución. El resto queda pendiente para la siguiente.</p>
+            <div class="button-row">
+              <button type="submit" data-job-type="enrich" {% if active_jobs['enrich'] or not is_admin %}disabled{% endif %}>Enriquecer pendientes</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="job-card">
+          <div class="job-card-head">
+            <div><span class="job-step">3</span><h3>Metadatos TMDB</h3></div>
+            <span class="status-pill {{ 'status-active' if active_jobs['tmdb'] else '' }}" data-job-badge="tmdb">{{ 'Activo' if active_jobs['tmdb'] else 'Disponible' }}</span>
+          </div>
+          <p class="job-desc">Empareja las ediciones con TMDB y completa póster, país de origen y enlace a la ficha de la película.</p>
+          <form method="post" action="/jobs">
+            <input type="hidden" name="next" value="/tareas">
+            <input type="hidden" name="job_type" value="tmdb">
+            <label class="field" for="fuente-tmdb">Fuente
+              <select id="fuente-tmdb" name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select>
+            </label>
+            <p class="field-help">Catálogo cuyas fichas se van a sincronizar con TMDB.</p>
+            <label class="field" for="lote-tmdb">Lote
+              <input id="lote-tmdb" type="number" name="limit" value="5000" min="1" max="50000">
+            </label>
+            <p class="field-help">Máximo de fichas a sincronizar en esta ejecución. El resto queda pendiente para la siguiente.</p>
+            <label class="field field-inline">
+              <input type="checkbox" name="refresh" value="true">
+              Reactualizar también las ya sincronizadas
+            </label>
+            <p class="field-help">Vuelve a consultar TMDB para las fichas que ya tenían metadatos. Consume más tiempo y peticiones.</p>
+            <p class="hint">Requiere un token de TMDB configurado en Configuración.</p>
+            <div class="button-row">
+              <button type="submit" data-job-type="tmdb" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>
+            </div>
+          </form>
+        </article>
+
+        <h3 class="job-group-title">Mantenimiento</h3>
+
+        <article class="job-card">
+          <div class="job-card-head">
+            <div><span class="job-step">4</span><h3>Reindexar</h3></div>
+            <span class="status-pill {{ 'status-active' if active_jobs['index'] else '' }}" data-job-badge="index">{{ 'Activo' if active_jobs['index'] else 'Disponible' }}</span>
+          </div>
+          <p class="job-desc">Reconstruye el índice de búsqueda con las ediciones y metadatos ya guardados. No descarga fichas nuevas.</p>
+          <form method="post" action="/jobs">
+            <input type="hidden" name="next" value="/tareas">
+            <input type="hidden" name="job_type" value="index">
+            <label class="field" for="fuente-index">Fuente
+              <select id="fuente-index" name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select>
+            </label>
+            <p class="field-help">Catálogo cuyo índice se va a reconstruir.</p>
+            <div class="button-row">
+              <button type="submit" data-job-type="index" {% if active_jobs['index'] or not is_admin %}disabled{% endif %}>Reindexar</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="job-card">
+          <div class="job-card-head">
+            <div><span class="job-step job-step--aux">Aux</span><h3>Bibliotecas</h3></div>
+            <span class="status-pill {{ 'status-active' if active_jobs['branches'] else '' }}" data-job-badge="branches">{{ 'Activo' if active_jobs['branches'] else 'Disponible' }}</span>
+          </div>
+          <p class="job-desc">Actualiza las direcciones, códigos postales y sucursales de las bibliotecas que ya existen en el catálogo.</p>
+          <form method="post" action="/jobs">
+            <input type="hidden" name="next" value="/tareas">
+            <input type="hidden" name="job_type" value="branches">
+            <label class="field" for="fuente-branches">Fuente
+              <select id="fuente-branches" name="fuente">{% for fuente in fuentes %}<option value="{{ fuente.codigo }}">{{ fuente.nombre }}</option>{% endfor %}</select>
+            </label>
+            <p class="field-help">Catálogo del que se actualizan las bibliotecas.</p>
+            <p class="field-help">Solo procesa bibliotecas conocidas; no crea bibliotecas nuevas en Madrid.</p>
+            <div class="button-row">
+              <button type="submit" data-job-type="branches" {% if active_jobs['branches'] or not is_admin %}disabled{% endif %}>Recargar direcciones de bibliotecas</button>
+            </div>
+          </form>
+        </article>
+      </div>
+    </div>
   </section>
 
-  <section>
-    <h2>Trabajos recientes</h2>
-    <div id="jobs-table">
+  <section id="panel-trabajos" class="tab-panel panel jobs-panel" role="tabpanel" aria-labelledby="tab-trabajos" {% if default_tab != 'trabajos' %}hidden{% endif %}>
+    <div class="panel-head">
+      <div>
+        <h2>Trabajos recientes</h2>
+        <p class="muted">Últimos {{ jobs|length }} trabajos. La lista se actualiza sola y tiene scroll independiente.</p>
+      </div>
+      {% if refresh_seconds %}<span class="muted">Se actualiza cada {{ refresh_seconds }} s</span>{% endif %}
+    </div>
+    <div id="jobs-table" class="table-frame jobs-frame">
     {% if jobs %}
       <table>
         <thead>
@@ -76,7 +188,7 @@
               <td>{{ job.id }}</td>
               <td>{{ job.fuente.codigo if job.fuente else 'global' }}</td>
               <td>{{ job.job_type }}</td>
-              <td>{{ job.status }}</td>
+              <td><span class="status-pill status-{{ job.status }}">{{ job.status }}</span></td>
               <td>{{ job.cursor_doc if job.cursor_doc is not none else '—' }}/{{ job.cursor_titn if job.cursor_titn is not none else '—' }}</td>
               <td>{{ job.attempts or 0 }}/{{ job.max_attempts or 0 }}</td>
               <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '—' }}</td>
@@ -89,7 +201,7 @@
         </tbody>
       </table>
     {% else %}
-      <p class="muted">No hay trabajos registrados.</p>
+      <p class="muted empty-state">No hay trabajos registrados.</p>
     {% endif %}
     </div>
   </section>

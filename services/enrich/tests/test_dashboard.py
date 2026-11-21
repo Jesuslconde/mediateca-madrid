@@ -1742,3 +1742,110 @@ def test_post_catalogo_tmdb_exige_administracion(monkeypatch, tmp_path) -> None:
     assert response.status_code == 303
     assert "Token de administracion" in unquote_plus(response.headers["location"])
     assert edicion.tmdb_id is None
+
+
+def test_tareas_organiza_las_acciones_en_pestanas_y_tarjetas(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    create_job(session, "enrich")
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.get("/tareas")
+    finally:
+        _clear_overrides()
+
+    html = response.text
+    assert response.status_code == 200
+    assert 'role="tablist"' in html
+    assert 'id="tab-lanzar"' in html
+    assert 'id="tab-trabajos"' in html
+    assert 'id="panel-lanzar"' in html
+    assert 'id="panel-trabajos"' in html
+    assert 'id="jobs-table" class="table-frame jobs-frame"' in html
+    assert "Tareas bajo demanda" in html
+    assert "Cómo funciona la cola" in html
+
+    for title in (
+        "Descubrir catálogo",
+        "Enriquecer fichas",
+        "Metadatos TMDB",
+        "Reindexar",
+        "Bibliotecas",
+    ):
+        assert title in html
+
+    assert html.count('data-job-type="discover"') == 2
+    assert 'name="mode" value="incremental"' in html
+    assert 'name="mode" value="full"' in html
+    assert "Buscar novedades" in html
+    assert "Barrido completo" in html
+    assert "Máximo de fichas" in html
+    assert "Reactualizar también las ya sincronizadas" in html
+    assert "índice de búsqueda" in html
+    assert "direcciones, códigos postales" in html
+
+
+def test_tareas_avisa_si_la_administracion_esta_bloqueada(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", "secreto")
+
+    client = _client_for(session)
+    try:
+        response = client.get("/tareas")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert "Administración bloqueada" in response.text
+    assert "Desbloquea la administración desde el menú lateral" in response.text
+
+
+def test_al_encolar_un_trabajo_se_abre_la_pestana_de_trabajos(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs",
+            data={"job_type": "discover", "mode": "incremental"},
+            follow_redirects=True,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    assert "Trabajo" in response.text
+    assert 'data-default-tab="trabajos"' in response.text
+
+
+def test_inicio_usa_rejilla_compacta_que_cabe_en_la_pantalla(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.get("/")
+    finally:
+        _clear_overrides()
+
+    html = response.text
+    assert response.status_code == 200
+    assert 'class="dashboard-grid"' in html
+    assert 'class="panel dashboard-span-6"' in html
+    assert 'class="panel dashboard-span-3"' in html
+    assert 'class="grid grid-compact" id="grid-coverage"' in html
