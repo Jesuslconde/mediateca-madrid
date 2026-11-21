@@ -104,7 +104,12 @@ def _edicion_es_audiovisual(edicion: Edicion) -> bool:
     if edicion.soportes:
         return True
     soportes = [ejemplar.soporte for ejemplar in edicion.ejemplares if ejemplar.soporte]
-    return detect_audiovisual(_descripcion_fisica(edicion), soportes) is not False
+    return (
+        detect_audiovisual(
+            _descripcion_fisica(edicion), soportes, edicion.tipo_documento
+        )
+        is not False
+    )
 
 
 def build_document(edicion: Edicion) -> dict[str, Any]:

@@ -17,10 +17,11 @@ FORM_QUALIFIER = re.compile(
 )
 INVISIBLE_SEPARATORS = frozenset({"\u00ad", "\u200b", "\u200c", "\ufeff"})
 
-MATERIAL_BRACKET = re.compile(r"\s*\[([^\[\]]{1,80})\]")
+MATERIAL_GROUP = re.compile(r"\s*([\[(])([^\[\]()]{1,80})([\])])")
 MATERIAL_SEPARATOR = re.compile(r"[^a-z0-9]+")
 SQUARE_BRACKET_GROUP = re.compile(r"\s*\[[^\]]*\]")
 PAREN_GROUP = re.compile(r"\s*\([^)]*\)")
+EMPTY_GROUP = re.compile(r"\s*[\[(]\s*[\])]")
 
 MATERIAL_CORE = frozenset(
     {
@@ -44,6 +45,7 @@ MATERIAL_CORE = frozenset(
         "material",
         "disco",
         "pelicula",
+        "multimedia",
         "enregistrament",
         "4k",
         "uhd",
@@ -169,10 +171,11 @@ def is_material_qualifier(value: str) -> bool:
 
 
 def strip_material_qualifier(value: str | None) -> str | None:
-    """Quita calificadores de material como ``[DVD-Vídeo]`` del título.
+    """Quita calificadores de material como ``[DVD-Vídeo]`` o ``(DVD)``.
 
-    Solo elimina grupos entre corchetes reconocidos como GMD. Conserva
-    corchetes que forman parte del título, como ``[Rec]`` o ``[A caixa]``.
+    Solo elimina grupos reconocidos como GMD. Conserva corchetes que forman
+    parte del título, como ``[Rec]`` o ``[A caixa]``, y corrige corchetes
+    desbalanceados que deja el OPAC.
     """
     text = clean_title(value)
     if not text:
@@ -182,18 +185,40 @@ def strip_material_qualifier(value: str | None) -> str | None:
 
     def _replace(match: re.Match[str]) -> str:
         nonlocal removed
-        if is_material_qualifier(match.group(1)):
+        opener, content, closer = match.group(1), match.group(2), match.group(3)
+        if (opener == "[" and closer != "]") or (opener == "(" and closer != ")"):
+            return match.group(0)
+        if is_material_qualifier(content):
             removed = True
             return " "
         return match.group(0)
 
-    text = MATERIAL_BRACKET.sub(_replace, text)
+    while True:
+        previous = text
+        text = MATERIAL_GROUP.sub(_replace, text)
+        if text == previous:
+            break
+
+    empty_text = EMPTY_GROUP.sub(" ", text)
+    if empty_text != text:
+        removed = True
+        text = empty_text
+
+    if not has_balanced_brackets(text):
+        text = text.replace("[", " ").replace("]", " ")
+        removed = True
+
     if not removed:
         return clean_title(text)
 
     text = WHITESPACE.sub(" ", text).strip()
+    text = re.sub(r"\s*[;,]\s*\.\s*", ". ", text)
     text = re.sub(r"\s+([.,])", r"\1", text)
-    text = re.sub(r"([:;=])(?=\S)", r"\1 ", text)
+    text = re.sub(r"(?<!\.)\.\.(?!\.)", ".", text)
+    text = re.sub(r"\s*([:;=])\s*", r" \1 ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+videograbaciones?\s*$", "", text, flags=re.IGNORECASE)
+    text = WHITESPACE.sub(" ", text).strip()
 
     result = clean_title(text)
     return result or text

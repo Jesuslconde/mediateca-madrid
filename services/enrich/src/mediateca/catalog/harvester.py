@@ -72,6 +72,7 @@ def _es_audiovisual(parsed) -> bool | None:
     return detect_audiovisual(
         parsed.descripcion_fisica,
         [ejemplar.soporte for ejemplar in parsed.ejemplares if ejemplar.soporte],
+        parsed.tipo_documento,
     )
 
 

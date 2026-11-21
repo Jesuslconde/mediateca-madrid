@@ -140,8 +140,62 @@ def test_conserva_corchetes_que_no_son_calificador_de_material() -> None:
         "Madrileña bonita [1856-1956]",
         "Diapositivas [sobre la Biblioteca Municipal de Jerez]",
         "[P]",
+        "(500) Days of Summer",
+        "Título (2020)",
+        "Título (Película cinematográfica)",
+        "Título (The Child)",
     ):
         assert strip_material_qualifier(titulo) == titulo
+
+
+def test_quita_calificadores_de_material_entre_parentesis() -> None:
+    assert strip_material_qualifier("Lunnis (DVD) Videograbaciones") == "Lunnis"
+    assert strip_material_qualifier("La muchacha de Londres (DVD-Video)") == (
+        "La muchacha de Londres"
+    )
+    assert strip_material_qualifier("Frozen (Video): una aventura de Olaf") == (
+        "Frozen : una aventura de Olaf"
+    )
+    assert strip_material_qualifier("El caso O'hara (DVD)") == "El caso O'hara"
+    assert strip_material_qualifier("Turandot (videograbación) : Drama lírico") == (
+        "Turandot : Drama lírico"
+    )
+    assert strip_material_qualifier("Curro Lucena (Videograbación-DVD)") == (
+        "Curro Lucena"
+    )
+    assert strip_material_qualifier("El corredor del laberinto (videodisco)") == (
+        "El corredor del laberinto"
+    )
+
+
+def test_corrige_corchetes_desbalanceados_y_separadores() -> None:
+    assert strip_material_qualifier("La leyenda de Bruce Lee.]") == (
+        "La leyenda de Bruce Lee"
+    )
+    assert strip_material_qualifier("Rebelde sin causa = Goodfellas]") == (
+        "Rebelde sin causa = Goodfellas"
+    )
+    assert strip_material_qualifier(
+        "Battlestar galactica [ : temporada uno"
+    ) == "Battlestar galactica : temporada uno"
+    assert strip_material_qualifier("Los Picapiedra ; ]. Volumen 1") == (
+        "Los Picapiedra. Volumen 1"
+    )
+    assert strip_material_qualifier(
+        "Los pitufos. [(Dvd-Video)]. 8, ¡Pitufeando!"
+    ) == "Los pitufos. 8, ¡Pitufeando!"
+    assert strip_material_qualifier(
+        "Bailando con lobos: una historia... de América"
+    ) == "Bailando con lobos: una historia... de América"
+    assert strip_material_qualifier(
+        "La fuerza de uno = ]The power of one"
+    ) == "La fuerza de uno = The power of one"
+
+
+def test_quita_calificador_multimedia() -> None:
+    assert strip_material_qualifier(
+        "Concierto lírico-coral [Multimedia] : Auditorio Manuel de Falla"
+    ) == "Concierto lírico-coral : Auditorio Manuel de Falla"
 
 
 def test_strip_all_brackets_solo_para_candidatos() -> None:

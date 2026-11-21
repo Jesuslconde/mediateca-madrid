@@ -511,7 +511,9 @@ def _parse_search_item(scope: Tag) -> ParsedEdicion | None:
         sinopsis=data.get("Sumario, etc.") or _first_marc_value(marc.get("T520")),
         generos=_parse_generos(scope, data, marc),  # type: ignore[arg-type]
         materias=_parse_materias(scope, data, marc),
-        soportes=detect_soportes(descripcion_fisica),
+        soportes=detect_soportes(
+            descripcion_fisica, tipo_documento=data.get("Tipo de documento")
+        ),
         ean=_first_marc_value(marc.get("T024a")),
         tipo_documento=data.get("Tipo de documento"),
         notas=notas,
@@ -582,6 +584,7 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
     soportes = detect_soportes(
         descripcion_fisica,
         [ejemplar.soporte for ejemplar in ejemplares if ejemplar.soporte],
+        tipo_documento=tipo_documento,
     )
 
     notas = {

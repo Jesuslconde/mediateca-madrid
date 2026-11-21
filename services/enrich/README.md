@@ -101,6 +101,16 @@ portadas y enlaces:
 docker compose run --rm worker python -m mediateca tmdb-enrich --refresh --limit 5000
 ```
 
+## Normalización de soportes
+
+El parser reconoce `4K UHD`, `Blu-ray`, `DVD` y `VHS` a partir de la descripción
+física y del soporte de los ejemplares. En Andalucía también se mapean las
+descripciones genéricas `videodisco`, `disco óptico`, `CD-Video`, `DVD-Vídeo` y
+`disco` con duración a `DVD`, y `videocasete`, `videocassette`, `Beta`, `VHS` y
+`Video` a `VHS`. Los registros de `CD-ROM`, `DVD-ROM`, `CD-DA`, discos sonoros,
+discos compactos de audio y diapositivas no se consideran material audiovisual y
+se excluyen del índice.
+
 ## Dashboard de estado
 
 La vista web se divide en cuatro paginas con un menu lateral comun:

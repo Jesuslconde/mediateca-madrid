@@ -31,12 +31,37 @@ El clasificador SHALL revisar el campo `Soporte` de cada ejemplar y SHALL añadi
 
 ### Requirement: Normalización de variantes
 
-Las variantes `Blu-ray`, `Blu-Ray`, `BluRay`, `BD` y `Blu ray` MUST normalizarse a un único valor `Blu-ray`; las variantes de DVD SHALL normalizarse a `DVD`.
+Las variantes `Blu-ray`, `Blu-Ray`, `BluRay`, `BD` y `Blu ray` MUST normalizarse a un único valor `Blu-ray`; las variantes de DVD SHALL normalizarse a `DVD`. Las descripciones genéricas de videograbación SHALL mapearse a un soporte cuando sean inequívocas: `videodisco`, `disco óptico`, `CD-Video`, `DVD-Vídeo` y `disco` con duración a `DVD`; `videocasete`, `videocassette`, `VHS` y `Beta` a `VHS`.
 
 #### Scenario: Variantes de escritura
 
 - **WHEN** un registro contiene `Vídeo (Blu-Ray)` y otro `Blu-ray`
 - **THEN** ambos se indexan con el mismo valor de faceta `Blu-ray`
+
+#### Scenario: Descripción genérica de videodisco
+
+- **WHEN** la descripción física es `1 videodisco (101 min.)` o `1 disco (132 min.)`
+- **THEN** la edición se clasifica como `DVD`
+
+#### Scenario: Descripción genérica de videocasete
+
+- **WHEN** la descripción física es `1 videocasete (Beta)`, `1 videocasete` o `1 Video`
+- **THEN** la edición se clasifica como `VHS`
+
+#### Scenario: Soporte ambiguo con DVD-Vídeo y DVD-ROM
+
+- **WHEN** la descripción es `1 disco compacto (DVD-Vídeo y DVD-ROM)`
+- **THEN** la edición se clasifica como `DVD`
+- **AND** no se descarta por contener `DVD-ROM`
+
+### Requirement: Exclusión de soportes no audiovisuales
+
+Los registros cuya descripción corresponda a `CD-ROM`, `DVD-ROM`, `CD-DA`, `CD-AD`, discos sonoros, discos compactos de audio o colecciones de diapositivas MUST NOT clasificarse como DVD ni como material audiovisual, aunque el OPAC los etiquete como videograbaciones.
+
+#### Scenario: Material no audiovisual
+
+- **WHEN** la descripción es `56 p.`, `1 CD-ROM`, `1 disco (CD-DA)` u `80 diapositivas`
+- **THEN** la edición no se clasifica como DVD ni como material audiovisual
 
 ### Requirement: Ediciones con varios soportes
 
