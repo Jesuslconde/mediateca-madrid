@@ -17,6 +17,68 @@ FORM_QUALIFIER = re.compile(
 )
 INVISIBLE_SEPARATORS = frozenset({"\u00ad", "\u200b", "\u200c", "\ufeff"})
 
+MATERIAL_BRACKET = re.compile(r"\s*\[([^\]]{1,80})\]")
+MATERIAL_SEPARATOR = re.compile(r"[^a-z0-9]+")
+SQUARE_BRACKET_GROUP = re.compile(r"\s*\[[^\]]*\]")
+PAREN_GROUP = re.compile(r"\s*\([^)]*\)")
+
+MATERIAL_CORE = frozenset(
+    {
+        "dvd",
+        "video",
+        "videos",
+        "vhs",
+        "blu",
+        "videograbacion",
+        "videograbaciones",
+        "videocasete",
+        "videodisco",
+        "grabacion",
+        "archivo",
+        "recurso",
+        "material",
+        "disco",
+        "pelicula",
+        "enregistrament",
+        "4k",
+        "uhd",
+        "cd",
+        "cinta",
+        "diapositivas",
+        "transparencias",
+        "betamax",
+        "umd",
+        "laserdisc",
+        "hd",
+    }
+)
+MATERIAL_ALLOWED = MATERIAL_CORE | frozenset(
+    {
+        "ray",
+        "disc",
+        "book",
+        "rom",
+        "sonora",
+        "ordenador",
+        "electronico",
+        "grafico",
+        "proyectable",
+        "cartografico",
+        "versatil",
+        "digital",
+        "compacto",
+        "de",
+        "del",
+        "la",
+        "el",
+        "los",
+        "las",
+        "y",
+        "o",
+        "con",
+    }
+)
+
 
 def clean_title(value: str | None) -> str | None:
     """Normaliza un título para mostrarlo y buscarlo.
@@ -64,4 +126,74 @@ def strip_form_qualifier(value: str | None) -> str | None:
         if cleaned == text:
             break
         text = cleaned
+    return clean_title(text)
+
+
+def has_balanced_brackets(value: str | None) -> bool:
+    """Indica si los corchetes del texto están equilibrados."""
+    text = value or ""
+    return text.count("[") == text.count("]")
+
+
+def _normalize_material_tokens(value: str) -> list[str]:
+    text = unicodedata.normalize("NFKD", value)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.casefold()
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = MATERIAL_SEPARATOR.sub(" ", text)
+    return text.split()
+
+
+def is_material_qualifier(value: str) -> bool:
+    """Indica si un grupo entre corchetes es un calificador de material."""
+    tokens = _normalize_material_tokens(value)
+    return (
+        bool(tokens)
+        and any(token in MATERIAL_CORE for token in tokens)
+        and all(token in MATERIAL_ALLOWED for token in tokens)
+    )
+
+
+def strip_material_qualifier(value: str | None) -> str | None:
+    """Quita calificadores de material como ``[DVD-Vídeo]`` del título.
+
+    Solo elimina grupos entre corchetes reconocidos como GMD. Conserva
+    corchetes que forman parte del título, como ``[Rec]`` o ``[A caixa]``.
+    """
+    text = clean_title(value)
+    if not text:
+        return None
+
+    removed = False
+
+    def _replace(match: re.Match[str]) -> str:
+        nonlocal removed
+        if is_material_qualifier(match.group(1)):
+            removed = True
+            return " "
+        return match.group(0)
+
+    text = MATERIAL_BRACKET.sub(_replace, text)
+    if not removed:
+        return clean_title(text)
+
+    text = WHITESPACE.sub(" ", text).strip()
+    text = re.sub(r"\s+([.,])", r"\1", text)
+    text = re.sub(r"([:;=])(?=\S)", r"\1 ", text)
+
+    result = clean_title(text)
+    return result or text
+
+
+def strip_all_brackets(value: str | None) -> str | None:
+    """Quita todos los grupos entre corchetes y paréntesis.
+
+    Se usa como candidato adicional para TMDB, nunca para persistir.
+    """
+    text = clean_title(value)
+    if not text:
+        return None
+    text = SQUARE_BRACKET_GROUP.sub(" ", text)
+    text = PAREN_GROUP.sub(" ", text)
+    text = WHITESPACE.sub(" ", text).strip()
     return clean_title(text)

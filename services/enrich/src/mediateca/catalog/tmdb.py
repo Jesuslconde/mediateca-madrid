@@ -14,7 +14,9 @@ import httpx
 from mediateca_shared.titles import (
     clean_title,
     split_responsibility,
+    strip_all_brackets,
     strip_form_qualifier,
+    strip_material_qualifier,
 )
 
 from mediateca.core.config import settings
@@ -83,17 +85,21 @@ def normalize_title(value: str | None) -> str:
 
 def title_candidates(titulo_uniforme: str | None, titulo: str | None) -> list[str]:
     candidates: list[str] = []
+
+    def _add(value: str | None) -> None:
+        cleaned = clean_title(value)
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
     for raw in (titulo_uniforme, titulo):
         if not raw:
             continue
-        cleaned = strip_form_qualifier(clean_title(raw))
+        cleaned = strip_material_qualifier(strip_form_qualifier(clean_title(raw)))
         if not cleaned:
             continue
-        if cleaned not in candidates:
-            candidates.append(cleaned)
-        head = clean_title(split_responsibility(cleaned))
-        if head and head not in candidates:
-            candidates.append(head)
+        _add(cleaned)
+        _add(strip_all_brackets(cleaned))
+        _add(split_responsibility(cleaned))
     return candidates
 
 

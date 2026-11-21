@@ -51,7 +51,7 @@ Cada edición MUST identificarse por su `record_id`, compuesto por el código de
 
 ### Requirement: Normalización de metadatos
 
-El parser MUST normalizar espacios, puntuación final, años, duración en minutos, idioma, país y roles de autoría antes de persistir. El título MUST ser el título propio completo, sin mención de responsabilidad ni puntuación ISBD final.
+El parser MUST normalizar espacios, puntuación final, años, duración en minutos, idioma, país y roles de autoría antes de persistir. El título MUST ser el título propio completo, sin mención de responsabilidad, sin puntuación ISBD final y sin calificadores de material catalográficos como `[DVD-Vídeo]`.
 
 #### Scenario: Duración extraída de la descripción física
 
@@ -68,7 +68,14 @@ El parser MUST normalizar espacios, puntuación final, años, duración en minut
 
 - **WHEN** el título termina en ` /`, ` :`, ` ;`, ` ,`, `.` o `=`
 - **THEN** la puntuación final se elimina
-- **AND** se conservan `?`, `!`, corchetes y paréntesis
+- **AND** se conservan `?`, `!` y los corchetes o paréntesis que forman parte del título
+
+#### Scenario: Título con calificador de material
+
+- **WHEN** el título visible es `La cocina fácil de Ferran Adrià [DVD-Vídeo]`
+- **THEN** la edición guarda `La cocina fácil de Ferran Adrià`
+- **AND** se eliminan variantes conocidas como `[Vídeo]`, `[Blu-ray]`, `[VHS]`, `[Videograbación]` o `[Material gráfico proyectable]`
+- **AND** se conservan corchetes que forman parte del título, como `[Rec]`, `[A caixa]` o `[tercera temporada]`
 
 #### Scenario: Título uniforme con puntuación final
 

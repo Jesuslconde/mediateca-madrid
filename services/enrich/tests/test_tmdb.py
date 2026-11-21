@@ -378,3 +378,24 @@ def test_candidatos_tmdb_limpian_calificadores_y_responsabilidad() -> None:
         "The Prado Museum. A Collection of Wonders",
         "Pintores y reyes del Prado",
     ]
+
+
+def test_candidatos_tmdb_limpian_calificadores_de_material_y_generan_fallback() -> None:
+    assert title_candidates(
+        None, "La cocina fácil de Ferran Adrià [DVD-Vídeo]"
+    ) == ["La cocina fácil de Ferran Adrià"]
+
+    assert title_candidates(
+        None, "La caja [DVD-Vídeo] = [A caixa]"
+    ) == ["La caja = [A caixa]", "La caja"]
+
+    assert title_candidates(
+        None, "Curro Jiménez [DVD-Vídeo] [tercera temporada]"
+    ) == ["Curro Jiménez [tercera temporada]", "Curro Jiménez"]
+
+    assert title_candidates(None, "[Rec]") == ["[Rec]"]
+    assert title_candidates(None, "X") == ["X"]
+    assert title_candidates(None, "(500) Days of Summer") == [
+        "(500) Days of Summer",
+        "Days of Summer",
+    ]

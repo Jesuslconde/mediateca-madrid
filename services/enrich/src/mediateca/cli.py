@@ -378,6 +378,14 @@ def normalize_titles_command(
     limit: int | None = typer.Option(
         None, "--limit", min=1, help="Numero maximo de ediciones"
     ),
+    fuente: str | None = typer.Option(
+        None, "--fuente", help="Limitar a una fuente por codigo, por ejemplo andalucia"
+    ),
+    material_only: bool = typer.Option(
+        False,
+        "--material-only",
+        help="Limpiar solo calificadores de material del titulo actual",
+    ),
     reindex: bool = typer.Option(
         False,
         "--reindex",
@@ -388,14 +396,25 @@ def normalize_titles_command(
     configure_logging()
     indexed = 0
     with session_scope() as session:
-        stats = backfill_titles(session, apply=apply, limit=limit)
+        stats = backfill_titles(
+            session,
+            apply=apply,
+            limit=limit,
+            fuente=fuente,
+            material_only=material_only,
+        )
         if apply and reindex and stats.changed_titns:
             indexed = MeiliIndexer().index_titns(session, stats.changed_titns)
 
     table = Table(title="Normalizacion de titulos")
     table.add_column("Metrica")
     table.add_column("Valor", justify="right")
-    table.add_row("Modo", "aplicado" if apply else "dry-run")
+    mode = "aplicado" if apply else "dry-run"
+    if material_only:
+        mode += " (solo material)"
+    if fuente:
+        mode += f" · {fuente}"
+    table.add_row("Modo", mode)
     table.add_row("Ediciones leidas", str(stats.scanned))
     table.add_row("Titulos cambiados", str(stats.changed))
     table.add_row("Sin cambios", str(stats.unchanged))

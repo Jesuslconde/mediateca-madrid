@@ -10,7 +10,12 @@ from mediateca_shared.soportes import (
     canonical_soporte,
     detect_soportes,
 )
-from mediateca_shared.titles import clean_title, split_responsibility
+from mediateca_shared.titles import (
+    clean_title,
+    has_balanced_brackets,
+    split_responsibility,
+    strip_material_qualifier,
+)
 
 try:  # lxml es opcional en pruebas; html.parser siempre esta disponible
     import lxml  # noqa: F401
@@ -23,6 +28,13 @@ except ImportError:  # pragma: no cover
 MARC_KEY_RE = re.compile(
     r"^(T\d{3}[a-z]*|TITN|LENG|FEPU|MATE|ntitl|nauth|nedit|nedic|nisbn|nissn|ld06|ld07)$"
 )
+
+
+def _clean_title_candidate(value: str | None) -> str | None:
+    """Limpia un título candidato y descarta los truncados en un corchete."""
+    if not value or not has_balanced_brackets(value):
+        return None
+    return strip_material_qualifier(value)
 
 
 @dataclass(slots=True)
@@ -442,11 +454,13 @@ def _parse_search_item(scope: Tag) -> ParsedEdicion | None:
         return None
 
     titulo = (
-        clean_title(_text(scope.select_one(".c-docs_title")))
-        or clean_title(_first_marc_value(marc.get("T245ab")))
-        or clean_title(_first_marc_value(marc.get("T245a")))
-        or clean_title(split_responsibility(_first_marc_value(marc.get("T245"))))
-        or clean_title(_js_text(scope, "ntitl"))
+        _clean_title_candidate(_text(scope.select_one(".c-docs_title")))
+        or _clean_title_candidate(_first_marc_value(marc.get("T245ab")))
+        or _clean_title_candidate(_first_marc_value(marc.get("T245a")))
+        or _clean_title_candidate(
+            split_responsibility(_first_marc_value(marc.get("T245")))
+        )
+        or _clean_title_candidate(_js_text(scope, "ntitl"))
     ) or titn
 
     publicacion = (
@@ -533,9 +547,9 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
     if not titn:
         raise ValueError("No se ha podido identificar el TITN de la ficha")
 
-    titulo = clean_title(_text(soup.select_one(".doc_title"))) or clean_title(
-        _js_text(soup, "ntitl")
-    )
+    titulo = _clean_title_candidate(
+        _text(soup.select_one(".doc_title"))
+    ) or _clean_title_candidate(_js_text(soup, "ntitl"))
     if not titulo:
         raise ValueError(f"La ficha {titn} no tiene titulo")
 

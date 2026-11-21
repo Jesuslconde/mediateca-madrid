@@ -60,9 +60,10 @@ nunca el scheduler: solo se lanza a mano desde el dashboard o la CLI.
 
 ## Normalización de títulos
 
-El parser guarda el título propio completo, sin la mención de responsabilidad ni
-la puntuación ISBD final. Para corregir las ediciones que ya están guardadas sin
-volver a recolectar del OPAC:
+El parser guarda el título propio completo, sin la mención de responsabilidad,
+sin la puntuación ISBD final y sin calificadores de material como `[DVD-Vídeo]`.
+Para corregir las ediciones que ya están guardadas sin volver a recolectar del
+OPAC:
 
 ```bash
 docker compose run --rm worker python -m mediateca normalize-titles --limit 100
@@ -77,10 +78,24 @@ docker compose run --rm worker python -m mediateca normalize-titles --apply --re
 ```
 
 El comando recalcula el título desde `marc["T245ab"]`, `marc["T245"]` sin la
-responsabilidad, `marc["ntitl"]` y el título actual. No modifica obras ni
-ejemplares. Es idempotente: una segunda ejecución no encuentra cambios. Después
-del backfill puedes reconsultar TMDB por lotes para corregir países, portadas y
-enlaces:
+responsabilidad, `marc["ntitl"]` y el título actual. Descarta los candidatos con
+corchetes desbalanceados, como el `T245ab` que algunos registros de Andalucía
+cortan justo en `[`, y elimina los calificadores de material conocidos
+(`[DVD-Vídeo]`, `[Vídeo]`, `[Blu-ray]`, etc.). No modifica obras ni ejemplares.
+Es idempotente: una segunda ejecución no encuentra cambios.
+
+Para corregir solo los calificadores de material de los títulos ya guardados,
+sin recalcular desde MARC, usa el modo específico y limita la fuente:
+
+```bash
+docker compose run --rm worker python -m mediateca normalize-titles \
+  --material-only --fuente andalucia --limit 100
+docker compose run --rm worker python -m mediateca normalize-titles \
+  --material-only --fuente andalucia --apply --reindex
+```
+
+Después del backfill puedes reconsultar TMDB por lotes para corregir países,
+portadas y enlaces:
 
 ```bash
 docker compose run --rm worker python -m mediateca tmdb-enrich --refresh --limit 5000

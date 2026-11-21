@@ -73,6 +73,13 @@ El sistema MUST localizar la película en TMDB usando el título y el año de la
 - **THEN** el sistema normaliza el título antes de consultar TMDB
 - **AND** la puntuación final no impide la coincidencia
 
+#### Scenario: Título con calificador de material
+
+- **WHEN** el título del OPAC contiene un calificador como `[DVD-Vídeo]`
+- **THEN** la consulta a TMDB usa el título sin ese calificador
+- **AND** el sistema prueba además un candidato sin ningún grupo entre corchetes o paréntesis
+- **AND** conserva el título original como candidato para casos como `[Rec]` o `[A caixa]`
+
 #### Scenario: Título uniforme con calificador de forma
 
 - **WHEN** el título uniforme es `Un amor (Película cinematográfica)`

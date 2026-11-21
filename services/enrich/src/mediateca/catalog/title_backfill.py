@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from mediateca_shared.models import Edicion
-from mediateca_shared.titles import clean_title, split_responsibility
+from mediateca_shared.models import Edicion, Fuente
+from mediateca_shared.titles import (
+    clean_title,
+    has_balanced_brackets,
+    split_responsibility,
+    strip_material_qualifier,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -45,7 +50,9 @@ def title_from_marc(marc: dict[str, Any], fallback: str | None) -> str | None:
         fallback,
     ]
     for candidate in candidates:
-        cleaned = clean_title(candidate)
+        if not candidate or not has_balanced_brackets(candidate):
+            continue
+        cleaned = strip_material_qualifier(candidate)
         if cleaned:
             return cleaned
     return None
@@ -56,17 +63,29 @@ def backfill_titles(
     *,
     apply: bool = False,
     limit: int | None = None,
+    fuente: str | None = None,
+    material_only: bool = False,
 ) -> BackfillStats:
     """Recalcula títulos existentes. Sin ``apply`` solo informa de los cambios."""
     stmt = select(Edicion).order_by(Edicion.titn)
+    if fuente:
+        stmt = stmt.join(Fuente, Fuente.id == Edicion.fuente_id).where(
+            Fuente.codigo == fuente
+        )
     if limit is not None:
         stmt = stmt.limit(limit)
 
     stats = BackfillStats()
     for edicion in session.scalars(stmt):
         stats.scanned += 1
-        new_titulo = title_from_marc(edicion.marc or {}, edicion.titulo) or edicion.titulo
-        new_titulo_uniforme = clean_title(edicion.titulo_uniforme)
+        if material_only:
+            new_titulo = strip_material_qualifier(edicion.titulo) or edicion.titulo
+            new_titulo_uniforme = edicion.titulo_uniforme
+        else:
+            new_titulo = (
+                title_from_marc(edicion.marc or {}, edicion.titulo) or edicion.titulo
+            )
+            new_titulo_uniforme = clean_title(edicion.titulo_uniforme)
 
         titulo_changed = new_titulo != edicion.titulo
         uniforme_changed = new_titulo_uniforme != edicion.titulo_uniforme

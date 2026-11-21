@@ -251,6 +251,7 @@ def test_parser_ejemplares_andaluces_con_columnas_propias() -> None:
 
     parsed = parse_detail(html)
 
+    assert parsed.titulo == "La épica"
     assert parsed.soportes == []
     assert len(parsed.ejemplares) == 1
     ejemplar = parsed.ejemplares[0]
@@ -296,3 +297,50 @@ def test_parser_ejemplares_andaluces_lee_el_soporte() -> None:
     assert parsed.soportes == ["VHS"]
     assert parsed.ejemplares[0].soporte == "VHS"
     assert parsed.ejemplares[0].signatura == "VHS 12"
+
+
+def test_parser_limpia_calificadores_de_material_en_ficha() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">1001622</span>
+      <span class="doc_title">La cocina fácil de Ferran Adrià [DVD-Vídeo].</span>
+      <span class="js-ntitl">La cocina fácil de Ferran Adrià [</span>
+    </body></html>
+    """
+
+    parsed = parse_detail(html)
+
+    assert parsed.titulo == "La cocina fácil de Ferran Adrià"
+
+
+def test_parser_limpia_calificadores_de_material_en_listado() -> None:
+    html = """
+    <html><body>
+      <ul class="c-docs">
+        <li class="c-docs_unit">
+          <div class="c-docs_header">
+            <a class="c-docs_title" href="?ACC=165&amp;DOC=1&amp;TITN=1">Pilates [DVD-Vídeo] : guía esencial</a>
+          </div>
+          <p class="c-docs_marc"><span class="js-TITN">1</span></p>
+        </li>
+      </ul>
+    </body></html>
+    """
+
+    parsed = parse_search_results(html)
+
+    assert len(parsed) == 1
+    assert parsed[0].titulo == "Pilates : guía esencial"
+
+
+def test_parser_conserva_corchetes_que_forman_parte_del_titulo() -> None:
+    html = """
+    <html><body>
+      <span class="js-TITN">200</span>
+      <span class="doc_title">[Rec]</span>
+    </body></html>
+    """
+
+    parsed = parse_detail(html)
+
+    assert parsed.titulo == "[Rec]"

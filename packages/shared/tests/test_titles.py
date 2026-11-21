@@ -1,7 +1,9 @@
 from mediateca_shared.titles import (
     clean_title,
     split_responsibility,
+    strip_all_brackets,
     strip_form_qualifier,
+    strip_material_qualifier,
 )
 
 
@@ -63,3 +65,74 @@ def test_titulo_vacio() -> None:
     assert clean_title(None) is None
     assert clean_title("   ") is None
     assert clean_title(" / ") is None
+
+
+def test_quita_calificadores_de_material_conocidos() -> None:
+    assert strip_material_qualifier(
+        "La cocina fácil de Ferran Adrià [DVD-Vídeo]"
+    ) == "La cocina fácil de Ferran Adrià"
+    assert strip_material_qualifier(
+        "Pilates [DVD-Vídeo] : guía esencial"
+    ) == "Pilates : guía esencial"
+    assert strip_material_qualifier(
+        "La caja [DVD-Vídeo] = [A caixa]"
+    ) == "La caja = [A caixa]"
+    assert strip_material_qualifier(
+        "Curro Jiménez [DVD-Vídeo] [tercera temporada]"
+    ) == "Curro Jiménez [tercera temporada]"
+    assert strip_material_qualifier(
+        "Star Wars [DVD-Vídeo]. Episodio V"
+    ) == "Star Wars. Episodio V"
+    assert strip_material_qualifier(
+        "Atención, pastillas [Archivo de ordenador]"
+    ) == "Atención, pastillas"
+    assert strip_material_qualifier(
+        "La épica [Material gráfico proyectable] /"
+    ) == "La épica"
+
+
+def test_quita_variantes_de_calificadores_de_material() -> None:
+    assert strip_material_qualifier("Título [DVD]") == "Título"
+    assert strip_material_qualifier("Título [Vídeo]") == "Título"
+    assert strip_material_qualifier("Título [video]") == "Título"
+    assert strip_material_qualifier("Título [Vídeo-DVD]") == "Título"
+    assert strip_material_qualifier("Título [Video DVD]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Video]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Vídeos]") == "Título"
+    assert strip_material_qualifier("Título [Blu-ray]") == "Título"
+    assert strip_material_qualifier("Título [Blu-ray disc]") == "Título"
+    assert strip_material_qualifier("Título [VHS]") == "Título"
+    assert strip_material_qualifier("Título [Videograbación]") == "Título"
+    assert strip_material_qualifier("Título [Videograbacíón]") == "Título"
+    assert strip_material_qualifier("Título [Grabación sonora]") == "Título"
+    assert strip_material_qualifier("Título [Recurso electrónico]") == "Título"
+    assert strip_material_qualifier("Título [Disco versátil digital]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Vídeo + Grabación sonora]") == "Título"
+    assert strip_material_qualifier("Título [Vídeo (DVD)]") == "Título"
+    assert strip_material_qualifier("Título [Película : vídeo]") == "Título"
+    assert strip_material_qualifier("Título [DVD-BOOK]") == "Título"
+    assert strip_material_qualifier("Título [4K UHD]") == "Título"
+
+
+def test_conserva_corchetes_que_no_son_calificador_de_material() -> None:
+    for titulo in (
+        "[Rec]",
+        "[A caixa]",
+        "[Rebel without a cause]",
+        "Curro Jiménez [tercera temporada]",
+        "La década de los 60 (1) [y] (2)",
+        "Madrileña bonita [1856-1956]",
+        "Diapositivas [sobre la Biblioteca Municipal de Jerez]",
+    ):
+        assert strip_material_qualifier(titulo) == titulo
+
+
+def test_strip_all_brackets_solo_para_candidatos() -> None:
+    assert strip_all_brackets("(500) Days of Summer") == "Days of Summer"
+    assert strip_all_brackets("[Rec]") is None
+    assert strip_all_brackets(
+        "La caja [DVD-Vídeo] = [A caixa]"
+    ) == "La caja"
+    assert strip_all_brackets(
+        "Curro Jiménez [DVD-Vídeo] [tercera temporada]"
+    ) == "Curro Jiménez"

@@ -192,3 +192,124 @@ def test_cli_reindex_sin_apply_no_indexa(monkeypatch) -> None:
 
     assert resultado.exit_code == 0
     assert capturados == []
+
+
+def test_title_from_marc_descarta_t245ab_truncado_y_limpia_gmd() -> None:
+    assert (
+        title_from_marc(
+            {
+                "T245ab": ["La cocina fácil de Ferran Adrià ["],
+                "T245": "La cocina fácil de Ferran Adrià [DVD-Vídeo].",
+            },
+            "La cocina fácil de Ferran Adrià [DVD-Vídeo]",
+        )
+        == "La cocina fácil de Ferran Adrià"
+    )
+
+
+def test_material_only_limpia_el_titulo_actual_sin_tocar_el_uniforme() -> None:
+    session = _session()
+    edicion, obra = _edicion(
+        session,
+        "1",
+        "La cocina fácil de Ferran Adrià [DVD-Vídeo]",
+        titulo_uniforme="La cocina fácil de Ferran Adrià [DVD-Vídeo]",
+    )
+    uniforme_antes = edicion.titulo_uniforme
+    obra_antes = obra.titulo_uniforme
+
+    stats = backfill_titles(session, material_only=True, apply=True)
+    session.commit()
+    session.refresh(edicion)
+    session.refresh(obra)
+
+    assert stats.changed == 1
+    assert edicion.titulo == "La cocina fácil de Ferran Adrià"
+    assert edicion.titulo_uniforme == uniforme_antes
+    assert obra.titulo_uniforme == obra_antes
+
+
+def test_backfill_material_only_filtra_por_fuente() -> None:
+    session = _session()
+    madrid, _ = _edicion(
+        session, "1", "Título Madrid [DVD-Vídeo]"
+    )
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+    )
+    session.add(andalucia)
+    session.flush()
+    edicion_andalucia = Edicion(
+        fuente_id=andalucia.id,
+        record_id="andalucia:2",
+        titn="2",
+        titulo="Título Andalucía [DVD-Vídeo]",
+        marc={},
+    )
+    session.add(edicion_andalucia)
+    session.commit()
+
+    stats = backfill_titles(
+        session, fuente="andalucia", material_only=True, apply=True
+    )
+    session.commit()
+    session.refresh(madrid)
+    session.refresh(edicion_andalucia)
+
+    assert stats.scanned == 1
+    assert stats.changed == 1
+    assert madrid.titulo == "Título Madrid [DVD-Vídeo]"
+    assert edicion_andalucia.titulo == "Título Andalucía"
+
+
+def test_cli_material_only_filtra_por_fuente_y_reindexa(monkeypatch) -> None:
+    session = _session()
+    _edicion(session, "1", "Título Madrid [DVD-Vídeo]")
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucía",
+        base_url="https://www.juntadeandalucia.es",
+    )
+    session.add(andalucia)
+    session.flush()
+    edicion_andalucia = Edicion(
+        fuente_id=andalucia.id,
+        record_id="andalucia:2",
+        titn="2",
+        titulo="Título Andalucía [DVD-Vídeo]",
+        marc={},
+    )
+    session.add(edicion_andalucia)
+    session.commit()
+    capturados: list[str] = []
+
+    class FakeIndexer:
+        def index_titns(self, session, titns):  # noqa: ANN001
+            capturados.extend(titns)
+            return len(titns)
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+    monkeypatch.setattr(cli_module, "MeiliIndexer", FakeIndexer)
+
+    resultado = CliRunner().invoke(
+        cli_module.app,
+        [
+            "normalize-titles",
+            "--material-only",
+            "--fuente",
+            "andalucia",
+            "--apply",
+            "--reindex",
+        ],
+    )
+
+    assert resultado.exit_code == 0
+    assert capturados == ["2"]
+    assert edicion_andalucia.titulo == "Título Andalucía"
