@@ -17,7 +17,7 @@ FORM_QUALIFIER = re.compile(
 )
 INVISIBLE_SEPARATORS = frozenset({"\u00ad", "\u200b", "\u200c", "\ufeff"})
 
-MATERIAL_BRACKET = re.compile(r"\s*\[([^\]]{1,80})\]")
+MATERIAL_BRACKET = re.compile(r"\s*\[([^\[\]]{1,80})\]")
 MATERIAL_SEPARATOR = re.compile(r"[^a-z0-9]+")
 SQUARE_BRACKET_GROUP = re.compile(r"\s*\[[^\]]*\]")
 PAREN_GROUP = re.compile(r"\s*\([^)]*\)")
@@ -25,14 +25,19 @@ PAREN_GROUP = re.compile(r"\s*\([^)]*\)")
 MATERIAL_CORE = frozenset(
     {
         "dvd",
+        "dcd",
         "video",
         "videos",
         "vhs",
         "blu",
         "videograbacion",
         "videograbaciones",
+        "videograbacin",
         "videocasete",
+        "videocasetes",
         "videodisco",
+        "videojuego",
+        "videojuegos",
         "grabacion",
         "archivo",
         "recurso",
@@ -56,6 +61,7 @@ MATERIAL_ALLOWED = MATERIAL_CORE | frozenset(
     {
         "ray",
         "disc",
+        "dis",
         "book",
         "rom",
         "sonora",
@@ -67,6 +73,14 @@ MATERIAL_ALLOWED = MATERIAL_CORE | frozenset(
         "versatil",
         "digital",
         "compacto",
+        "p",
+        "s",
+        "nideo",
+        "viedo",
+        "vido",
+        "vide",
+        "vdeo",
+        "audiovisual",
         "de",
         "del",
         "la",
@@ -139,7 +153,7 @@ def _normalize_material_tokens(value: str) -> list[str]:
     text = unicodedata.normalize("NFKD", value)
     text = "".join(char for char in text if not unicodedata.combining(char))
     text = text.casefold()
-    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"[()]", " ", text)
     text = MATERIAL_SEPARATOR.sub(" ", text)
     return text.split()
 

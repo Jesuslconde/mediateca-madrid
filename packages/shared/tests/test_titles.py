@@ -112,6 +112,22 @@ def test_quita_variantes_de_calificadores_de_material() -> None:
     assert strip_material_qualifier("Título [Película : vídeo]") == "Título"
     assert strip_material_qualifier("Título [DVD-BOOK]") == "Título"
     assert strip_material_qualifier("Título [4K UHD]") == "Título"
+    assert strip_material_qualifier("Título [DVD-P]") == "Título"
+    assert strip_material_qualifier("Título [DVD´S]") == "Título"
+    assert strip_material_qualifier("Título [DCD-Vídeo]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Víedo]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Vído]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Víde]") == "Título"
+    assert strip_material_qualifier("Título [DVD-Vdeo]") == "Título"
+    assert strip_material_qualifier("Título [Blu-ray Dis]") == "Título"
+    assert strip_material_qualifier("Título [Videocasetes]") == "Título"
+    assert strip_material_qualifier("Título [Videograbacin]") == "Título"
+    assert strip_material_qualifier("Título [videojuego]") == "Título"
+    assert strip_material_qualifier("Título [(Dvd-Video)]") == "Título"
+    assert strip_material_qualifier("Título [Video - Audiovisual]") == "Título"
+    assert strip_material_qualifier(
+        "[Presentación del libro Atmósferas [DVD] : 100 relatos]"
+    ) == "[Presentación del libro Atmósferas : 100 relatos]"
 
 
 def test_conserva_corchetes_que_no_son_calificador_de_material() -> None:
@@ -123,6 +139,7 @@ def test_conserva_corchetes_que_no_son_calificador_de_material() -> None:
         "La década de los 60 (1) [y] (2)",
         "Madrileña bonita [1856-1956]",
         "Diapositivas [sobre la Biblioteca Municipal de Jerez]",
+        "[P]",
     ):
         assert strip_material_qualifier(titulo) == titulo
 
