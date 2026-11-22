@@ -294,44 +294,26 @@ Configuracion (`/configuracion`). Inicio muestra la salud del worker, el resumen
 de trabajos por estado y tipo, la cobertura y las metricas. Catálogo es una vista
 de solo lectura del estado de enriquecimiento por edicion, con resumen por estado
 OPAC y TMDB, filtros (estado, texto, soporte, biblioteca, año, idioma y país,
-desaparición) y tabla paginada. Tareas separa el lanzamiento y la cola en dos
-pestañas: "Lanzar trabajos" agrupa las acciones por finalidad, con una tarjeta por
-tarea, la explicacion de sus parametros y el estado de la cola; "Trabajos
-recientes" muestra la tabla en un marco con scroll propio. El dashboard ocupa la
-ventana completa y solo scrollean las zonas internas que lo necesitan.
-Configuracion agrupa la programacion, la URL de FlareSolverr y el token de TMDB.
+desaparición) y tabla paginada. Agrupación permite seleccionar ediciones y
+asignarlas a una obra existente, crear una obra nueva o devolverlas al
+comportamiento automatico. La obra destino se busca reutilizando el texto `q`
+del apartado Filtros: solo se muestran las coincidencias por titulo uniforme o
+año, nunca un desplegable con todas las obras. Tras agrupar o desvincular se
+reindexan las ediciones afectadas; si Meilisearch falla, la decision manual queda
+guardada y la pagina avisa de que hay que ejecutar `make index`. Tareas separa el
+lanzamiento y la cola en dos pestañas: "Lanzar trabajos" agrupa las acciones por
+finalidad, con una tarjeta por tarea, la explicacion de sus parametros y el estado
+de la cola; "Trabajos recientes" muestra la tabla en un marco con scroll propio.
+El dashboard ocupa la ventana completa y solo scrollean las zonas internas que lo
+necesitan. Configuracion agrupa la programacion, la URL de FlareSolverr y el token
+de TMDB.
 
 Inicio y Tareas se refrescan consultando la API de observabilidad; Configuracion,
-Catálogo y Agrupación no lo hacen para no perder los formularios ni los filtros. Las
-rutas POST conservan su URL y redirigen a la pagina de origen con `message` o
-`error`; el campo `next` se valida contra `/`, `/catalogo`, `/agrupacion`, `/tareas`
-y `/configuracion`. El estado de administracion y el login/logout viven en el menu
-lateral.
-
-## Agrupacion manual de obras
-
-La pagina `/agrupacion` permite al operador corregir manualmente la agrupacion de
-ediciones en obras. Muestra una tabla paginada de ediciones con titulo, año,
-soporte, fuente, TITN, obra actual y marca manual, con filtros por texto, fuente,
-soporte y estado de agrupacion (`sin_obra`, `manual`, `automatica`). La carga es de
-solo lectura: no crea ni modifica ediciones, obras ni trabajos.
-
-Las acciones de escritura se protegen con `_has_write_access()` igual que el resto
-del dashboard:
-
-- **Agrupar en obra existente**: asigna las ediciones seleccionadas a una obra
-  elegida, marca como manuales todas las ediciones de esa obra y elimina las obras
-  antiguas que quedan sin ediciones.
-- **Agrupar en obra nueva**: reutiliza la obra con la misma clave
-  `(titulo_uniforme, anio)` si existe o crea una obra manual; despues agrupa.
-- **Volver a automatico**: limpia la marca manual de las ediciones seleccionadas y
-  recalcula su obra con la heuristica de titulo uniforme y año, desmarcando la obra
-  anterior si pierde sus ediciones manuales.
-
-Tras guardar, se reindexan solo los `record_id` afectados con `index_titns`. Si
-Meilisearch falla, la agrupacion queda guardada y la redireccion avisa de que hay
-que ejecutar `make index`; la decision manual nunca se pierde por un fallo del
-indice.
+Catálogo y Agrupación no lo hacen para no perder los formularios ni los filtros.
+Las rutas POST conservan su URL y redirigen a la pagina de origen con `message` o
+`error`; el campo `next` se valida contra `/`, `/catalogo`, `/agrupacion`,
+`/tareas` y `/configuracion`. El estado de administracion y el login/logout viven
+en el menu lateral.
 
 ## Observabilidad de la ingesta
 

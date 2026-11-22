@@ -15,10 +15,10 @@
 
 ## 3. Dashboard de agrupación
 
-- [x] 3.1 Añadir consultas de listado, filtros, resumen y obras candidatas para `/agrupacion` en `services/enrich/src/mediateca/dashboard/`; verificar con tests de consultas sobre SQLite.
-- [x] 3.2 Crear `templates/agrupacion.html`, registrar la ruta GET y añadir el enlace al menú de `base.html`; verificar con un test de `TestClient` que la página carga y muestra ediciones.
-- [x] 3.3 Implementar los POST de agrupar en obra existente, agrupar en obra nueva y volver a automático con `_has_write_access()` y reindexado de las ediciones afectadas; verificar con tests de éxito, error de token y selección inválida.
-- [x] 3.4 Documentar la página y el flujo manual en `docs/ARCHITECTURE_ENRICH.md`; verificar que el documento describe `/agrupacion` y el reindexado posterior.
+- [x] 3.1 Añadir consultas de listado, filtros por `q`/fuente/soporte/estado, resumen y obras candidatas por el texto `q` (máximo 20) para `/agrupacion` en `services/enrich/src/mediateca/dashboard/`; verificar con tests de consultas sobre SQLite, incluido que sin `q` no hay candidatas.
+- [x] 3.2 Crear `templates/agrupacion.html`, registrar la ruta GET y añadir el enlace al menú de `base.html`, con un buscador de obra destino basado en `q` que solo muestre coincidencias; verificar con un test de `TestClient` que la página carga, muestra ediciones y no renderiza un select con todas las obras.
+- [x] 3.3 Implementar los POST de agrupar en obra existente, agrupar en obra nueva y volver a automático con `_has_write_access()`, validación del `obra_id` recibido y reindexado de las ediciones afectadas; verificar con tests de éxito, error de token y selección inválida.
+- [x] 3.4 Documentar la página y el flujo manual en `docs/ARCHITECTURE_ENRICH.md`, incluida la búsqueda de la obra destino con el mismo texto `q` de los filtros; verificar que el documento describe `/agrupacion` y el reindexado posterior.
 
 ## 4. Índice y búsqueda agrupada
 

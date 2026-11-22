@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from mediateca.catalog.grouping import group_editions_into_obra
 from mediateca.catalog.parser import parse_file, parse_search_results
 from mediateca.catalog.repository import (
     apply_tmdb_enrichment,
@@ -219,44 +220,6 @@ def test_apply_tmdb_enrichment_es_idempotente_y_conserva_pais(dvd_fixture) -> No
     assert session.scalar(select(func.count(Edicion.id))) == 1
 
 
-def test_reingesta_de_edicion_manual_conserva_la_obra(dvd_fixture) -> None:
-    session = _session()
-    parsed = parse_file(str(dvd_fixture))
-    edicion = upsert_edicion(session, parsed)
-    session.commit()
-
-    manual = Obra(titulo_uniforme="Manual", anio=2023)
-    manual.manual = True
-    session.add(manual)
-    edicion.obra = manual
-    edicion.obra_manual = True
-    edicion.obra_manual_at = datetime.now(UTC)
-    session.commit()
-
-    alterada = replace(parsed, titulo_uniforme="Cambiado", anio=1990)
-    upsert_edicion(session, alterada)
-    session.commit()
-
-    assert edicion.obra_id == manual.id
-    assert edicion.obra_manual is True
-
-
-def test_edicion_nueva_en_obra_manual_queda_marcada(dvd_fixture) -> None:
-    session = _session()
-    parsed = parse_file(str(dvd_fixture))
-    titulo = parsed.titulo_uniforme or parsed.titulo
-    manual = Obra(titulo_uniforme=titulo, anio=parsed.anio)
-    manual.manual = True
-    session.add(manual)
-    session.commit()
-
-    edicion = upsert_edicion(session, parsed)
-    session.commit()
-
-    assert edicion.obra_id == manual.id
-    assert edicion.obra_manual is True
-
-
 def test_misma_titn_en_dos_fuentes_genera_dos_ediciones(dvd_fixture) -> None:
     from mediateca_shared.models import Fuente
 
@@ -288,3 +251,55 @@ def test_misma_titn_en_dos_fuentes_genera_dos_ediciones(dvd_fixture) -> None:
         "madrid_2101557",
         "andalucia_2101557",
     }
+
+
+def test_reingesta_conserva_la_obra_manual(dvd_fixture) -> None:
+    session = _session()
+    dvd = parse_file(str(dvd_fixture))
+    edicion = upsert_edicion(session, dvd)
+    destino = Obra(titulo_uniforme="Agrupacion manual", anio=2023, manual=True)
+    session.add(destino)
+    session.flush()
+    group_editions_into_obra(session, [edicion], destino)
+    session.commit()
+
+    modificado = replace(
+        dvd,
+        titulo_uniforme="Titulo uniforme distinto",
+        anio=1900,
+    )
+    upsert_edicion(session, modificado)
+    session.commit()
+
+    assert edicion.obra_id == destino.id
+    assert edicion.obra_manual is True
+    assert session.scalar(select(func.count(Obra.id))) == 1
+
+
+def test_edicion_nueva_en_obra_manual_queda_manual(dvd_fixture) -> None:
+    session = _session()
+    dvd = parse_file(str(dvd_fixture))
+    obra = Obra(
+        titulo_uniforme=dvd.titulo_uniforme or dvd.titulo,
+        anio=dvd.anio,
+        manual=True,
+    )
+    session.add(obra)
+    session.commit()
+
+    edicion = upsert_edicion(session, dvd)
+    session.commit()
+
+    assert edicion.obra_id == obra.id
+    assert edicion.obra_manual is True
+    assert edicion.obra_manual_at is not None
+
+
+def test_edicion_automatica_no_queda_manual(dvd_fixture) -> None:
+    session = _session()
+    edicion = upsert_edicion(session, parse_file(str(dvd_fixture)))
+    session.commit()
+
+    assert edicion.obra_manual is False
+    assert edicion.obra is not None
+    assert edicion.obra.manual is False

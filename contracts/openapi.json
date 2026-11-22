@@ -1104,6 +1104,17 @@
             "type": "string",
             "title": "Fuente"
           },
+          "fuente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuente Nombre"
+          },
           "titn": {
             "type": "string",
             "title": "Titn"
@@ -1557,6 +1568,33 @@
             ],
             "title": "Fuente Nombre"
           },
+          "obra_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obra Id"
+          },
+          "obra_titulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obra Titulo"
+          },
+          "ediciones_count": {
+            "type": "integer",
+            "title": "Ediciones Count",
+            "default": 1
+          },
           "titn": {
             "type": "string",
             "title": "Titn"
@@ -1755,33 +1793,6 @@
             "title": "Guionistas",
             "default": []
           },
-          "obra_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Obra Id"
-          },
-          "obra_titulo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Obra Titulo"
-          },
-          "ediciones_count": {
-            "type": "integer",
-            "title": "Ediciones Count",
-            "default": 1
-          },
           "_formatted": {
             "anyOf": [
               {
@@ -1850,7 +1861,8 @@
           },
           "total_ediciones": {
             "type": "integer",
-            "title": "Total Ediciones"
+            "title": "Total Ediciones",
+            "default": 0
           },
           "total_pages": {
             "type": "integer",
@@ -1884,7 +1896,6 @@
           "page",
           "limit",
           "total",
-          "total_ediciones",
           "total_pages",
           "took_ms",
           "facets",

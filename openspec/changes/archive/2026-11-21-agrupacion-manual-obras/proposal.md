@@ -8,7 +8,7 @@ La agrupación automática de obras usa el título uniforme y el año exactos, p
 
 - Añadir a la edición las marcas `obra_manual` y `obra_manual_at`, y a la obra la marca `manual`.
 - Hacer que la asignación manual de obra prevalezca siempre sobre la agrupación automática durante la reingesta y el enriquecimiento.
-- Añadir una página `/agrupacion` al dashboard para seleccionar ediciones y agruparlas en una obra existente o en una obra nueva.
+- Añadir una página `/agrupacion` al dashboard para seleccionar ediciones y agruparlas en una obra existente, buscada por texto, o en una obra nueva.
 - Permitir desvincular una edición de su agrupación manual y devolverla al comportamiento automático.
 - Mantener la unicidad de obra por título uniforme y año: si la obra destino ya existe, se reutiliza; no se crean obras manuales duplicadas.
 - Añadir al índice de búsqueda la referencia a la obra (`obra_id`, `obra_key` y `obra_titulo`) y agrupar los resultados de búsqueda por obra.

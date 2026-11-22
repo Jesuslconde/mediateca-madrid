@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from mediateca.api.aggregation import aggregate_hits
+from mediateca.api.aggregation import aggregate_hits_by_obra
 from mediateca.api.deps import get_db, get_indexer
 from mediateca.api.schemas import SearchResponse
 from mediateca.catalog.search import CatalogSearch
@@ -83,5 +83,6 @@ def search(
             detail="El indice de busqueda no esta disponible",
         ) from exc
 
-    result["hits"] = aggregate_hits(session, result.get("hits", []))
+    result.setdefault("total_ediciones", result.get("total", 0))
+    aggregate_hits_by_obra(session, result.get("hits", []))
     return SearchResponse(**result)

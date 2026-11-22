@@ -361,6 +361,8 @@ export interface components {
             record_id: string;
             /** Fuente */
             fuente: string;
+            /** Fuente Nombre */
+            fuente_nombre?: string | null;
             /** Titn */
             titn: string;
             /** Titulo */
@@ -508,6 +510,15 @@ export interface components {
             fuente?: string | null;
             /** Fuente Nombre */
             fuente_nombre?: string | null;
+            /** Obra Id */
+            obra_id?: number | null;
+            /** Obra Titulo */
+            obra_titulo?: string | null;
+            /**
+             * Ediciones Count
+             * @default 1
+             */
+            ediciones_count: number;
             /** Titn */
             titn: string;
             /** Titulo */
@@ -579,15 +590,6 @@ export interface components {
              * @default []
              */
             guionistas: string[];
-            /** Obra Id */
-            obra_id?: number | null;
-            /** Obra Titulo */
-            obra_titulo?: string | null;
-            /**
-             * Ediciones Count
-             * @default 1
-             */
-            ediciones_count: number;
             _formatted?: components["schemas"]["SearchHitFormatted"] | null;
         };
         /** SearchHitFormatted */
@@ -609,7 +611,10 @@ export interface components {
             limit: number;
             /** Total */
             total: number;
-            /** Total Ediciones */
+            /**
+             * Total Ediciones
+             * @default 0
+             */
             total_ediciones: number;
             /** Total Pages */
             total_pages: number;

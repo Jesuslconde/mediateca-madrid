@@ -83,8 +83,6 @@ export default async function RecordPage({
   const relevantNotes = Object.entries(record.notas).filter(
     ([key]) => key.startsWith("Nota") || key.startsWith("Depósito"),
   );
-  const obra = record.obra;
-  const hermanas = obra?.ediciones ?? [];
 
   return (
     <article className="space-y-8">
@@ -161,61 +159,6 @@ export default async function RecordPage({
         </dl>
       </header>
 
-      {hermanas.length > 1 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-          <h2 className="text-lg font-bold text-ink">Ediciones de la misma obra</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            {hermanas.length} ediciones agrupadas bajo «{obra?.titulo_uniforme}».
-          </p>
-          <ul className="mt-4 space-y-2">
-            {hermanas.map((hermana) => {
-              const abierta = hermana.record_id === record.record_id;
-              const cuerpo = (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-ink">{hermana.titulo}</span>
-                    {hermana.anio ? <span className="text-xs text-slate-500">({hermana.anio})</span> : null}
-                    {(hermana.soportes ?? []).map((soporte) => (
-                      <SupportBadge key={soporte} support={soporte} />
-                    ))}
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {hermana.ejemplares} ejemplar{hermana.ejemplares === 1 ? "" : "es"}
-                    {hermana.fuente ? ` · ${hermana.fuente}` : ""}
-                  </p>
-                </>
-              );
-              return (
-                <li
-                  key={hermana.record_id}
-                  className={`rounded-xl border px-4 py-3 ${
-                    abierta
-                      ? "border-slate-300 bg-slate-50"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  {abierta ? (
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">{cuerpo}</div>
-                      <span className="flex-none rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        Abierta
-                      </span>
-                    </div>
-                  ) : (
-                    <Link
-                      href={`/registro/${encodeURIComponent(hermana.record_id)}`}
-                      className="block text-ink underline-offset-4 hover:text-accent"
-                    >
-                      {cuerpo}
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-8">
           {record.sinopsis ? (
@@ -238,6 +181,60 @@ export default async function RecordPage({
                   </div>
                 ))}
               </div>
+            </section>
+          ) : null}
+
+          {(record.obra?.ediciones?.length ?? 0) > 1 ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+              <h2 className="text-lg font-bold text-ink">Ediciones de la misma obra</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {record.obra?.ediciones?.length} ediciones comparten esta obra.
+              </p>
+              <ul className="mt-4 space-y-2">
+                {(record.obra?.ediciones ?? []).map((edicion) => {
+                  const actual = edicion.record_id === record.record_id;
+                  return (
+                    <li
+                      key={edicion.record_id}
+                      className={`rounded-xl border p-3 ${
+                        actual
+                          ? "border-accent/40 bg-rose-50/40"
+                          : "border-slate-200 bg-slate-50/40"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/registro/${encodeURIComponent(edicion.record_id)}?volver=${encodeURIComponent(volver)}`}
+                            className="text-sm font-semibold text-ink underline-offset-4 hover:text-accent hover:underline"
+                          >
+                            {edicion.titulo}
+                          </Link>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {[edicion.fuente_nombre || edicion.fuente, edicion.anio]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {actual ? (
+                            <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-white">
+                              Edición actual
+                            </span>
+                          ) : null}
+                          {edicion.soportes.map((soporte) => (
+                            <SupportBadge key={soporte} support={soporte} />
+                          ))}
+                          <span className="text-xs text-slate-500">
+                            {edicion.ejemplares} ejemplar
+                            {edicion.ejemplares === 1 ? "" : "es"}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           ) : null}
 

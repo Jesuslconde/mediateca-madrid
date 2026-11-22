@@ -47,6 +47,7 @@ FILTERABLE_ATTRIBUTES = [
     "is_stub",
     "obra_id",
     "obra_key",
+    "obra_titulo",
 ]
 
 SEARCHABLE_ATTRIBUTES = [
@@ -148,28 +149,24 @@ def build_document(edicion: Edicion) -> dict[str, Any]:
             if ejemplar.sucursal_nombre:
                 ubicaciones_texto.add(ejemplar.sucursal_nombre)
     materias = [relacion.materia.termino for relacion in edicion.materias]
-
     obra = edicion.obra
-    if obra is not None:
-        obra_id = obra.id
-        obra_key = f"obra:{obra.id}"
-        obra_titulo = obra.titulo_uniforme
-    else:
-        obra_id = None
-        obra_key = f"edicion:{edicion.record_id}"
-        obra_titulo = None
+    obra_id = edicion.obra_id
+    obra_key = (
+        f"obra:{obra_id}" if obra_id is not None else f"edicion:{edicion.record_id}"
+    )
+    obra_titulo = obra.titulo_uniforme if obra is not None else None
 
     return {
         "id": _meili_id(edicion.record_id),
         "record_id": edicion.record_id,
         "fuente": fuente_codigo,
         "fuente_nombre": fuente_nombre,
-        "titn": edicion.titn,
-        "titulo": edicion.titulo,
-        "titulo_uniforme": edicion.titulo_uniforme,
         "obra_id": obra_id,
         "obra_key": obra_key,
         "obra_titulo": obra_titulo,
+        "titn": edicion.titn,
+        "titulo": edicion.titulo,
+        "titulo_uniforme": edicion.titulo_uniforme,
         "publicacion": edicion.publicacion,
         "anio": edicion.anio,
         "idioma": edicion.idioma,

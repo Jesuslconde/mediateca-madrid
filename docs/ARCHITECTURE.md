@@ -52,7 +52,7 @@ El modelo obra -> edicion -> ejemplar, las marcas de progreso, los paises de ori
 
 La tabla `sucursales` guarda una ficha por sucursal con `codigo` unico, biblioteca, nombre, municipio, direccion, codigo postal y coordenadas opcionales. `Ejemplar` se relaciona con su sucursal por `sucursal_codigo` mediante una relacion de solo lectura, sin clave foranea ni relleno retroactivo. `Biblioteca.codigo_postal` y el resto de campos de ubicacion sirven de respaldo cuando un ejemplar no tiene sucursal.
 
-`SCHEMA_VERSION` es `8`. La migracion `migrate_fuentes.sql` crea la tabla `fuentes`, asocia el catalogo historico a Madrid y sustituye las unicidades. La migracion `migrate_andalucia.sql` anade la segunda fuente AbsysNet sin modificar Madrid y `migrate_andalucia_directory.sql` declara su directorio abierto. por `(fuente_id, titn)`, `(fuente_id, codigo)` y `(fuente_id, external_key)`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos. La migracion `migrate_agrupacion_manual.sql` anade las columnas `ediciones.obra_manual`, `ediciones.obra_manual_at`, `obras.manual` y `obras.updated_at` para la agrupacion manual de obras.
+`SCHEMA_VERSION` es `8`. La migracion `migrate_fuentes.sql` crea la tabla `fuentes`, asocia el catalogo historico a Madrid y sustituye las unicidades. La migracion `migrate_agrupacion_manual.sql` anade `ediciones.obra_manual`, `ediciones.obra_manual_at`, `obras.manual` y `obras.updated_at`; es idempotente y se aplica desde `make migrate`. La migracion `migrate_andalucia.sql` anade la segunda fuente AbsysNet sin modificar Madrid y `migrate_andalucia_directory.sql` declara su directorio abierto. por `(fuente_id, titn)`, `(fuente_id, codigo)` y `(fuente_id, external_key)`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos.
 
 La API expone `EjemplarOut.ubicacion` con codigo postal, municipio, latitud y longitud. El portal usa esos datos y, si faltan coordenadas de sucursal, el centroide del codigo postal del JSON `apps/web/lib/codigos-postales-madrid.json`. Ese JSON se genera con `scripts/generate_codigos_postales.py` a partir de centroides abiertos y del municipio del INE; no se sirve desde PostgreSQL ni desde Meilisearch.
 
@@ -71,30 +71,7 @@ La imagen `mediateca-web` contiene Python y Node. La API y el portal se ejecutan
 - `deploy/portainer-stack.yml` usa las imagenes publicadas en el registry.
 - El orden es `db/meilisearch -> init -> batch/web`.
 - La API comprueba `schema_meta.schema_version` al arrancar y falla si no coincide con `SCHEMA_VERSION`.
-- La migracion de fuentes exige reindexado completo; `init` lo hace con `--reset` al detectar el salto a la version 8.
-
-## Agrupacion manual de obras
-
-El operador puede corregir manualmente la agrupacion de ediciones en obras desde la
-pagina `/agrupacion` del dashboard. La decision queda persistida en
-`ediciones.obra_manual` (con `obra_manual_at`) y en `obras.manual`, y prevalece
-sobre la heuristica automatica en la reingesta: `upsert_edicion()` conserva la obra
-de una edicion marcada como manual. Las ediciones nuevas que coinciden en
-`(titulo_uniforme, anio)` con una obra manual se asocian a ella y quedan marcadas
-como manuales.
-
-Cada documento de Meilisearch incluye `obra_id`, `obra_key` (`obra:<id>` o
-`edicion:<record_id>`) y `obra_titulo`. La busqueda publica usa
-`distinct: "obra_key"` para devolver una edicion representativa por obra y una
-segunda consulta sin `distinct` para las facetas y el total de ediciones. La API
-agrega los datos de las ediciones hermanas de cada obra y la ficha expone la lista
-de ediciones de la misma obra.
-
-Tras agrupar o desvincular se reindexan solo las ediciones afectadas con
-`index_titns`. La migracion de agrupacion sube `SCHEMA_VERSION` a `8`, por lo que
-`init` reconstruye el indice completo con `--reset` para poblar `obra_key` en los
-documentos existentes; si el reindexado incremental falla tras una agrupacion, hay
-que ejecutar `make index`.
+- La migracion de fuentes y la agrupacion manual exigen reindexado completo; `init` lo hace con `--reset` al detectar el salto de version. Tras agrupar o desvincular ediciones desde el dashboard se reindexan solo las ediciones afectadas con `index_titns`; si falla, `make index` reconstruye el indice.
 
 ## Busqueda de solo lectura
 

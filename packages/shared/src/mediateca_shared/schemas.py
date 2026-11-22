@@ -27,6 +27,9 @@ class SearchHit(BaseModel):
     record_id: str | None = None
     fuente: str | None = None
     fuente_nombre: str | None = None
+    obra_id: int | None = None
+    obra_titulo: str | None = None
+    ediciones_count: int = 1
     titn: str
     titulo: str
     titulo_uniforme: str | None = None
@@ -49,9 +52,6 @@ class SearchHit(BaseModel):
     directores: list[str] = []
     actores: list[str] = []
     guionistas: list[str] = []
-    obra_id: int | None = None
-    obra_titulo: str | None = None
-    ediciones_count: int = 1
     formatted: SearchHitFormatted | None = Field(default=None, alias="_formatted")
 
 
@@ -60,7 +60,7 @@ class SearchResponse(BaseModel):
     page: int
     limit: int
     total: int
-    total_ediciones: int
+    total_ediciones: int = 0
     total_pages: int
     took_ms: int
     facets: dict[str, dict[str, int]]
@@ -112,6 +112,7 @@ class EjemplarOut(BaseModel):
 class ObraEdicionOut(BaseModel):
     record_id: str
     fuente: str
+    fuente_nombre: str | None = None
     titn: str
     titulo: str
     anio: int | None = None

@@ -57,12 +57,17 @@ La eliminación de obras vacías se hace solo tras comprobar que no les queda ni
 
 Se añade una página HTML en `services/enrich/src/mediateca/dashboard/` con:
 
-- filtros por texto, fuente, soporte y estado (`sin obra`, `manual`, `automática`);
+- filtros por texto (`q`), fuente, soporte y estado (`sin obra`, `manual`, `automática`);
 - tabla paginada con checkboxes;
-- un formulario con selector de obra existente, campos de obra nueva y botones `Agrupar en obra existente`, `Agrupar en obra nueva` y `Volver a automático`;
+- un buscador de obra destino que reutiliza el mismo texto `q` de los filtros y muestra solo las obras coincidentes por título uniforme o año, con un máximo de 20, en lugar de un desplegable con todas las obras;
+- campos de obra nueva y botones `Agrupar en obra existente`, `Agrupar en obra nueva` y `Volver a automático`;
 - protección con `_has_write_access()` y redirección con mensaje, igual que las acciones actuales del dashboard.
 
+La búsqueda de la obra destino y el filtro de ediciones comparten `q`: el texto se aplica a TITN/título en la tabla de ediciones y a título uniforme/año en las obras candidatas. Si `q` está vacío no se listan obras candidatas; el operador debe escribir texto para buscar el destino. Los demás filtros (fuente, soporte y estado) solo afectan a la tabla de ediciones.
+
 La página es de lectura para quien no tiene token; solo las acciones POST escriben. Tras el commit se reindexan las ediciones afectadas. Si Meilisearch falla, la agrupación queda guardada y se avisa de que hay que ejecutar `make index`.
+
+Alternativa descartada: un desplegable con todas las obras. No es usable con catálogos grandes y obliga a cargar la totalidad de las obras. Un campo independiente `obra_q` aislaría mejor ambos dominios, pero duplica el estado de búsqueda y obliga al operador a teclear dos veces; se prefiere reutilizar `q`.
 
 Alternativa descartada: añadir la acción a la tabla de `/catalogo`. La agrupación necesita selección múltiple y elección de destino; una página propia mantiene el catálogo como vista de estado.
 
@@ -116,6 +121,7 @@ Al agrupar o desvincular se reindexan solo los `record_id` afectados mediante `i
 - **Reindexado síncrono en la petición** → son pocos documentos; si Meilisearch falla, la agrupación queda guardada y se avisa de que hay que reindexar. No se pierde la decisión manual.
 - **Borrado accidental de una obra con ediciones** → la limpieza solo elimina obras cuyo recuento de ediciones es cero.
 - **Obras manuales que reciben ediciones nuevas** → las ediciones que coinciden en clave se añaden y quedan marcadas como manuales; es el comportamiento deseado para una obra curada.
+- **`q` compartido entre ediciones y obras** → un texto útil para filtrar ediciones puede no coincidir con el título uniforme de la obra destino, de modo que el operador tenga que ajustarlo para encontrar la obra. Si en uso real resulta confuso, se evaluará un campo `obra_q` independiente.
 - **Ordenación por año o duración en obras con ediciones de años distintos** → se usa la edición representativa. La agrupación manual está pensada para la misma película, por lo que la diferencia es excepcional.
 - **Consulta de agregación por página** → se cargan solo las ediciones de las obras devueltas y se usa `selectinload` para evitar N+1.
 - **Rollback de código sin restaurar el esquema** → la migración añade columnas con valor por defecto y es compatible hacia atrás en lectura, pero el índice reconstruido y `SCHEMA_VERSION=8` requieren desplegar las dos imágenes coordinadas.

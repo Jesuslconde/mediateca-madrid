@@ -21,27 +21,38 @@ def _session():
     )
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, expire_on_commit=False)()
-    fuente = Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
-    session.add(fuente)
-    session.flush()
-    session.info["fuente"] = fuente
+    session.add(
+        Fuente(codigo="madrid", nombre="Madrid", base_url="https://opac.example")
+    )
+    session.commit()
     return session
 
 
-def _obra(session, titulo_uniforme, anio, *, manual=False) -> Obra:
-    obra = Obra(titulo_uniforme=titulo_uniforme, anio=anio)
-    obra.manual = manual
+def _fuente_id(session) -> int:
+    return session.scalar(select(Fuente.id))
+
+
+def _obra(session, titulo: str, anio: int | None) -> Obra:
+    obra = Obra(titulo_uniforme=titulo, anio=anio)
     session.add(obra)
     session.flush()
     return obra
 
 
-def _edicion(session, titn, *, obra=None, titulo_uniforme=None, anio=None) -> Edicion:
+def _edicion(
+    session,
+    titn: str,
+    *,
+    titulo: str,
+    titulo_uniforme: str | None = None,
+    anio: int | None = None,
+    obra: Obra | None = None,
+) -> Edicion:
     edicion = Edicion(
-        fuente_id=session.info["fuente"].id,
+        fuente_id=_fuente_id(session),
         record_id=f"madrid:{titn}",
         titn=titn,
-        titulo=titulo_uniforme or f"Titulo {titn}",
+        titulo=titulo,
         titulo_uniforme=titulo_uniforme,
         anio=anio,
         obra=obra,
@@ -51,124 +62,142 @@ def _edicion(session, titn, *, obra=None, titulo_uniforme=None, anio=None) -> Ed
     return edicion
 
 
-def test_group_editions_into_existing_obra() -> None:
+def test_agrupar_mueve_ediciones_y_marca_toda_la_obra() -> None:
     session = _session()
-    auto_a = _obra(session, "La vida padre", 2022)
-    auto_b = _obra(session, "Otro titulo", 2020)
-    dest = _obra(session, "La vida padre", 2023)
-    e1 = _edicion(session, "1", obra=auto_a, titulo_uniforme="La vida padre", anio=2022)
-    e2 = _edicion(session, "2", obra=auto_b, titulo_uniforme="Otro titulo", anio=2020)
-    session.commit()
-
-    affected = group_editions_into_obra(session, [e1, e2], dest)
-    session.commit()
-
-    assert set(affected) == {"madrid:1", "madrid:2"}
-    assert e1.obra_id == dest.id
-    assert e2.obra_id == dest.id
-    assert e1.obra_manual is True
-    assert e2.obra_manual is True
-    assert e1.obra_manual_at is not None
-    assert dest.manual is True
-    # Las obras antiguas quedaron sin ediciones y se eliminaron.
-    assert session.get(Obra, auto_a.id) is None
-    assert session.get(Obra, auto_b.id) is None
-
-
-def test_group_no_elimina_obra_con_ediciones_restantes() -> None:
-    session = _session()
-    auto_a = _obra(session, "La vida padre", 2022)
-    dest = _obra(session, "La vida padre", 2023)
-    e1 = _edicion(session, "1", obra=auto_a, titulo_uniforme="La vida padre", anio=2022)
-    e2 = _edicion(session, "2", obra=auto_a, titulo_uniforme="La vida padre", anio=2022)
-    session.commit()
-
-    group_editions_into_obra(session, [e1], dest)
-    session.commit()
-
-    assert e1.obra_id == dest.id
-    assert e2.obra_id == auto_a.id
-    assert session.get(Obra, auto_a.id) is not None
-
-
-def test_create_obra_and_group_reutiliza_existente() -> None:
-    session = _session()
-    existing = _obra(session, "La vida padre", 2022)
-    e1 = _edicion(session, "1", titulo_uniforme="La vida padre", anio=2022)
-    session.commit()
-
-    create_obra_and_group(session, [e1], titulo_uniforme="La vida padre", anio=2022)
-    session.commit()
-
-    assert e1.obra_id == existing.id
-    assert session.scalar(select(func.count(Obra.id))) == 1
-    assert existing.manual is True
-
-
-def test_create_obra_and_group_crea_obra_manual() -> None:
-    session = _session()
-    e1 = _edicion(session, "1", titulo_uniforme="La vida padre", anio=2022)
-    session.commit()
-
-    create_obra_and_group(session, [e1], titulo_uniforme="La vida padre", anio=2022)
-    session.commit()
-
-    obra = session.scalars(select(Obra)).one()
-    assert obra.manual is True
-    assert e1.obra_id == obra.id
-    assert e1.obra_manual is True
-
-
-def test_ungroup_recalcula_y_elimina_obra_vacia() -> None:
-    session = _session()
-    manual_obra = _obra(session, "La vida padre", 2023, manual=True)
-    auto_obra = _obra(session, "La vida padre", 2022)
-    e1 = _edicion(
+    destino = _obra(session, "La vida padre", 2022)
+    hermana = _edicion(
         session,
         "1",
-        obra=manual_obra,
+        titulo="La vida padre",
         titulo_uniforme="La vida padre",
         anio=2022,
+        obra=destino,
     )
-    e1.obra_manual = True
-    session.commit()
-
-    ungroup_edition(session, e1)
-    session.commit()
-
-    assert e1.obra_manual is False
-    assert e1.obra_manual_at is None
-    assert e1.obra_id == auto_obra.id
-    # La obra manual quedo vacia y se elimino.
-    assert session.get(Obra, manual_obra.id) is None
-
-
-def test_ungroup_desmarca_obra_que_conserva_ediciones() -> None:
-    session = _session()
-    manual_obra = _obra(session, "La vida padre", 2023, manual=True)
-    auto_obra = _obra(session, "La vida padre", 2022)
-    e1 = _edicion(
-        session,
-        "1",
-        obra=manual_obra,
-        titulo_uniforme="La vida padre",
-        anio=2022,
-    )
-    e1.obra_manual = True
-    e2 = _edicion(
+    origen_a = _obra(session, "La vida padre (DVD)", 2022)
+    origen_b = _obra(session, "La vida padre (Blu-ray)", 2022)
+    primera = _edicion(
         session,
         "2",
-        obra=manual_obra,
-        titulo_uniforme="La vida padre",
-        anio=2023,
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre (DVD)",
+        anio=2022,
+        obra=origen_a,
     )
-    e2.obra_manual = True
+    segunda = _edicion(
+        session,
+        "3",
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre (Blu-ray)",
+        anio=2022,
+        obra=origen_b,
+    )
     session.commit()
 
-    ungroup_edition(session, e1)
+    afectadas = group_editions_into_obra(session, [primera, segunda], destino)
     session.commit()
 
-    assert e1.obra_id == auto_obra.id
-    # La obra manual conserva e2 (manual) y sigue marcada como manual.
-    assert manual_obra.manual is True
-    assert session.get(Obra, manual_obra.id) is not None
+    assert afectadas == ["madrid:2", "madrid:3"]
+    assert primera.obra_id == destino.id
+    assert segunda.obra_id == destino.id
+    assert hermana.obra_manual is True
+    assert primera.obra_manual is True
+    assert segunda.obra_manual is True
+    assert primera.obra_manual_at is not None
+    assert destino.manual is True
+    assert session.scalar(select(func.count(Obra.id))) == 1
+
+
+def test_agrupar_no_elimina_la_obra_origen_con_ediciones() -> None:
+    session = _session()
+    destino = _obra(session, "Destino", 2000)
+    origen = _obra(session, "Origen", 2001)
+    primera = _edicion(
+        session, "1", titulo="Uno", titulo_uniforme="Origen", anio=2001, obra=origen
+    )
+    permanece = _edicion(
+        session, "2", titulo="Dos", titulo_uniforme="Origen", anio=2001, obra=origen
+    )
+    session.commit()
+
+    group_editions_into_obra(session, [primera], destino)
+    session.commit()
+
+    assert session.get(Obra, origen.id) is not None
+    assert permanece.obra_id == origen.id
+    assert primera.obra_id == destino.id
+
+
+def test_crear_obra_reutiliza_la_clave_existente() -> None:
+    session = _session()
+    existente = _obra(session, "La vida padre", 2022)
+    edicion_existente = _edicion(
+        session,
+        "1",
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre",
+        anio=2022,
+        obra=existente,
+    )
+    otra = _edicion(session, "2", titulo="La vida padre")
+    session.commit()
+
+    obra, afectadas = create_obra_and_group(
+        session, [edicion_existente, otra], "La vida padre", 2022
+    )
+    session.commit()
+
+    assert obra.id == existente.id
+    assert afectadas == ["madrid:1", "madrid:2"]
+    assert session.scalar(select(func.count(Obra.id))) == 1
+    assert otra.obra_id == existente.id
+    assert obra.manual is True
+
+
+def test_desvincular_recalcula_la_obra_y_desmarca_la_anterior() -> None:
+    session = _session()
+    manual = _obra(session, "Agrupacion manual", 2022)
+    edicion = _edicion(
+        session,
+        "1",
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre",
+        anio=2022,
+        obra=manual,
+    )
+    session.commit()
+
+    group_editions_into_obra(session, [edicion], manual)
+    session.commit()
+    assert manual.manual is True
+
+    record_id = ungroup_edition(session, edicion)
+    session.commit()
+
+    assert record_id == "madrid:1"
+    assert edicion.obra_manual is False
+    assert edicion.obra_manual_at is None
+    assert edicion.obra.titulo_uniforme == "La vida padre"
+    assert edicion.obra.id != manual.id
+    assert edicion.obra.manual is False
+    assert session.get(Obra, manual.id) is None
+
+
+def test_desvincular_mantiene_manual_si_quedan_ediciones_manuales() -> None:
+    session = _session()
+    manual = _obra(session, "Agrupacion manual", 2022)
+    primera = _edicion(
+        session, "1", titulo="Una", titulo_uniforme="Una", anio=2022, obra=manual
+    )
+    segunda = _edicion(
+        session, "2", titulo="Dos", titulo_uniforme="Dos", anio=2022, obra=manual
+    )
+    session.commit()
+    group_editions_into_obra(session, [primera, segunda], manual)
+    session.commit()
+
+    ungroup_edition(session, primera)
+    session.commit()
+
+    assert manual.manual is True
+    assert segunda.obra_manual is True
+    assert primera.obra_manual is False

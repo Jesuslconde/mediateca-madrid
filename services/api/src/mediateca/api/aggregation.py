@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from mediateca_shared.models import Edicion, Ejemplar
@@ -7,80 +8,86 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 
-def _first_present(values: list[Any]) -> Any:
-    for value in values:
-        if value is not None and value != "":
+def _soportes(ediciones: list[Edicion]) -> list[str]:
+    values: set[str] = set()
+    for edicion in ediciones:
+        values.update(edicion.soportes or [])
+        for ejemplar in edicion.ejemplares:
+            if ejemplar.soporte:
+                values.add(ejemplar.soporte)
+    return sorted(values)
+
+
+def _bibliotecas(ediciones: list[Edicion]) -> list[str]:
+    values: set[str] = set()
+    for edicion in ediciones:
+        for ejemplar in edicion.ejemplares:
+            if ejemplar.biblioteca is not None:
+                values.add(ejemplar.biblioteca.nombre)
+    return sorted(values)
+
+
+def _primer_valor(ediciones: list[Edicion], atributo: str) -> Any:
+    for edicion in ediciones:
+        value = getattr(edicion, atributo)
+        if value not in (None, "", []):
             return value
     return None
 
 
-def aggregate_hits(
-    session: Session, hits: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Enriquece los hits agrupados con los datos de todas las ediciones de la obra."""
-    if not hits:
-        return []
+def aggregate_hits_by_obra(session: Session, hits: list[dict[str, Any]]) -> None:
+    """Agrega soportes, bibliotecas y ejemplares de todas las ediciones de la obra."""
+    obra_ids = sorted(
+        {
+            int(hit["obra_id"])
+            for hit in hits
+            if hit.get("obra_id") is not None
+        }
+    )
+    if not obra_ids:
+        for hit in hits:
+            hit["ediciones_count"] = 1
+        return
 
-    obra_ids = {hit.get("obra_id") for hit in hits if hit.get("obra_id") is not None}
-    ediciones_por_obra: dict[int, list[Edicion]] = {}
-    if obra_ids:
-        stmt = (
-            select(Edicion)
-            .where(Edicion.obra_id.in_(obra_ids))
-            .options(
-                selectinload(Edicion.obra),
-                selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
-            )
+    stmt = (
+        select(Edicion)
+        .where(Edicion.obra_id.in_(obra_ids))
+        .options(
+            selectinload(Edicion.fuente),
+            selectinload(Edicion.obra),
+            selectinload(Edicion.ejemplares).selectinload(Ejemplar.biblioteca),
         )
-        for edicion in session.scalars(stmt):
-            ediciones_por_obra.setdefault(edicion.obra_id, []).append(edicion)
+    )
+    by_obra: dict[int, list[Edicion]] = defaultdict(list)
+    for edicion in session.scalars(stmt):
+        if edicion.obra_id is not None:
+            by_obra[edicion.obra_id].append(edicion)
 
-    enriched: list[dict[str, Any]] = []
     for hit in hits:
-        item = dict(hit)
-        obra_id = item.get("obra_id")
+        obra_id = hit.get("obra_id")
         if obra_id is None:
-            item["ediciones_count"] = 1
-            enriched.append(item)
+            hit["ediciones_count"] = 1
+            continue
+        ediciones = by_obra.get(int(obra_id), [])
+        if not ediciones:
+            hit["ediciones_count"] = 1
             continue
 
-        ediciones = ediciones_por_obra.get(obra_id, [])
-        item["ediciones_count"] = len(ediciones) or 1
-
-        soportes: list[str] = []
-        bibliotecas: list[str] = []
-        ejemplares = 0
-        for edicion in ediciones:
-            for soporte in edicion.soportes or []:
-                if soporte not in soportes:
-                    soportes.append(soporte)
-            for ejemplar in edicion.ejemplares:
-                if ejemplar.biblioteca is not None:
-                    nombre = ejemplar.biblioteca.nombre
-                    if nombre and nombre not in bibliotecas:
-                        bibliotecas.append(nombre)
-                ejemplares += 1
-
-        item["soportes"] = soportes or item.get("soportes") or []
-        item["bibliotecas"] = sorted(bibliotecas) or item.get("bibliotecas") or []
-        item["ejemplares"] = ejemplares
-
-        if ediciones:
-            obra = ediciones[0].obra
-            item["obra_titulo"] = item.get("obra_titulo") or (
-                obra.titulo_uniforme if obra is not None else None
-            )
-            for campo in ("tmdb_poster_url", "tmdb_url", "sinopsis"):
-                if not item.get(campo):
-                    valor = _first_present([getattr(edicion, campo) for edicion in ediciones])
-                    if valor:
-                        item[campo] = valor
-            for campo in ("anio", "duracion_min"):
-                if item.get(campo) is None:
-                    valor = _first_present([getattr(edicion, campo) for edicion in ediciones])
-                    if valor is not None:
-                        item[campo] = valor
-
-        enriched.append(item)
-
-    return enriched
+        hit["ediciones_count"] = len(ediciones)
+        hit["soportes"] = _soportes(ediciones)
+        hit["bibliotecas"] = _bibliotecas(ediciones)
+        hit["ejemplares"] = sum(len(edicion.ejemplares) for edicion in ediciones)
+        hit["obra_titulo"] = hit.get("obra_titulo") or _primer_valor(
+            ediciones, "titulo_uniforme"
+        )
+        for atributo in (
+            "tmdb_poster_url",
+            "anio",
+            "duracion_min",
+            "sinopsis",
+            "titulo_uniforme",
+        ):
+            if not hit.get(atributo):
+                value = _primer_valor(ediciones, atributo)
+                if value not in (None, "", []):
+                    hit[atributo] = value

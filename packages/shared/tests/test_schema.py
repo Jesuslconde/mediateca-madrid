@@ -10,6 +10,7 @@ from mediateca_shared.models import (
     Ejemplar,
     Fuente,
     HarvestJob,
+    Obra,
     SchemaMeta,
     Sucursal,
 )
@@ -80,18 +81,14 @@ def test_esquema_version_8() -> None:
     assert SCHEMA_VERSION == "8"
 
 
-def test_edicion_incluye_agrupacion_manual() -> None:
-    columnas = {columna.name for columna in Edicion.__table__.columns}
-    assert "obra_manual" in columnas
-    assert "obra_manual_at" in columnas
+def test_columnas_de_agrupacion_manual() -> None:
+    columnas_edicion = {columna.name for columna in Edicion.__table__.columns}
+    assert "obra_manual" in columnas_edicion
+    assert "obra_manual_at" in columnas_edicion
 
-
-def test_obra_incluye_marca_manual() -> None:
-    from mediateca_shared.models import Obra
-
-    columnas = {columna.name for columna in Obra.__table__.columns}
-    assert "manual" in columnas
-    assert "updated_at" in columnas
+    columnas_obra = {columna.name for columna in Obra.__table__.columns}
+    assert "manual" in columnas_obra
+    assert "updated_at" in columnas_obra
 
 
 def test_fuente_valida_codigo() -> None:
@@ -107,3 +104,27 @@ def test_edicion_tiene_identidad_compuesta() -> None:
     constraints = {constraint.name for constraint in Edicion.__table__.constraints}
     assert "uq_ediciones_fuente_titn" in constraints
     assert "uq_ediciones_record_id" in constraints
+
+
+def test_esquemas_de_agrupacion_tienen_valores_por_defecto() -> None:
+    from mediateca_shared.schemas import ObraOut, SearchHit, SearchResponse
+
+    hit = SearchHit(id="madrid_1", titn="1", titulo="La vida padre")
+    assert hit.obra_id is None
+    assert hit.obra_titulo is None
+    assert hit.ediciones_count == 1
+
+    response = SearchResponse(
+        query="",
+        page=1,
+        limit=20,
+        total=1,
+        total_pages=1,
+        took_ms=0,
+        facets={},
+        hits=[hit],
+    )
+    assert response.total_ediciones == 0
+
+    obra = ObraOut(id=1, titulo_uniforme="La vida padre")
+    assert obra.ediciones == []
