@@ -217,6 +217,16 @@ def _base_context(
 
 def _inicio_context(request: Request, session: Session) -> dict[str, Any]:
     cover = catalog_coverage(session)
+    fuentes = enabled_fuentes(session)
+    last_by_source: dict[str, Any] = {}
+    for job in recent_jobs(session, limit=200):
+        codigo = job.fuente_codigo
+        if codigo and codigo not in last_by_source:
+            last_by_source[codigo] = job
+    fuentes_resumen = [
+        {"fuente": fuente, "last_job": last_by_source.get(fuente.codigo)}
+        for fuente in fuentes
+    ]
     context = _base_context(
         request, "inicio", refresh_seconds=settings.dashboard_refresh_seconds
     )
@@ -225,7 +235,8 @@ def _inicio_context(request: Request, session: Session) -> dict[str, Any]:
             "status_counts": job_status_counts(session),
             "type_counts": job_type_counts(session),
             "fuente_counts": job_fuente_counts(session),
-            "fuentes": enabled_fuentes(session),
+            "fuentes": fuentes,
+            "fuentes_resumen": fuentes_resumen,
             "coverage": cover,
             "enrichment_percent": enrichment_percentage(cover),
             "metrics": ingest_metrics(session, cover),

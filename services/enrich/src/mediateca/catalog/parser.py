@@ -227,7 +227,9 @@ def _parse_enlaces(soup: BeautifulSoup) -> list[ParsedEnlace]:
     return result
 
 
-def _cell_text(td: Tag) -> str | None:
+def _cell_text(td: Tag | None) -> str | None:
+    if td is None:
+        return None
     for label in td.select(".copias_label"):
         label.extract()
     return clean(td.get_text(" ", strip=True))
@@ -536,6 +538,29 @@ def parse_search_results(html: str) -> list[ParsedEdicion]:
     return resultados
 
 
+def _has_valid_titn(value: str | None) -> bool:
+    match = re.search(r"[?&]TITN=(\d+)", value or "")
+    return bool(match and int(match.group(1)) > 0)
+
+
+def _permanent_source_url(
+    canonical: str | None,
+    xslike: str | None,
+    url: str | None,
+    titn: str,
+) -> str | None:
+    """Elige una URL permanente: canonica, enlace del OPAC o ``?TITN=``."""
+    for candidate in (canonical, xslike):
+        if _has_valid_titn(candidate):
+            return candidate
+    base = canonical or xslike
+    if base:
+        return f"{base.split('?', 1)[0].split('#', 1)[0]}?TITN={titn}"
+    if _has_valid_titn(url):
+        return url
+    return url
+
+
 def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
     soup = BeautifulSoup(html, BS_PARSER)
     data = _dt_dd(soup)
@@ -593,7 +618,12 @@ def parse_detail(html: str, url: str | None = None) -> ParsedEdicion:
         if label not in {"Título uniforme", "Título", "Publicación", "Descripción física"}
     }
 
-    enlace_permanente = _text(soup.select_one("#xslike"))
+    canonical = soup.select_one('link[rel="canonical"]')
+    enlace_canonico = clean(canonical.get("href")) if isinstance(canonical, Tag) else None
+    enlace_xslike = _text(soup.select_one("#xslike"))
+    enlace_permanente = _permanent_source_url(
+        enlace_canonico, enlace_xslike, url, str(titn)
+    )
 
     return ParsedEdicion(
         titn=str(titn),

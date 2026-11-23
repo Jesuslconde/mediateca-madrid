@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from mediateca.catalog.indexer import (
     FACET_FIELDS,
     FILTERABLE_ATTRIBUTES,
+    SEARCHABLE_ATTRIBUTES,
     MeiliIndexer,
     build_document,
     build_filters,
@@ -188,6 +189,13 @@ def test_faceta_y_filtro_de_paises_origen() -> None:
     assert 'paises_origen = "ES"' in filters
     assert 'paises_origen = "FR"' in filters
     assert " OR " in filters
+
+
+def test_filtro_por_titn() -> None:
+    assert "titn" in FILTERABLE_ATTRIBUTES
+    assert "titn" in SEARCHABLE_ATTRIBUTES
+
+    assert build_filters(titn="2101557") == 'titn = "2101557"'
 
 
 def test_filtro_de_ubicacion_por_codigo_y_por_nombre() -> None:

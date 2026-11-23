@@ -241,9 +241,19 @@ export default async function RecordPage({
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink">Bibliotecas con ejemplares</h2>
             <p className="mb-4 mt-1 text-xs text-slate-400">
-              {record.ejemplares.length} ejemplar{record.ejemplares.length === 1 ? "" : "es"} en{" "}
-              {bibliotecas} biblioteca{bibliotecas === 1 ? "" : "s"}. Consulta el estado de
-              préstamo en la ficha del OPAC.
+              {record.ejemplares.length === 0 ? (
+                <>
+                  Este registro no incluye ejemplares. Consulta la disponibilidad en la ficha
+                  del catálogo oficial.
+                </>
+              ) : (
+                <>
+                  {record.ejemplares.length} ejemplar
+                  {record.ejemplares.length === 1 ? "" : "es"} en {bibliotecas} biblioteca
+                  {bibliotecas === 1 ? "" : "s"}. Consulta el estado de préstamo en la ficha
+                  del OPAC.
+                </>
+              )}
             </p>
             <LibrariesTable ejemplares={record.ejemplares} opacUrl={record.source_url} />
           </section>

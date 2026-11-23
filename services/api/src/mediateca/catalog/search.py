@@ -27,6 +27,7 @@ def _quote(value: str) -> str:
 
 def build_filters(
     *,
+    titn: str | None = None,
     soportes: list[str] | None = None,
     genero: str | None = None,
     anio_desde: int | None = None,
@@ -37,6 +38,9 @@ def build_filters(
     fuente: str | None = None,
 ) -> str | None:
     filters: list[str] = []
+
+    if titn:
+        filters.append(f"titn = {_quote(titn)}")
 
     if fuente:
         filters.append(f"fuente = {_quote(fuente)}")
@@ -82,6 +86,7 @@ class CatalogSearch:
         self,
         query: str,
         *,
+        titn: str | None = None,
         soportes: list[str] | None = None,
         genero: str | None = None,
         anio_desde: int | None = None,
@@ -95,6 +100,7 @@ class CatalogSearch:
         limit: int = 20,
     ) -> dict[str, Any]:
         filters = build_filters(
+            titn=titn,
             soportes=soportes,
             genero=genero,
             anio_desde=anio_desde,

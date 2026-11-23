@@ -30,6 +30,7 @@ FACET_FIELDS = [
 
 FILTERABLE_ATTRIBUTES = [
     "record_id",
+    "titn",
     "fuente",
     "soportes",
     "soporte_principal",
@@ -61,6 +62,7 @@ SEARCHABLE_ATTRIBUTES = [
     "materias",
     "generos",
     "publicacion",
+    "titn",
 ]
 
 SORTABLE_ATTRIBUTES = ["anio", "titulo", "duracion_min"]
@@ -205,6 +207,7 @@ def _quote(value: str) -> str:
 
 def build_filters(
     *,
+    titn: str | None = None,
     soportes: list[str] | None = None,
     genero: str | None = None,
     anio_desde: int | None = None,
@@ -215,6 +218,9 @@ def build_filters(
     fuente: str | None = None,
 ) -> str | None:
     filters: list[str] = []
+
+    if titn:
+        filters.append(f"titn = {_quote(titn)}")
 
     if fuente:
         filters.append(f"fuente = {_quote(fuente)}")
@@ -357,6 +363,7 @@ class MeiliIndexer:
         self,
         query: str,
         *,
+        titn: str | None = None,
         soportes: list[str] | None = None,
         genero: str | None = None,
         anio_desde: int | None = None,
@@ -370,6 +377,7 @@ class MeiliIndexer:
         limit: int = 20,
     ) -> dict[str, Any]:
         filters = build_filters(
+            titn=titn,
             soportes=soportes,
             genero=genero,
             anio_desde=anio_desde,

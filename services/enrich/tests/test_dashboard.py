@@ -280,6 +280,38 @@ def test_app_responde_y_muestra_los_datos(monkeypatch, tmp_path) -> None:
     assert f"<td>{running.id}</td>" in tareas.text
 
 
+def test_inicio_muestra_fuentes_con_modo_y_cobertura(monkeypatch, tmp_path) -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    fuente = Fuente(
+        codigo="cataluna",
+        nombre="Cataluna",
+        base_url="https://catalogos.cultura.gob.es",
+        opac_path="/CCBIP/cgi-ccbip/abnetopac",
+        options={"discovery": "novedades", "coverage": True, "subcat": "BPCAT"},
+    )
+    session.add(fuente)
+    session.commit()
+    create_job(session, "discover", fuente=fuente)
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.get("/")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    html = response.text
+    assert "cataluna" in html
+    assert "novedades" in html
+    assert "cobertura" in html
+    assert "habilitada" in html
+
+
 def test_api_dashboard_inicio_devuelve_datos(monkeypatch, tmp_path) -> None:
     session = _session()
     create_job(session, "enrich")

@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import delete, func, select
 
+from mediateca.catalog.calibration import CalibrationError, calibrate_source
 from mediateca.catalog.directory import (
     DirectoryUnavailable,
     build_directory_client,
@@ -119,6 +120,37 @@ def migrate_command() -> None:
     configure_logging()
     _apply_migrations()
     console.print("[green]Migraciones aplicadas[/green]")
+
+
+@app.command("calibrate-source")
+def calibrate_source_command(
+    fuente: str = typer.Option(..., "--fuente", help="Codigo de fuente"),
+    apply: bool = typer.Option(
+        True, "--apply/--no-apply", help="Guardar el perfil calibrado en la fuente"
+    ),
+) -> None:
+    """Calibra el patron de sesion y el codigo de video de una fuente."""
+    configure_logging()
+    with session_scope() as session:
+        source = get_fuente(session, fuente)
+        try:
+            result = calibrate_source(source)
+        except CalibrationError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        if apply:
+            source.session_pattern = result.session_pattern
+            source.format_value = result.format_value
+            session.commit()
+
+    table = Table(title=f"Calibracion de {fuente}")
+    table.add_column("Campo")
+    table.add_column("Valor")
+    table.add_row("Patron de sesion", result.session_pattern)
+    table.add_row("Formato de video", f"{result.format_value} ({result.format_label})")
+    table.add_row("Sesion detectada", result.session_url)
+    table.add_row("Aplicado", "si" if apply else "no")
+    console.print(table)
 
 
 @app.command("init")

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { FacetFilters } from "@/components/FacetFilters";
 import { PaginationLink } from "@/components/PaginationLink";
 import { RecordCard } from "@/components/RecordCard";
-import { SearchBar } from "@/components/SearchBar";
+import { SearchBar, type SearchField } from "@/components/SearchBar";
 import { SearchSkeleton } from "@/components/SearchSkeleton";
 import { SortSelect } from "@/components/SortSelect";
 import { getLocations, searchRecords } from "@/lib/api";
@@ -29,6 +29,7 @@ function parseYear(value: string | undefined): number | undefined {
 type SearchBodyProps = {
   sp: RawSearchParams;
   query: string;
+  campo: SearchField;
   supports: string[];
   genero?: string;
   idioma?: string;
@@ -49,6 +50,7 @@ export default async function SearchPage({
 }) {
   const sp = await searchParams;
   const query = first(sp.q)?.trim() ?? "";
+  const campo: SearchField = first(sp.campo) === "titn" ? "titn" : "todo";
   const supports = toArray(sp.soporte);
   const genero = first(sp.genero);
   const idioma = first(sp.idioma);
@@ -64,6 +66,7 @@ export default async function SearchPage({
   const volver = `/buscar${searchQuery ? `?${searchQuery}` : ""}`;
   const suspenseKey = [
     query,
+    campo,
     supports.join(","),
     genero ?? "",
     idioma ?? "",
@@ -79,13 +82,17 @@ export default async function SearchPage({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
-        <SearchBar defaultValue={query} compact />
+        <SearchBar defaultValue={query} campo={campo} compact />
       </section>
 
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-ink">
-            {query ? `Resultados para “${query}”` : "Todo el catálogo"}
+            {query
+              ? campo === "titn"
+                ? `Resultados para TITN “${query}”`
+                : `Resultados para “${query}”`
+              : "Todo el catálogo"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Filtra el catálogo y elige cómo ordenar los resultados.
@@ -100,6 +107,7 @@ export default async function SearchPage({
         <SearchBody
           sp={sp}
           query={query}
+          campo={campo}
           supports={supports}
           genero={genero}
           idioma={idioma}
@@ -120,6 +128,7 @@ export default async function SearchPage({
 async function SearchBody({
   sp,
   query,
+  campo,
   supports,
   genero,
   idioma,
@@ -134,7 +143,8 @@ async function SearchBody({
 }: SearchBodyProps) {
   const [result, locations, activeList] = await Promise.all([
     searchRecords({
-      q: query || undefined,
+      q: campo === "titn" ? undefined : query || undefined,
+      titn: campo === "titn" ? query || undefined : undefined,
       soporte: supports.length ? supports : undefined,
       genero,
       idioma,

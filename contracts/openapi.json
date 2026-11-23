@@ -3,7 +3,7 @@
   "info": {
     "title": "Mediateca Madrid",
     "description": "Portal alternativo de busqueda de videos, DVD y Blu-ray de las bibliotecas publicas de la Comunidad de Madrid.",
-    "version": "0.7.8"
+    "version": "0.7.11"
   },
   "paths": {
     "/api/search": {
@@ -26,6 +26,25 @@
               "title": "Q"
             },
             "description": "Texto de busqueda"
+          },
+          {
+            "name": "titn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Identificador TITN exacto",
+              "title": "Titn"
+            },
+            "description": "Identificador TITN exacto"
           },
           {
             "name": "soporte",

@@ -154,6 +154,37 @@ BEGIN
 END
 $$;
 
+-- Elimina los indices unicos globales heredados: la unicidad es por fuente.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'ix_bibliotecas_codigo'
+          AND indexdef ~ '^CREATE UNIQUE INDEX'
+    ) THEN
+        DROP INDEX ix_bibliotecas_codigo;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'ix_sucursales_codigo'
+          AND indexdef ~ '^CREATE UNIQUE INDEX'
+    ) THEN
+        DROP INDEX ix_sucursales_codigo;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'ix_ediciones_titn'
+          AND indexdef ~ '^CREATE UNIQUE INDEX'
+    ) THEN
+        DROP INDEX ix_ediciones_titn;
+    END IF;
+END
+$$;
+
+CREATE INDEX IF NOT EXISTS ix_bibliotecas_codigo ON bibliotecas (codigo);
+CREATE INDEX IF NOT EXISTS ix_sucursales_codigo ON sucursales (codigo);
+CREATE INDEX IF NOT EXISTS ix_ediciones_titn ON ediciones (titn);
+
 CREATE INDEX IF NOT EXISTS ix_ediciones_fuente_id ON ediciones (fuente_id);
 CREATE INDEX IF NOT EXISTS ix_bibliotecas_fuente_id ON bibliotecas (fuente_id);
 CREATE INDEX IF NOT EXISTS ix_sucursales_fuente_id ON sucursales (fuente_id);

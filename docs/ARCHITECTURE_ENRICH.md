@@ -355,3 +355,55 @@ escriben logs JSON con `job_id`, `job_type`, `titn`, `doc`, `result`,
 ## Fuentes OPAC
 
 Cada ejecucion de descubrimiento o enriquecimiento pertenece a una fuente de la tabla `fuentes`. El perfil de la fuente define URL base, ruta, patron de sesion, filtro de formato, retardo y politica de captcha. La identidad de una edicion es `record_id = <fuente>:<titn>`; los cursores, la deduplicacion, los contadores y el indexado se evaluan por fuente. Una fuente deshabilitada o pausada por captcha no recibe trabajos, pero no altera a las demas.
+
+### Modos de descubrimiento
+
+`fuentes.options.discovery` selecciona la forma de la busqueda:
+
+- `"avanzada"` (por defecto): `FORM=2`, `xsqf01="*"`, `select03` y `subcat`. Es el flujo de Madrid y Andalucia.
+- `"novedades"`: `FORM=5`, `xsqf99=1`, `select05=02`, `select03` y `subcat`. Es el flujo del CCBIP para cobertura.
+
+La sesion, la paginacion (`ACC=161&DOC=N`), la ficha (`ACC=165&DOC=N`), el enriquecimiento (`?TITN=<titn>&FORM=1`) y el parser son los mismos en ambos modos.
+
+### Fuentes AbsysNet autonomicas
+
+Las diez fuentes se siembran deshabilitadas con `services/enrich/scripts/migrate_fuentes_autonomicas.sql`. Todas usan `adapter=absysnet` y `select03=06` (calibrado con una busqueda real):
+
+| Fuente | Ruta | Patron de sesion |
+|---|---|---|
+| aragon | `/cgi-bin/opac` | `/opac/([A-Za-z0-9]+)` |
+| asturias | `/cgi-bin/opacbp` | `/opacbp/([A-Za-z0-9]+)` |
+| cantabria | `/cgi-bin/abnetopac2` | `/abnetopac2/([A-Za-z0-9]+)` |
+| castilla-leon | `/cgi-bin/abnetopac` | `/abnetopac/([A-Za-z0-9]+)` |
+| extremadura | `/cgi-bin/abnetopac` | `/abnetopac/([A-Za-z0-9]+)` |
+| la-rioja | `/cgi-bin/opac` | `/opac/([A-Za-z0-9]+)` |
+| murcia | `/cgi-bin/abnetopac` | `/abnetopac/([A-Za-z0-9]+)` |
+| navarra | `/Appsext/opac/abnetcl.exe` | `/abnetcl.exe/([A-Za-z0-9]+)` |
+| pais-vasco | `/cgi-bin_q81a/abnetclop` | `/abnetclop/([A-Za-z0-9]+)` |
+| valencia | `/cginet-bin/abnetop` | `/abnetop/([A-Za-z0-9]+)` |
+
+La Rioja declara `options.verify_tls=false` porque su certificado no encadena con una CA local. Asturias y Extremadura usan `options.discovery="novedades"` con `select05` y `search_extra` (campos ocultos del formulario), porque su busqueda avanzada ignora `select03`; el resto usa `avanzada`. Murcia declara `options.detail_on_discovery=true` porque su OPAC no resuelve la ficha por `TITN`: el descubrimiento obtiene la ficha desde la URL del listado en la misma sesion.
+
+La migracion de fuentes elimina los indices unicos globales heredados de `bibliotecas.codigo`, `sucursales.codigo` y `ediciones.titn`; la unicidad es por fuente (`fuente_id, codigo`) y por `record_id`.
+
+### Fuentes de cobertura CCBIP
+
+Las cinco fuentes de cobertura se siembran con `services/enrich/scripts/migrate_fuentes_cobertura.sql`, deshabilitadas y con `adapter=absysnet`, `options.discovery="novedades"`, `options.coverage=true` y `options.subcat`:
+
+| Fuente | subcat |
+|---|---|
+| castilla-la-mancha | `BPCLM` |
+| galicia | `BPGAL` |
+| cataluna | `BPCAT` |
+| baleares | `BPEMAO_A` |
+| canarias | `BPCANA` |
+
+`options.coverage=true` significa que la fuente solo aporta metadatos y enlace permanente: no se crean ejemplares ni se exige directorio. El CCBIP se actualizo por ultima vez en junio de 2026 y no debe usarse para "novedades". La URL permanente se toma del `<link rel="canonical">`; si no contiene `TITN`, se reconstruye con `?TITN=<titn>`.
+
+### Alta, calibracion y reversion
+
+1. Aplicar la migracion: `python -m mediateca migrate`.
+2. Calibrar la fuente: `python -m mediateca calibrate-source --fuente <codigo>` (actualiza `session_pattern` y `format_value`; se puede revisar sin aplicar con `--no-apply`).
+3. Validar con un lote pequeno: `python -m mediateca discover --fuente <codigo> --max-pages 1 --limit 5`.
+4. Habilitar la fuente (`enabled=true`) y reindexar: `python -m mediateca index --fuente <codigo>`.
+5. Reversion: deshabilitar la fuente; sus datos siguen consultables y no se borra nada.

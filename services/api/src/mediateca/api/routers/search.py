@@ -23,6 +23,9 @@ SORT_MAP: dict[str, list[str] | None] = {
 def search(
     request: Request,
     q: str = Query(default="", max_length=250, description="Texto de busqueda"),
+    titn: str | None = Query(
+        default=None, max_length=32, description="Identificador TITN exacto"
+    ),
     soporte: list[str] | None = Query(
         default=None,
         description="Puede repetirse: DVD, Blu-ray, 4K UHD, VHS",
@@ -65,6 +68,7 @@ def search(
     try:
         result = indexer.search(
             q,
+            titn=titn,
             soportes=soporte,
             genero=genero,
             anio_desde=anio_desde,

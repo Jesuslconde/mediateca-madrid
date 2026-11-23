@@ -344,3 +344,62 @@ def test_parser_conserva_corchetes_que_forman_parte_del_titulo() -> None:
     parsed = parse_detail(html)
 
     assert parsed.titulo == "[Rec]"
+
+
+def test_parsea_listado_aragon(aragon_search_fixture) -> None:
+    parsed = parse_search_results(aragon_search_fixture.read_text(encoding="utf-8"))
+
+    assert len(parsed) == 2
+    assert all(item.titn and item.titulo and item.soportes for item in parsed)
+
+
+def test_parsea_listado_valencia(valencia_search_fixture) -> None:
+    parsed = parse_search_results(valencia_search_fixture.read_text(encoding="utf-8"))
+
+    assert len(parsed) == 2
+    assert all(item.titn and item.titulo and item.soportes for item in parsed)
+
+
+def test_parsea_listado_pais_vasco(pais_vasco_search_fixture) -> None:
+    parsed = parse_search_results(pais_vasco_search_fixture.read_text(encoding="utf-8"))
+
+    assert len(parsed) == 2
+    assert all(item.titn and item.titulo and item.soportes for item in parsed)
+
+
+def test_parsea_novedades_ccbip(ccbip_novedades_fixture) -> None:
+    parsed = parse_search_results(ccbip_novedades_fixture.read_text(encoding="utf-8"))
+
+    assert len(parsed) == 2
+    assert all(item.titn and item.titulo and item.soportes for item in parsed)
+
+
+def test_parsea_ficha_ccbip_usa_url_permanente(ccbip_detail_fixture) -> None:
+    parsed = parse_detail(
+        ccbip_detail_fixture.read_text(encoding="utf-8"),
+        "http://catalogos.cultura.gob.es/CCBIP/cgi-ccbip/abnetopac/SESION/NT1?TITN=18&FORM=1",
+    )
+
+    assert parsed.titn == "18"
+    assert parsed.titulo.startswith("007")
+    assert parsed.soportes == ["DVD"]
+    assert parsed.ejemplares == []
+    assert parsed.source_url == (
+        "http://catalogos.cultura.gob.es:80/CCBIP/cgi-ccbip/abnetopac?TITN=18"
+    )
+
+
+def test_canonical_tiene_prioridad_sobre_xslike() -> None:
+    html = """
+    <html><head>
+      <link rel="canonical" href="https://opac.example/abnetopac?TITN=123">
+    </head><body>
+      <span class="js-TITN">123</span>
+      <span class="doc_title">Titulo</span>
+      <span id="xslike">https://opac.example/abnetopac?TITN=0</span>
+    </body></html>
+    """
+
+    parsed = parse_detail(html, "https://opac.example/sesion?TITN=123")
+
+    assert parsed.source_url == "https://opac.example/abnetopac?TITN=123"

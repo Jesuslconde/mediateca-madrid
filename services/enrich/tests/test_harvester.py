@@ -621,3 +621,197 @@ def test_perfil_opac_andalucia_usa_abnetcl_y_videograbaciones() -> None:
         andalucia_client.close()
         madrid_client.close()
         override.close()
+
+
+class _CaptureClient(OpacClient):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.session_id = "TEST"
+        self.data: dict | None = None
+
+    def _request(self, method, url, **kwargs):  # noqa: ANN001
+        self.data = kwargs.get("data")
+        return httpx.Response(
+            200,
+            text="<html></html>",
+            request=httpx.Request(method, url),
+        )
+
+
+def test_search_avanzada_envia_form_2() -> None:
+    client = _CaptureClient(
+        discovery="avanzada", format_value="06", subcat="BPCLM"
+    )
+    try:
+        client.search("*")
+        assert client.data is not None
+        assert client.data["FORM"] == "2"
+        assert client.data["xsqf01"] == "*"
+        assert client.data["select03"] == "06"
+        assert client.data["subcat"] == "BPCLM"
+        assert "xsqf99" not in client.data
+    finally:
+        client.close()
+
+
+def test_search_novedades_envia_form_5() -> None:
+    client = _CaptureClient(
+        discovery="novedades", format_value="06", subcat="BPCLM"
+    )
+    try:
+        client.search("*")
+        assert client.data is not None
+        assert client.data["FORM"] == "5"
+        assert client.data["xsqf99"] == "1"
+        assert client.data["select05"] == "02"
+        assert client.data["select03"] == "06"
+        assert client.data["subcat"] == "BPCLM"
+        assert "xsqf01" not in client.data
+    finally:
+        client.close()
+
+
+def test_from_fuente_lee_discovery_y_coverage() -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    fuente = Fuente(
+        codigo="ccbip-test",
+        nombre="CCBIP de prueba",
+        base_url="https://catalogos.cultura.gob.es",
+        opac_path="/CCBIP/cgi-ccbip/abnetopac",
+        session_pattern=r"/abnetopac/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="06",
+        options={
+            "discovery": "novedades",
+            "coverage": True,
+            "subcat": "BPCLM",
+        },
+    )
+    session.add(fuente)
+    session.commit()
+
+    client = OpacClient.from_fuente(fuente)
+    try:
+        assert client.discovery == "novedades"
+        assert client.subcat == "BPCLM"
+        assert client.select05 == "02"
+        assert Harvester(session, fuente=fuente, client=client).coverage is True
+    finally:
+        client.close()
+
+
+def test_detail_on_discovery_usa_la_ficha_del_listado() -> None:
+    from mediateca_shared.models import Fuente
+
+    session = _session()
+    fuente = Fuente(
+        codigo="murcia-test",
+        nombre="Murcia",
+        base_url="https://opac.example",
+        opac_path="/opac",
+        options={"detail_on_discovery": True},
+    )
+    session.add(fuente)
+    session.commit()
+
+    listing = """
+    <html><body><ul class="c-docs">
+      <li class="c-docs_unit">
+        <span class="js-TITN">111</span>
+        <span class="doc_title">Registro del listado</span>
+        <span class="js-T300a">1 DVD-Video (ca. 90 min)</span>
+        <a href="?ACC=165&DOC=1">Ficha</a>
+      </li>
+    </ul></body></html>
+    """
+    detail = """
+    <html><body>
+      <span class="js-TITN">999</span>
+      <span class="doc_title">Registro de la ficha</span>
+      <span class="js-T300a">1 DVD-Video (ca. 90 min)</span>
+    </body></html>
+    """
+
+    class _DetailClient:
+        delay = 0.0
+
+        def __init__(self) -> None:
+            self.fetched: list[str] = []
+
+        def search_all(self, query, *, max_pages=None, start_doc=None):  # noqa: ANN001
+            yield SearchPage(
+                query=query,
+                total=1,
+                items=[
+                    SearchItem(
+                        doc=1,
+                        url="https://opac.example/opac/SESION/NT1?ACC=165&DOC=1",
+                        titulo="Registro del listado",
+                    )
+                ],
+                html=listing,
+            )
+
+        def fetch_detail(self, url: str):
+            self.fetched.append(url)
+            return detail, url
+
+    client = _DetailClient()
+    harvester = Harvester(session, fuente=fuente, client=client)
+
+    stats = harvester.harvest_discovery(max_pages=1, limit=1)
+
+    assert stats["processed"] == 1
+    assert client.fetched == [
+        "https://opac.example/opac/SESION/NT1?ACC=165&DOC=1"
+    ]
+    edicion = session.scalars(select(Edicion)).one()
+    assert edicion.record_id == "murcia-test:999"
+    assert edicion.is_stub is False
+    assert edicion.detail_fetched_at is not None
+
+
+def test_cobertura_guarda_edicion_sin_ejemplares(ccbip_detail_fixture) -> None:
+    from mediateca_shared.models import Biblioteca, Fuente
+
+    from mediateca.catalog.jobs import create_stub
+
+    session = _session()
+    fuente = Fuente(
+        codigo="ccbip-test",
+        nombre="CCBIP de prueba",
+        base_url="https://catalogos.cultura.gob.es",
+        opac_path="/CCBIP/cgi-ccbip/abnetopac",
+        session_pattern=r"/abnetopac/([A-Za-z0-9]+)",
+        format_field="select03",
+        format_value="06",
+        options={
+            "discovery": "novedades",
+            "coverage": True,
+            "subcat": "BPCLM",
+        },
+    )
+    session.add(fuente)
+    session.commit()
+    create_stub(session, "18", fuente=fuente)
+    session.commit()
+    html = ccbip_detail_fixture.read_text(encoding="utf-8")
+
+    class _CoverageClient:
+        delay = 0.0
+        max_retries = 1
+
+        def fetch_by_titn(self, titn: str):
+            return html, f"https://catalogos.cultura.gob.es/NT1?TITN={titn}&FORM=1"
+
+    harvester = Harvester(session, fuente=fuente, client=_CoverageClient())
+    assert harvester.coverage is True
+
+    stats = harvester.harvest_enrichment(limit=10)
+
+    assert stats["processed"] == 1
+    edicion = session.scalars(select(Edicion)).one()
+    assert edicion.ejemplares == []
+    assert session.scalar(select(func.count(Biblioteca.id))) == 0

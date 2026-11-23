@@ -773,3 +773,56 @@ def test_cli_refresh_branches_sin_directorio_no_falla(monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
     assert "no tiene directorio" in result.output
+
+
+def test_cli_calibrate_source_actualiza_solo_la_fuente(monkeypatch) -> None:
+    from mediateca_shared.models import Fuente
+
+    from mediateca.catalog.calibration import CalibrationResult
+
+    session = _session()
+    aragon = Fuente(
+        codigo="aragon",
+        nombre="Aragon",
+        base_url="https://opac.example",
+        opac_path="/opac",
+        session_pattern=r"/viejo/([A-Za-z0-9]+)",
+        format_value="05",
+    )
+    andalucia = Fuente(
+        codigo="andalucia",
+        nombre="Andalucia",
+        base_url="https://anda.example",
+        opac_path="/abnetcl.cgi",
+        session_pattern=r"/abnetcl\.cgi/([A-Za-z0-9]+)",
+        format_value="05",
+    )
+    session.add_all([aragon, andalucia])
+    session.commit()
+
+    @contextmanager
+    def fake_session_scope():
+        yield session
+        session.commit()
+
+    def fake_calibrate(fuente):  # noqa: ANN001
+        return CalibrationResult(
+            session_pattern=r"/opac/([A-Za-z0-9]+)",
+            format_value="06",
+            format_label="Videograbaciones",
+            session_url="https://opac.example/opac/SESION",
+        )
+
+    monkeypatch.setattr(cli_module, "calibrate_source", fake_calibrate)
+    monkeypatch.setattr(cli_module, "session_scope", fake_session_scope)
+
+    result = CliRunner().invoke(
+        cli_module.app, ["calibrate-source", "--fuente", "aragon"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert aragon.session_pattern == r"/opac/([A-Za-z0-9]+)"
+    assert aragon.format_value == "06"
+    assert andalucia.session_pattern == r"/abnetcl\.cgi/([A-Za-z0-9]+)"
+    assert andalucia.format_value == "05"
+    assert "Videograbaciones" in result.output

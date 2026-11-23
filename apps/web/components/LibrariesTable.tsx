@@ -164,6 +164,20 @@ export function LibrariesTable({
     return (
       <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
         No hay bibliotecas con ejemplares registrados para este título.
+        {opacUrl ? (
+          <>
+            {" "}
+            <a
+              href={opacUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-sky-700 underline-offset-4 hover:underline"
+            >
+              Consulta el catálogo oficial
+            </a>
+            .
+          </>
+        ) : null}
       </p>
     );
   }

@@ -692,6 +692,8 @@ export interface operations {
             query?: {
                 /** @description Texto de busqueda */
                 q?: string;
+                /** @description Identificador TITN exacto */
+                titn?: string | null;
                 /** @description Puede repetirse: DVD, Blu-ray, 4K UHD, VHS */
                 soporte?: string[] | null;
                 genero?: string | null;

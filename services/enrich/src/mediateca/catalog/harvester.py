@@ -157,6 +157,10 @@ class OpacClient:
         format_field: str | None = None,
         format_value: str | None = None,
         subcat: str | None = None,
+        discovery: str | None = None,
+        select05: str | None = None,
+        search_extra: dict[str, object] | None = None,
+        verify_tls: bool | None = None,
         client: httpx.Client | None = None,
     ) -> None:
         self.base_url = (base_url or settings.opac_base_url).rstrip("/")
@@ -166,6 +170,12 @@ class OpacClient:
         self.format_field = format_field or "select03"
         self.format_value = format_value or "6"
         self.subcat = subcat or "/"
+        self.discovery = (discovery or "avanzada").strip().lower()
+        if self.discovery not in {"avanzada", "novedades"}:
+            raise ValueError(f"Modo de descubrimiento no valido: {self.discovery}")
+        self.select05 = select05 or "02"
+        self.search_extra = dict(search_extra or {})
+        self.verify_tls = True if verify_tls is None else bool(verify_tls)
         self.timeout = timeout or settings.crawl_timeout
         self.delay = delay if delay is not None else settings.crawl_delay
         self.max_retries = max_retries or settings.crawl_max_retries
@@ -173,12 +183,14 @@ class OpacClient:
         self.client = client or httpx.Client(
             follow_redirects=True,
             timeout=self.timeout,
+            verify=self.verify_tls,
             headers={
                 "User-Agent": self.user_agent,
                 "Accept-Language": "es-ES,es;q=0.9",
             },
         )
         self.session_id: str | None = None
+        self._news_ready = False
         self.captchas = 0
         self.captchas_solved = 0
         self.captchas_failed = 0
@@ -204,6 +216,10 @@ class OpacClient:
             "format_field": profile.format_field,
             "format_value": profile.format_value,
             "subcat": options.get("subcat"),
+            "discovery": options.get("discovery"),
+            "select05": options.get("select05"),
+            "search_extra": options.get("search_extra"),
+            "verify_tls": options.get("verify_tls"),
         }
         params.update(kwargs)
         return cls(**params)
@@ -254,6 +270,7 @@ class OpacClient:
         if not session_id:
             raise OpacError("No se ha podido obtener el identificador de sesion del OPAC")
         self.session_id = session_id
+        self._news_ready = False
         # Una segunda peticion inicializa las cookies y el estado de la sesion.
         initialized = self.client.get(f"{self.opac_url}/{session_id}", params={"ACC": 101})
         initialized.raise_for_status()
@@ -465,18 +482,44 @@ class OpacClient:
 
     def search(self, query: str) -> SearchPage:
         self._ensure_session()
-        data = {
-            "ACC": "131",
-            "START": "1",
-            "FORM": "2",
-            "xindex": "",
-            "xindty": "",
-            "xindbt": "",
-            "xexact": "",
-            "xsqf01": query,
-            self.format_field: self.format_value,
-            "subcat": self.subcat,
-        }
+        if self.discovery == "novedades" and not self._news_ready:
+            form_response = self.client.get(
+                f"{self.opac_url}/{self.session_id}",
+                params={"ACC": 120, "FORM": 5},
+            )
+            form_response.raise_for_status()
+            new_session = self._extract_session(form_response)
+            if new_session:
+                self.session_id = new_session
+            self._news_ready = True
+        if self.discovery == "novedades":
+            data = {
+                "ACC": "131",
+                "FORM": "5",
+                "xsqf99": "1",
+                "START": "1",
+                "xindex": "",
+                "xindty": "",
+                "xindbt": "",
+                "xexact": "",
+                "subcat": self.subcat,
+                "select05": self.select05,
+                self.format_field: self.format_value,
+            }
+        else:
+            data = {
+                "ACC": "131",
+                "START": "1",
+                "FORM": "2",
+                "xindex": "",
+                "xindty": "",
+                "xindbt": "",
+                "xexact": "",
+                "xsqf01": query,
+                self.format_field: self.format_value,
+                "subcat": self.subcat,
+            }
+        data.update(self.search_extra)
         response = self._request("POST", self._url(1), data=data)
         return self._parse_results(response, query)
 
@@ -559,6 +602,10 @@ class Harvester:
     ) -> None:
         self.session = session
         self.fuente = fuente or ensure_default_fuente(session)
+        self.coverage = bool((self.fuente.options or {}).get("coverage"))
+        self.detail_on_discovery = bool(
+            (self.fuente.options or {}).get("detail_on_discovery")
+        )
         self.client = client or OpacClient.from_fuente(self.fuente)
         self.tmdb_client = tmdb_client
         self.processed_titns: list[str] = []
@@ -1022,7 +1069,10 @@ class Harvester:
                                 page_items[0].titn,
                             )
 
-                for parsed in page_items:
+                for index, parsed in enumerate(page_items):
+                    item_url = (
+                        page.items[index].url if index < len(page.items) else None
+                    )
                     if resume_titn and parsed.titn == resume_titn:
                         resume_titn = None
                         continue
@@ -1045,10 +1095,45 @@ class Harvester:
                             },
                         )
                         continue
+                    detail_parsed = False
+                    edition = parsed
+                    if self.detail_on_discovery and item_url:
+                        try:
+                            html, final_url = self.client.fetch_detail(item_url)
+                            edition = parse_detail(html, final_url)
+                            detail_parsed = True
+                            time.sleep(delay)
+                        except Exception as exc:  # noqa: BLE001
+                            errors += 1
+                            logger.exception(
+                                "Error obteniendo ficha",
+                                extra={
+                                    "job_id": job.id,
+                                    "job_type": job.job_type,
+                                    "titn": parsed.titn,
+                                    "doc": parsed.doc,
+                                    "result": "failed",
+                                    "error": str(exc),
+                                },
+                            )
+                            continue
+                        if _es_audiovisual(edition) is False:
+                            filtered += 1
+                            last_titn = parsed.titn
+                            if parsed.doc is not None:
+                                last_doc = parsed.doc
+                            continue
                     started = time.monotonic()
                     try:
                         with self.session.begin_nested():
-                            upsert_stub(self.session, parsed, fuente=self.fuente)
+                            if detail_parsed:
+                                upsert_edicion(
+                                    self.session, edition, fuente=self.fuente
+                                )
+                            else:
+                                upsert_stub(
+                                    self.session, parsed, fuente=self.fuente
+                                )
                     except Exception as exc:  # noqa: BLE001
                         errors += 1
                         logger.exception(
@@ -1068,7 +1153,7 @@ class Harvester:
                         continue
 
                     processed += 1
-                    record_id = compose_record_id(self.fuente.codigo, parsed.titn)
+                    record_id = compose_record_id(self.fuente.codigo, edition.titn)
                     self.processed_titns.append(record_id)
                     seen.add(record_id)
                     last_titn = parsed.titn

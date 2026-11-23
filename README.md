@@ -144,7 +144,7 @@ Cuando cambie el modelo:
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | GET | `/health` | Estado de PostgreSQL y Meilisearch |
-| GET | `/api/search` | Busqueda con `q`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
+| GET | `/api/search` | Busqueda con `q`, `titn`, `soporte`, `genero`, `anio_desde`, `anio_hasta`, `idioma`, `paises_origen`, `biblioteca`, `page`, `limit`, `sort` |
 | GET | `/api/records/{record_id}` | Ficha completa con fuente, ejemplares, paises de origen y `ubicacion` por ejemplar; un `TITN` suelto se resuelve como Madrid |
 | GET | `/api/libraries` | Bibliotecas con numero de ejemplares |
 | GET | `/api/stats` | Totales y reparto por soporte |
@@ -177,7 +177,28 @@ Si la sucursal no tiene coordenadas pero tiene codigo postal, `latitud` y `longi
 
 ## Fuentes y reindexado
 
-Las fuentes OPAC viven en la tabla `fuentes`. Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`; Andalucía se crea con `services/enrich/scripts/migrate_andalucia.sql` y su perfil AbsysNet (`abnetcl.cgi`, `select03=05`). `migrate_andalucia_directory.sql` anade el directorio abierto de Andalucía a `fuentes.options`. Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
+Las fuentes OPAC viven en la tabla `fuentes`. Madrid se siembra con `MEDIATECA_OPAC_BASE_URL` y `MEDIATECA_OPAC_PATH`; Andalucía con `services/enrich/scripts/migrate_andalucia.sql` y su perfil AbsysNet (`abnetcl.cgi`, `select03=05`); las diez redes AbsysNet autonómicas con `migrate_fuentes_autonomicas.sql`; y las cinco fuentes de cobertura del CCBIP con `migrate_fuentes_cobertura.sql`. Cada fuente mantiene su perfil, su sesion y sus contadores. Las ediciones se identifican por `record_id` y el indice usa ese identificador.
+
+Las fuentes nuevas se siembran deshabilitadas. El perfil declara `options.discovery` (`"avanzada"` para las redes AbsysNet salvo Asturias y Extremadura, y `"novedades"` para esas dos y el CCBIP) y `options.coverage=true` en las cinco fuentes de cobertura, que solo aportan metadatos y enlace permanente, sin ejemplares. La Rioja declara `options.verify_tls=false`; Murcia, `options.detail_on_discovery=true`, porque su OPAC no resuelve la ficha por `TITN`. La migración de fuentes elimina los índices únicos globales heredados de `bibliotecas.codigo`, `sucursales.codigo` y `ediciones.titn`; la unicidad es por fuente y por `record_id`.
+
+Alta y calibración de una fuente:
+
+```bash
+docker compose run --rm worker python -m mediateca migrate
+docker compose run --rm worker python -m mediateca calibrate-source --fuente aragon
+docker compose run --rm worker python -m mediateca discover --fuente aragon --max-pages 1 --limit 5
+docker compose run --rm worker python -m mediateca index --fuente aragon
+```
+
+Para habilitar una fuente de cobertura, valida primero su lote pequeño y después pon `enabled=true`:
+
+```bash
+docker compose run --rm worker python -m mediateca discover --fuente cataluna --max-pages 1 --limit 5
+docker compose run --rm worker python -m mediateca enrich --fuente cataluna --limit 5
+docker compose run --rm worker python -m mediateca index --fuente cataluna
+```
+
+Para revertir, deshabilita la fuente (`enabled=false`); no se borran sus datos ni se alteran las demás.
 
 Tras aplicar la migracion de identidad (`SCHEMA_VERSION=7`) hay que reconstruir el indice:
 

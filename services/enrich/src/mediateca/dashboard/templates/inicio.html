@@ -46,6 +46,42 @@
     </section>
 
     <section class="panel dashboard-span-3">
+      <h2>Fuentes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Nombre</th>
+            <th>Descubrimiento</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Ultimo trabajo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in fuentes_resumen %}
+            <tr>
+              <td>{{ item.fuente.codigo }}</td>
+              <td>{{ item.fuente.nombre }}</td>
+              <td>{{ item.fuente.options.get('discovery', 'avanzada') }}</td>
+              <td>{{ 'cobertura' if item.fuente.options.get('coverage') else 'ejemplares' }}</td>
+              <td>{{ 'habilitada' if item.fuente.enabled else 'deshabilitada' }}</td>
+              <td>
+                {% if item.last_job %}
+                  {{ item.last_job.job_type }} · {{ item.last_job.status }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">Sin fuentes registradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel dashboard-span-3">
       <h2>Cobertura del catalogo</h2>
       <div class="grid grid-compact" id="grid-coverage">
         <div class="metric"><span class="muted">Ediciones</span><strong>{{ coverage.ediciones }}</strong></div>

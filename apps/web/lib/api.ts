@@ -18,6 +18,7 @@ export type RecordDetail = Schemas["RecordDetail"];
 
 export type SearchParamsInput = {
   q?: string;
+  titn?: string;
   soporte?: string[];
   genero?: string;
   anio_desde?: number;

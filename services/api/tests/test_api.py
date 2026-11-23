@@ -73,6 +73,20 @@ def test_search_filtra_solo_fichas_enriquecidas() -> None:
     assert "detail_complete = true" in index.options["filter"]
 
 
+def test_search_filtra_por_titn() -> None:
+    search, index = _catalog_search()
+    app.dependency_overrides[get_indexer] = lambda: search
+    try:
+        client = TestClient(app)
+        response = client.get("/api/search", params={"titn": "2101557"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert index.options is not None
+    assert index.options["filter"] == 'detail_complete = true AND titn = "2101557"'
+
+
 def test_search_combina_filtro_de_enriquecidas_con_faceta() -> None:
     search, index = _catalog_search()
     app.dependency_overrides[get_indexer] = lambda: search
@@ -331,6 +345,42 @@ def test_record_sin_paises_devuelve_lista_vacia() -> None:
 
     assert response.status_code == 200
     assert response.json()["paises_origen"] == []
+
+
+def test_record_de_cobertura_sin_ejemplares_expone_source_url() -> None:
+    session = _sqlite_session()
+    fuente = Fuente(
+        codigo="cataluna",
+        nombre="Cataluna",
+        base_url="https://catalogos.cultura.gob.es",
+        opac_path="/CCBIP/cgi-ccbip/abnetopac",
+    )
+    session.add(fuente)
+    session.commit()
+    session.add(
+        Edicion(
+            fuente_id=fuente.id,
+            record_id="cataluna:18",
+            titn="18",
+            titulo="007 al servicio secreto de su majestad",
+        )
+    )
+    session.commit()
+
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).get("/api/records/cataluna:18")
+    finally:
+        app.dependency_overrides.clear()
+        session.close()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fuente"] == "cataluna"
+    assert body["ejemplares"] == []
+    assert body["source_url"] == (
+        "https://catalogos.cultura.gob.es/CCBIP/cgi-ccbip/abnetopac?TITN=18"
+    )
 
 
 def test_record_devuelve_portada_y_enlace_de_tmdb() -> None:

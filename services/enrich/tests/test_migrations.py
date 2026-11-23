@@ -231,3 +231,86 @@ def test_migracion_configura_el_directorio_de_andalucia(pg_connection) -> None:
     assert conn.exec_driver_sql(
         "SELECT options->>'directory' FROM fuentes WHERE codigo = 'madrid'"
     ).scalar_one() is None
+
+
+ABSYS_SOURCES = {
+    "aragon",
+    "asturias",
+    "cantabria",
+    "castilla-leon",
+    "extremadura",
+    "la-rioja",
+    "murcia",
+    "navarra",
+    "pais-vasco",
+    "valencia",
+}
+COVERAGE_SOURCES = {
+    "castilla-la-mancha": "BPCLM",
+    "galicia": "BPGAL",
+    "cataluna": "BPCAT",
+    "baleares": "BPEMAO_A",
+    "canarias": "BPCANA",
+}
+
+
+def _assert_new_sources(conn) -> None:
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = ANY(%s)",
+        (list(ABSYS_SOURCES),),
+    ).scalar_one() == len(ABSYS_SOURCES)
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = ANY(%s)",
+        (list(COVERAGE_SOURCES),),
+    ).scalar_one() == len(COVERAGE_SOURCES)
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = ANY(%s) "
+        "AND adapter = 'absysnet' AND enabled = false AND format_value = '06'",
+        (list(ABSYS_SOURCES | set(COVERAGE_SOURCES)),),
+    ).scalar_one() == len(ABSYS_SOURCES) + len(COVERAGE_SOURCES)
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo = ANY(%s) "
+        "AND options->>'discovery' = 'avanzada'",
+        (list(ABSYS_SOURCES),),
+    ).scalar_one() == len(ABSYS_SOURCES)
+    assert conn.exec_driver_sql(
+        "SELECT codigo, options->>'subcat' FROM fuentes "
+        "WHERE options->>'discovery' = 'novedades' ORDER BY codigo"
+    ).fetchall() == sorted(COVERAGE_SOURCES.items())
+    assert conn.exec_driver_sql(
+        "SELECT options->>'coverage' FROM fuentes WHERE codigo = 'cataluna'"
+    ).scalar_one() == "true"
+    assert conn.exec_driver_sql(
+        "SELECT options->>'verify_tls' FROM fuentes WHERE codigo = 'la-rioja'"
+    ).scalar_one() == "false"
+    assert conn.exec_driver_sql(
+        "SELECT count(*) FROM fuentes WHERE codigo IN ('madrid', 'andalucia') "
+        "AND enabled = true"
+    ).scalar_one() == 2
+
+
+def test_migraciones_siembran_fuentes_autonomicas_y_cobertura(pg_connection) -> None:
+    conn, _engine = pg_connection
+    Base.metadata.create_all(conn)
+
+    _run_migrations(conn)
+    _run_migrations(conn)
+
+    _assert_new_sources(conn)
+
+
+def test_semillas_declaran_las_quince_fuentes() -> None:
+    autonomicas = (MIGRATIONS_DIR / "migrate_fuentes_autonomicas.sql").read_text(
+        encoding="utf-8"
+    )
+    cobertura = (MIGRATIONS_DIR / "migrate_fuentes_cobertura.sql").read_text(
+        encoding="utf-8"
+    )
+
+    for codigo in ABSYS_SOURCES:
+        assert f"'{codigo}'" in autonomicas
+    for codigo, subcat in COVERAGE_SOURCES.items():
+        assert f"'{codigo}'" in cobertura
+        assert f'"subcat": "{subcat}"' in cobertura
+    assert '"discovery": "novedades"' in cobertura
+    assert '"coverage": true' in cobertura

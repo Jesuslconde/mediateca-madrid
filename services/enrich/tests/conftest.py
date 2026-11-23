@@ -26,3 +26,28 @@ def bluray_fixture() -> Path:
 @pytest.fixture
 def search_results_fixture() -> Path:
     return FIXTURES / "search_results.html"
+
+
+@pytest.fixture
+def aragon_search_fixture() -> Path:
+    return FIXTURES / "aragon" / "search_results.html"
+
+
+@pytest.fixture
+def valencia_search_fixture() -> Path:
+    return FIXTURES / "valencia" / "search_results.html"
+
+
+@pytest.fixture
+def pais_vasco_search_fixture() -> Path:
+    return FIXTURES / "pais-vasco" / "search_results.html"
+
+
+@pytest.fixture
+def ccbip_novedades_fixture() -> Path:
+    return FIXTURES / "ccbip" / "novedades.html"
+
+
+@pytest.fixture
+def ccbip_detail_fixture() -> Path:
+    return FIXTURES / "ccbip" / "detail_007.html"

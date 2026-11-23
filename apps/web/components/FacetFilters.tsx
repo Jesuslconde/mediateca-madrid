@@ -35,6 +35,7 @@ export function FacetFilters({
   const selectedBiblioteca = first(params.biblioteca);
   const selectedSort = first(params.sort) ?? "relevancia";
   const query = first(params.q) ?? "";
+  const campo = first(params.campo) === "titn" ? "titn" : undefined;
 
   const supportEntries = DEFAULT_SUPPORTS.map((support) => [
     support,
@@ -58,6 +59,7 @@ export function FacetFilters({
   return (
     <Form action="/buscar" className="space-y-6">
       {query ? <input type="hidden" name="q" value={query} /> : null}
+      {campo ? <input type="hidden" name="campo" value={campo} /> : null}
       {selectedSort !== "relevancia" ? (
         <input type="hidden" name="sort" value={selectedSort} />
       ) : null}
@@ -188,7 +190,7 @@ export function FacetFilters({
           Aplicar filtros
         </button>
         <Link
-          href={`/buscar${query ? `?${buildSearchQuery({ q: query })}` : ""}`}
+          href={`/buscar${query ? `?${buildSearchQuery({ q: query, campo })}` : ""}`}
           className="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-600 transition hover:bg-slate-100"
         >
           Limpiar filtros
