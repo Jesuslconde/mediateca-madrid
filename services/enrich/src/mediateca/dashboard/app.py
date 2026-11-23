@@ -17,7 +17,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from mediateca.api.routers.ingest import router as ingest_router
-from mediateca.catalog.fuentes import enabled_fuentes, get_fuente
+from mediateca.catalog.fuentes import (
+    FuenteNotFound,
+    enabled_fuentes,
+    get_fuente,
+    list_fuentes,
+)
 from mediateca.catalog.grouping import (
     create_obra_and_group,
     group_editions_into_obra,
@@ -185,6 +190,15 @@ def _form_int(
         raise ScheduleValidationError(f"El campo {name} debe ser un numero") from exc
 
 
+def _selected_fuentes(values: dict[str, list[str]]) -> list[str]:
+    selected: list[str] = []
+    for raw in values.get("fuente") or []:
+        codigo = raw.strip()
+        if codigo and codigo not in selected:
+            selected.append(codigo)
+    return selected
+
+
 def get_session() -> Generator[Session, None, None]:
     session = get_session_factory()()
     try:
@@ -254,6 +268,7 @@ def _tareas_context(request: Request, session: Session) -> dict[str, Any]:
         {
             "jobs": recent_jobs(session),
             "fuentes": enabled_fuentes(session),
+            "fuentes_todas": list_fuentes(session),
             "active_jobs": {
                 job_type: has_active_job(session, job_type) for job_type in JOB_TYPES
             },
@@ -1178,6 +1193,134 @@ async def enqueue_job_from_dashboard(
     return _redirect_with(
         next_path,
         message=f"Trabajo {job.id} ({job.job_type}) encolado",
+    )
+
+
+BATCH_ACTIONS = {"discover", "discover_full", "enrich", "index"}
+
+
+@app.post("/fuentes/estado")
+async def update_fuente_estado(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_next((values.get("next") or [""])[0], "/tareas")
+    if not _has_write_access(request):
+        return _admin_error(next_path)
+    codigo = (values.get("fuente") or [""])[0].strip()
+    accion = (values.get("accion") or [""])[0].strip()
+    if accion not in {"habilitar", "deshabilitar"}:
+        return _redirect_with(next_path, error="Accion no valida")
+    enabled = accion == "habilitar"
+    try:
+        fuente = get_fuente(session, codigo)
+        fuente.enabled = enabled
+        session.commit()
+    except FuenteNotFound as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo actualizar el estado de la fuente")
+        return _redirect_with(
+            next_path, error="No se pudo actualizar el estado de la fuente"
+        )
+    return _redirect_with(
+        next_path,
+        message=(
+            f"Fuente {fuente.codigo} "
+            f"{'habilitada' if enabled else 'deshabilitada'}"
+        ),
+    )
+
+
+@app.post("/jobs/lote")
+async def enqueue_batch_jobs(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_next((values.get("next") or [""])[0], "/tareas")
+    if not _has_write_access(request):
+        return _admin_error(next_path)
+    accion = (values.get("accion") or [""])[0].strip()
+    if accion not in BATCH_ACTIONS:
+        return _redirect_with(next_path, error="Accion no valida")
+    codigos = _selected_fuentes(values)
+    if not codigos:
+        return _redirect_with(next_path, error="Selecciona al menos una fuente")
+    limit = 5000
+    if accion == "enrich":
+        try:
+            limit = int((values.get("limit") or ["5000"])[0])
+        except (TypeError, ValueError):
+            return _redirect_with(next_path, error="El lote debe ser un numero")
+        if not 1 <= limit <= 50000:
+            return _redirect_with(
+                next_path, error="El lote debe estar entre 1 y 50000"
+            )
+
+    encolados: list[str] = []
+    errores: list[str] = []
+    for codigo in codigos:
+        try:
+            fuente = get_fuente(session, codigo)
+            if not fuente.enabled:
+                errores.append(f"{codigo}: deshabilitada")
+                continue
+            with session.begin_nested():
+                if accion == "discover":
+                    enqueue_discover_job(
+                        session,
+                        fuente=fuente,
+                        mode="incremental",
+                        reason="dashboard-lote",
+                    )
+                elif accion == "discover_full":
+                    enqueue_discover_job(
+                        session,
+                        fuente=fuente,
+                        mode="full",
+                        reason="dashboard-lote",
+                    )
+                elif accion == "enrich":
+                    enqueue_enrich_job(
+                        session,
+                        fuente=fuente,
+                        batch_size=limit,
+                        since=None,
+                        reason="dashboard-lote",
+                    )
+                else:
+                    enqueue_index_job(session, fuente=fuente)
+            encolados.append(fuente.codigo)
+        except JobAlreadyActive as exc:
+            errores.append(f"{codigo}: {exc}")
+        except (FuenteNotFound, ValueError) as exc:
+            errores.append(f"{codigo}: {exc}")
+        except SQLAlchemyError:
+            logger.exception("No se pudo encolar un trabajo del lote")
+            errores.append(f"{codigo}: error de base de datos")
+
+    try:
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudieron encolar los trabajos del lote")
+        return _redirect_with(
+            next_path, error="No se pudieron encolar los trabajos del lote"
+        )
+
+    if not encolados:
+        return _redirect_with(
+            next_path,
+            error="; ".join(errores) or "No se encolo ningun trabajo",
+        )
+    return _redirect_with(
+        next_path,
+        message=f"{len(encolados)} trabajo(s) encolado(s): {', '.join(encolados)}",
+        error="; ".join(errores) if errores else None,
     )
 
 

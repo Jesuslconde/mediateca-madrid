@@ -6,13 +6,14 @@ from pathlib import Path
 from urllib.parse import unquote_plus
 
 from fastapi.testclient import TestClient
-from mediateca_shared.models import Edicion, HarvestJob, Obra
+from mediateca_shared.models import Edicion, Fuente, HarvestJob, Obra
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import mediateca.dashboard.app as dashboard_module
+from mediateca.catalog.fuentes import get_fuente
 from mediateca.catalog.jobs import (
     claim_job,
     create_job,
@@ -2163,3 +2164,176 @@ def test_post_agrupacion_exige_token(monkeypatch, tmp_path) -> None:
     assert response.status_code == 303
     assert "Token de administracion" in unquote_plus(response.headers["location"])
     assert primera.obra_manual is False
+
+
+def test_tareas_muestra_todas_las_fuentes_y_permite_habilitarlas(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    aragon = Fuente(
+        codigo="aragon",
+        nombre="Red de Bibliotecas de Aragon",
+        base_url="https://bibliotecas.aragon.es",
+        opac_path="/cgi-bin/opac",
+        enabled=False,
+        options={"discovery": "avanzada"},
+    )
+    session.add(aragon)
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        tareas = client.get("/tareas")
+        response = client.post(
+            "/fuentes/estado",
+            data={"fuente": "aragon", "accion": "habilitar", "next": "/tareas"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert tareas.status_code == 200
+    assert "aragon" in tareas.text
+    assert "deshabilitada" in tareas.text
+    assert "Habilitar" in tareas.text
+    assert response.status_code == 303
+    assert "message=" in response.headers["location"]
+    session.expire_all()
+    assert get_fuente(session, "aragon").enabled is True
+
+
+def test_post_fuente_estado_puede_deshabilitar(monkeypatch, tmp_path) -> None:
+    session = _session()
+    fuente = Fuente(
+        codigo="valencia",
+        nombre="Red Valenciana",
+        base_url="https://xlpv.gva.es",
+        opac_path="/cginet-bin/abnetop",
+        enabled=True,
+    )
+    session.add(fuente)
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/fuentes/estado",
+            data={"fuente": "valencia", "accion": "deshabilitar", "next": "/tareas"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    session.expire_all()
+    assert get_fuente(session, "valencia").enabled is False
+
+
+def test_post_lote_encola_el_mismo_trabajo_por_fuente(monkeypatch, tmp_path) -> None:
+    session = _session()
+    aragon = Fuente(
+        codigo="aragon",
+        nombre="Aragon",
+        base_url="https://a.example",
+        opac_path="/opac",
+        enabled=True,
+    )
+    valencia = Fuente(
+        codigo="valencia",
+        nombre="Valencia",
+        base_url="https://v.example",
+        opac_path="/opac",
+        enabled=True,
+    )
+    session.add_all([aragon, valencia])
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs/lote",
+            data={
+                "fuente": ["aragon", "valencia"],
+                "accion": "discover",
+                "next": "/tareas",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    location = unquote_plus(response.headers["location"])
+    assert "2 trabajo(s) encolado(s)" in location
+    jobs = list(
+        session.scalars(select(HarvestJob).where(HarvestJob.job_type == "discover"))
+    )
+    assert {job.fuente_id for job in jobs} == {aragon.id, valencia.id}
+
+
+def test_post_lote_omite_fuentes_deshabilitadas(monkeypatch, tmp_path) -> None:
+    session = _session()
+    aragon = Fuente(
+        codigo="aragon",
+        nombre="Aragon",
+        base_url="https://a.example",
+        opac_path="/opac",
+        enabled=True,
+    )
+    asturias = Fuente(
+        codigo="asturias",
+        nombre="Asturias",
+        base_url="https://s.example",
+        opac_path="/opac",
+        enabled=False,
+    )
+    session.add_all([aragon, asturias])
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs/lote",
+            data={
+                "fuente": ["aragon", "asturias"],
+                "accion": "enrich",
+                "limit": "10",
+                "next": "/tareas",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    location = unquote_plus(response.headers["location"])
+    assert "1 trabajo(s) encolado(s)" in location
+    assert "asturias: deshabilitada" in location
+    jobs = list(
+        session.scalars(select(HarvestJob).where(HarvestJob.job_type == "enrich"))
+    )
+    assert [job.fuente_id for job in jobs] == [aragon.id]
+
+
+def test_post_lote_exige_seleccionar_fuente(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/jobs/lote",
+            data={"accion": "discover", "next": "/tareas"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert "Selecciona al menos una fuente" in unquote_plus(
+        response.headers["location"]
+    )

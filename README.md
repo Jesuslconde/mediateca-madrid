@@ -200,6 +200,8 @@ docker compose run --rm worker python -m mediateca index --fuente cataluna
 
 Para revertir, deshabilita la fuente (`enabled=false`); no se borran sus datos ni se alteran las demás.
 
+La página `/tareas` del dashboard lista todas las fuentes, incluidas las deshabilitadas, con su modo de descubrimiento, cobertura y estado. Desde ahí se puede habilitar o deshabilitar cada fuente y seleccionar varias para lanzar en lote el descubrimiento (novedades o barrido completo), el enriquecimiento o la reindexación. Las fuentes deshabilitadas no se procesan hasta activarlas.
+
 Tras aplicar la migracion de identidad (`SCHEMA_VERSION=7`) hay que reconstruir el indice:
 
 ```bash

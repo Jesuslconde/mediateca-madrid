@@ -37,6 +37,69 @@
       {% endif %}
 
       <div class="job-grid">
+        <h3 class="job-group-title">Fuentes y lotes</h3>
+
+        <article class="job-card job-card--wide">
+          <div class="job-card-head">
+            <div><span class="job-step job-step--aux">Src</span><h3>Fuentes del catálogo</h3></div>
+            <span class="muted">{{ fuentes_todas|selectattr('enabled')|list|length }} activas de {{ fuentes_todas|length }}</span>
+          </div>
+          <p class="job-desc">Marca varias fuentes y lanza el mismo trabajo en lote. Las fuentes deshabilitadas aparecen en la lista pero no se procesan hasta activarlas.</p>
+          <form id="lote-fuentes" method="post" action="/jobs/lote">
+            <input type="hidden" name="next" value="/tareas">
+            <div class="table-frame">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Fuente</th>
+                    <th>Modo</th>
+                    <th>Cobertura</th>
+                    <th>Estado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for fuente in fuentes_todas %}
+                    {% set options = fuente.options or {} %}
+                    <tr>
+                      <td><input type="checkbox" name="fuente" value="{{ fuente.codigo }}" {% if not fuente.enabled %}disabled title="Habilita la fuente para lanzar trabajos"{% endif %}></td>
+                      <td><strong>{{ fuente.codigo }}</strong><br><span class="muted">{{ fuente.nombre }}</span></td>
+                      <td>{{ options.get('discovery', 'avanzada') }}</td>
+                      <td>{{ 'si' if options.get('coverage', false) else 'no' }}</td>
+                      <td><span class="status-pill {{ 'status-completed' if fuente.enabled else 'status-failed' }}">{{ 'habilitada' if fuente.enabled else 'deshabilitada' }}</span></td>
+                      <td>
+                        {% if is_admin %}
+                          <button type="submit" form="estado-{{ fuente.codigo }}" class="{{ 'btn-secondary' if fuente.enabled else '' }}">{{ 'Deshabilitar' if fuente.enabled else 'Habilitar' }}</button>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="button-row">
+              <label class="field-inline" for="lote-limit">Lote
+                <input id="lote-limit" type="number" name="limit" value="5000" min="1" max="50000">
+              </label>
+              <button type="submit" name="accion" value="discover" {% if not is_admin %}disabled{% endif %}>Descubrir novedades</button>
+              <button type="submit" name="accion" value="discover_full" class="btn-secondary" onclick="return confirm('El barrido completo recorre todo el catálogo de las fuentes seleccionadas. ¿Continuar?');" {% if not is_admin %}disabled{% endif %}>Barrido completo</button>
+              <button type="submit" name="accion" value="enrich" class="btn-secondary" {% if not is_admin %}disabled{% endif %}>Enriquecer</button>
+              <button type="submit" name="accion" value="index" class="btn-secondary" {% if not is_admin %}disabled{% endif %}>Reindexar</button>
+            </div>
+            <p class="hint">El tamaño de lote solo se aplica al enriquecimiento. Los trabajos incompatibles quedan en cola según las reglas del worker.</p>
+          </form>
+          {% if is_admin %}
+            {% for fuente in fuentes_todas %}
+              <form id="estado-{{ fuente.codigo }}" method="post" action="/fuentes/estado" hidden>
+                <input type="hidden" name="next" value="/tareas">
+                <input type="hidden" name="fuente" value="{{ fuente.codigo }}">
+                <input type="hidden" name="accion" value="{{ 'deshabilitar' if fuente.enabled else 'habilitar' }}">
+              </form>
+            {% endfor %}
+          {% endif %}
+        </article>
+
         <h3 class="job-group-title">Captación y enriquecimiento</h3>
 
         <article class="job-card job-card--wide">
