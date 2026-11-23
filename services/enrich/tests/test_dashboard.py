@@ -1919,7 +1919,7 @@ def test_agrupacion_responde_y_muestra_candidatas_sin_select_gigante(
 
     client = _client_for(session)
     try:
-        response = client.get("/agrupacion?q=vida")
+        response = client.get("/agrupacion?q=vida&amplio=1")
         sin_texto = client.get("/agrupacion")
     finally:
         _clear_overrides()
@@ -1936,6 +1936,47 @@ def test_agrupacion_responde_y_muestra_candidatas_sin_select_gigante(
     assert 'class="nav-link active" aria-current="page">Agrupación</a>' in html
     assert "Escribe un texto en el filtro" in sin_texto.text
     assert '<div class="candidate-list">' not in sin_texto.text
+
+
+def test_agrupacion_paginacion_con_numeros_y_fragmento_ajax(
+    monkeypatch, tmp_path
+) -> None:
+    session = _session()
+    obra = Obra(titulo_uniforme="Serie", anio=2020, manual=False)
+    session.add(obra)
+    session.flush()
+    for number in range(5):
+        stub = create_stub(session, str(number))
+        stub.titulo = f"Pelicula {number}"
+        stub.titulo_uniforme = f"Pelicula {number}"
+        stub.anio = 2020
+        stub.obra = obra
+    session.commit()
+
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.get("/agrupacion?limit=2")
+        fragmento = client.get("/agrupacion/ediciones?limit=2&page=2")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    html = response.text
+    assert 'class="pagination"' in html
+    assert 'data-page="2"' in html
+    assert "Página 1 de 3" in html
+    # La paginación aparece dentro del formulario, antes de la obra destino.
+    assert html.index('class="pagination"') < html.index("Obra destino")
+
+    assert fragmento.status_code == 200
+    frag = fragmento.text
+    assert 'name="record_id"' in frag
+    assert 'class="pagination"' in frag
+    assert "Página 2 de 3" in frag
+    assert "Resumen de agrupación" not in frag
 
 
 def test_agrupacion_registra_trazas_de_cada_paso(monkeypatch, tmp_path, caplog) -> None:

@@ -1,0 +1,53 @@
+<input type="hidden" name="next" value="{{ next_path }}">
+<div class="table-frame">
+  <table>
+    <thead>
+      <tr>
+        <th>Sel.</th>
+        <th>Título</th>
+        <th>Año</th>
+        <th>Soporte</th>
+        <th>Fuente</th>
+        <th>TITN</th>
+        <th>Obra actual</th>
+        <th>Manual</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for edicion in rows %}
+        <tr>
+          <td>
+            <input type="checkbox" name="record_id" value="{{ edicion.record_id }}" aria-label="Seleccionar {{ edicion.titulo }}">
+          </td>
+          <td>{{ edicion.titulo }}</td>
+          <td>{{ edicion.anio if edicion.anio is not none else '—' }}</td>
+          <td>{{ edicion.soporte_principal or '—' }}</td>
+          <td>{{ edicion.fuente.codigo if edicion.fuente else '—' }}</td>
+          <td>{{ edicion.titn }}</td>
+          <td>{{ edicion.obra.titulo_uniforme if edicion.obra else '—' }}</td>
+          <td>{{ 'Sí' if edicion.obra_manual else 'No' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Paginación de ediciones">
+  {% if has_prev %}
+    <a class="js-page" href="/agrupacion/ediciones?{{ prev_query }}" data-page="{{ page - 1 }}" rel="prev">Anterior</a>
+  {% endif %}
+  {% for item in pagination %}
+    {% if item is none %}
+      <span class="page-ellipsis" aria-hidden="true">…</span>
+    {% elif item == page %}
+      <span class="page-current" aria-current="page">{{ item }}</span>
+    {% else %}
+      <a class="js-page" href="/agrupacion/ediciones?{{ page_queries[item] }}" data-page="{{ item }}">{{ item }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if has_next %}
+    <a class="js-page" href="/agrupacion/ediciones?{{ next_query }}" data-page="{{ page + 1 }}" rel="next">Siguiente</a>
+  {% endif %}
+  <span class="pagination-info">Página {{ page }} de {{ pages }}</span>
+</nav>
+{% endif %}

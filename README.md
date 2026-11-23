@@ -227,7 +227,7 @@ En un despliegue normal el servicio `init` detecta el salto de version y ejecuta
 
 ## Agrupación manual de obras
 
-El dashboard expone `/agrupacion` para corregir la agrupación automática de ediciones. El operador filtra las ediciones por texto, fuente, soporte o estado, las selecciona y elige una obra destino o crea una obra nueva. La obra destino se busca con el mismo texto `q` del apartado Filtros y solo se muestran las coincidencias; no hay un desplegable con todas las obras. La acción "Volver a automático" desvincula las ediciones y las reasigna por título uniforme y año.
+El dashboard expone `/agrupacion` para corregir la agrupación automática de ediciones. El operador filtra las ediciones por texto, fuente, soporte, año o estado, las selecciona y elige una obra destino o crea una obra nueva. La búsqueda de texto es exacta por defecto; la casilla "Búsqueda amplia" la convierte en una búsqueda por coincidencia parcial. La obra destino se busca con el mismo texto `q` del apartado Filtros y solo se muestran las coincidencias; no hay un desplegable con todas las obras. La acción "Volver a automático" desvincula las ediciones y las reasigna por título uniforme y año.
 
 Al agrupar o desvincular se reindexan solo las ediciones afectadas. Si Meilisearch no responde, la decisión manual queda guardada y el dashboard avisa de que hay que ejecutar `make index`. La agrupación manual sube `SCHEMA_VERSION` a `8`; el despliegue normal debe reconstruir el índice con `make init` (o `make index-reset` si se aplica la migración por separado) para que los documentos incluyan `obra_key`.
 

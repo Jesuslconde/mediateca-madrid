@@ -71,7 +71,7 @@ def test_filtra_por_texto_fuente_soporte_y_estado() -> None:
     _edicion(session, "3", titulo="Otra pelicula", soporte="DVD")
     session.commit()
 
-    assert [e.titn for e in agrupacion_rows(session, AgrupacionFilter(texto="vida"))] == [
+    assert [e.titn for e in agrupacion_rows(session, AgrupacionFilter(texto="vida", amplio=True))] == [
         "1",
         "2",
     ]
@@ -92,6 +92,39 @@ def test_filtra_por_texto_fuente_soporte_y_estado() -> None:
     ] == ["1"]
 
 
+def test_texto_es_exacto_por_defecto_y_amplio_es_opcional() -> None:
+    session = _session()
+    obra = _obra(session, "La vida padre", 2022)
+    _edicion(session, "1", titulo="La vida padre", obra=obra)
+    _edicion(session, "2", titulo="La vida padre", obra=obra)
+    _edicion(session, "3", titulo="Otra pelicula")
+    session.commit()
+
+    # Por defecto el texto es exacto: "vida" no coincide con "La vida padre".
+    assert agrupacion_rows(session, AgrupacionFilter(texto="vida")) == []
+    assert [
+        e.titn for e in agrupacion_rows(session, AgrupacionFilter(texto="La vida padre"))
+    ] == ["1", "2"]
+    # Con ``amplio`` se recupera la búsqueda por coincidencia parcial.
+    assert [
+        e.titn for e in agrupacion_rows(session, AgrupacionFilter(texto="vida", amplio=True))
+    ] == ["1", "2"]
+
+
+def test_filtra_por_anio() -> None:
+    session = _session()
+    obra = _obra(session, "La vida padre", 2022)
+    _edicion(session, "1", titulo="La vida padre", obra=obra)
+    _edicion(session, "2", titulo="La vida padre", obra=obra)
+    _edicion(session, "3", titulo="Otra pelicula")
+    session.commit()
+
+    assert [
+        e.titn for e in agrupacion_rows(session, AgrupacionFilter(anio=2022))
+    ] == ["1", "2"]
+    assert agrupacion_rows(session, AgrupacionFilter(anio=1999)) == []
+
+
 def test_resumen_separa_estados_y_respeta_filtros_base() -> None:
     session = _session()
     obra = _obra(session, "La vida padre", 2022)
@@ -106,11 +139,11 @@ def test_resumen_separa_estados_y_respeta_filtros_base() -> None:
     assert resumen.automatica == 1
     assert resumen.manual == 1
 
-    filtrado = agrupacion_summary(session, AgrupacionFilter(texto="vida"))
+    filtrado = agrupacion_summary(session, AgrupacionFilter(texto="vida", amplio=True))
     assert filtrado.total == 2
     assert filtrado.sin_obra == 0
     assert filtrado.manual == 1
-    assert agrupacion_total(session, AgrupacionFilter(texto="vida")) == 2
+    assert agrupacion_total(session, AgrupacionFilter(texto="vida", amplio=True)) == 2
 
 
 def test_paginacion_estable_y_limite() -> None:

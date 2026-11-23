@@ -22,6 +22,8 @@ class AgrupacionFilter:
     fuente: str | None = None
     soporte: str | None = None
     estado: str | None = None
+    anio: int | None = None
+    amplio: bool = False
     page: int = 1
     limit: int = DEFAULT_LIMIT
 
@@ -43,7 +45,9 @@ class ObraCandidata:
 def _base_predicates(filtro: AgrupacionFilter) -> list:
     clauses = []
     if filtro.texto:
-        term = f"%{filtro.texto}%"
+        # Por defecto la búsqueda es exacta; con ``amplio`` se busca por
+        # coincidencia parcial (contiene) sobre los mismos campos.
+        term = f"%{filtro.texto}%" if filtro.amplio else filtro.texto
         clauses.append(
             or_(
                 Edicion.titn.ilike(term),
@@ -59,6 +63,8 @@ def _base_predicates(filtro: AgrupacionFilter) -> list:
         )
     if filtro.soporte:
         clauses.append(Edicion.soporte_principal == filtro.soporte)
+    if filtro.anio is not None:
+        clauses.append(Edicion.anio == filtro.anio)
     return clauses
 
 
@@ -91,11 +97,13 @@ def _select_ediciones(filtro: AgrupacionFilter):
 def agrupacion_total(session: Session, filtro: AgrupacionFilter) -> int:
     started = time.monotonic()
     logger.info(
-        "Agrupacion total: consultando (q=%r, fuente=%r, soporte=%r, estado=%r)",
+        "Agrupacion total: consultando (q=%r, fuente=%r, soporte=%r, estado=%r, anio=%r, amplio=%r)",
         filtro.texto,
         filtro.fuente,
         filtro.soporte,
         filtro.estado,
+        filtro.anio,
+        filtro.amplio,
         extra={"step": "agrupacion.total.start"},
     )
     total = session.scalar(
@@ -123,7 +131,7 @@ def agrupacion_rows(session: Session, filtro: AgrupacionFilter) -> list[Edicion]
     offset = (page - 1) * limit
     started = time.monotonic()
     logger.info(
-        "Agrupacion filas: consultando pagina=%s limit=%s offset=%s (q=%r, fuente=%r, soporte=%r, estado=%r)",
+        "Agrupacion filas: consultando pagina=%s limit=%s offset=%s (q=%r, fuente=%r, soporte=%r, estado=%r, anio=%r, amplio=%r)",
         page,
         limit,
         offset,
@@ -131,6 +139,8 @@ def agrupacion_rows(session: Session, filtro: AgrupacionFilter) -> list[Edicion]
         filtro.fuente,
         filtro.soporte,
         filtro.estado,
+        filtro.anio,
+        filtro.amplio,
         extra={"step": "agrupacion.rows.start", "page": page},
     )
     stmt = (
@@ -164,6 +174,8 @@ def agrupacion_summary(
         texto=filtro.texto,
         fuente=filtro.fuente,
         soporte=filtro.soporte,
+        anio=filtro.anio,
+        amplio=filtro.amplio,
         page=filtro.page,
         limit=filtro.limit,
     )
@@ -172,10 +184,12 @@ def agrupacion_summary(
         Obra, Edicion.obra_id == Obra.id
     )
     logger.info(
-        "Agrupacion resumen: consultando totales (q=%r, fuente=%r, soporte=%r)",
+        "Agrupacion resumen: consultando totales (q=%r, fuente=%r, soporte=%r, anio=%r, amplio=%r)",
         filtro.texto,
         filtro.fuente,
         filtro.soporte,
+        filtro.anio,
+        filtro.amplio,
         extra={"step": "agrupacion.summary.start"},
     )
 

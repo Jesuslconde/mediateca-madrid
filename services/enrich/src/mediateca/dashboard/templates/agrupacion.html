@@ -17,6 +17,13 @@
       <label>Texto
         <input type="text" name="q" value="{{ filter.texto or '' }}" placeholder="Título, TITN o título uniforme">
       </label>
+      <label class="field-inline" title="Por defecto la búsqueda es exacta. Márcalo para buscar coincidencias parciales.">
+        <input type="checkbox" name="amplio" value="1" {% if filter.amplio %}checked{% endif %}>
+        Búsqueda amplia
+      </label>
+      <label>Año
+        <input type="number" name="anio" value="{{ filter.anio or '' }}" min="1900" max="2100" step="1" placeholder="Todos">
+      </label>
       <label>Fuente
         <select name="fuente">
           <option value="">Todas</option>
@@ -51,49 +58,35 @@
       .candidate small { color: var(--ink-muted); }
       .grouping-actions { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid #e5e9ef; }
       .danger { color: var(--warn); }
+      .pagination {
+        display: flex; align-items: center; gap: .3rem; flex-wrap: wrap;
+        margin-top: .75rem;
+      }
+      .pagination a, .pagination .page-current, .pagination .page-ellipsis {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 2rem; height: 2rem; padding: 0 .5rem;
+        border: 1px solid var(--border); border-radius: 6px;
+        font-size: .85rem; text-decoration: none; color: var(--primary); background: #fff;
+      }
+      .pagination a:hover { background: var(--primary-soft); }
+      .pagination .page-current {
+        background: var(--primary); color: #fff; font-weight: 700; border-color: var(--primary);
+      }
+      .pagination .page-ellipsis { border: none; color: var(--ink-muted); }
+      .pagination .pagination-info { margin-left: auto; color: var(--ink-muted); font-size: .82rem; }
     </style>
   </section>
 
   <section>
     <h2>Ediciones</h2>
-    <p class="muted">{{ total }} edición{% if total != 1 %}es{% endif %} coincidentes · Página {{ page }} de {{ pages }}</p>
+    <p class="muted">{{ total }} edición{% if total != 1 %}es{% endif %} coincidentes</p>
     {% if rows %}
       {% if admin_required and not is_admin %}
         <p class="error">Desbloquea la administración desde el menú lateral para agrupar ediciones.</p>
       {% else %}
         <form method="post" action="/agrupacion/agrupar">
-          <input type="hidden" name="next" value="{{ next_path }}">
-          <div class="table-frame">
-            <table>
-              <thead>
-                <tr>
-                  <th>Sel.</th>
-                  <th>Título</th>
-                  <th>Año</th>
-                  <th>Soporte</th>
-                  <th>Fuente</th>
-                  <th>TITN</th>
-                  <th>Obra actual</th>
-                  <th>Manual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for edicion in rows %}
-                  <tr>
-                    <td>
-                      <input type="checkbox" name="record_id" value="{{ edicion.record_id }}" aria-label="Seleccionar {{ edicion.titulo }}">
-                    </td>
-                    <td>{{ edicion.titulo }}</td>
-                    <td>{{ edicion.anio if edicion.anio is not none else '—' }}</td>
-                    <td>{{ edicion.soporte_principal or '—' }}</td>
-                    <td>{{ edicion.fuente.codigo if edicion.fuente else '—' }}</td>
-                    <td>{{ edicion.titn }}</td>
-                    <td>{{ edicion.obra.titulo_uniforme if edicion.obra else '—' }}</td>
-                    <td>{{ 'Sí' if edicion.obra_manual else 'No' }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div id="ediciones-container">
+            {% include "agrupacion_ediciones.html" %}
           </div>
 
           <div class="grouping-actions">
@@ -136,13 +129,40 @@
           </div>
         </form>
       {% endif %}
-
-      <div class="actions">
-        {% if has_prev %}<a href="/agrupacion?{{ prev_query }}"><button type="button">Anterior</button></a>{% endif %}
-        {% if has_next %}<a href="/agrupacion?{{ next_query }}"><button type="button">Siguiente</button></a>{% endif %}
-      </div>
     {% else %}
       <p class="muted">No hay ediciones para los filtros indicados.</p>
     {% endif %}
   </section>
+
+  <script>
+    (function () {
+      var container = document.getElementById('ediciones-container');
+      if (!container) return;
+
+      function attach() {
+        container.querySelectorAll('a.js-page').forEach(function (link) {
+          link.addEventListener('click', function (event) {
+            event.preventDefault();
+            var target = link.getAttribute('href');
+            fetch(target, { headers: { 'Accept': 'text/html' } })
+              .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+              })
+              .then(function (html) {
+                container.innerHTML = html;
+                var full = target.replace('/agrupacion/ediciones', '/agrupacion');
+                if (history.pushState) history.pushState(null, '', full);
+                attach();
+              })
+              .catch(function () {
+                window.location.href = target.replace('/agrupacion/ediciones', '/agrupacion');
+              });
+          });
+        });
+      }
+
+      attach();
+    })();
+  </script>
 {% endblock %}

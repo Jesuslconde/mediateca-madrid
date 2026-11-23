@@ -367,11 +367,20 @@ def _parse_agrupacion_filter(request: Request) -> AgrupacionFilter:
     estado = q.get("estado") or None
     if estado not in {"sin_obra", "manual", "automatica"}:
         estado = None
+    anio_raw = q.get("anio") or None
+    anio: int | None = None
+    if anio_raw:
+        try:
+            anio = int(anio_raw)
+        except ValueError:
+            anio = None
     return AgrupacionFilter(
         texto=q.get("q") or None,
         fuente=q.get("fuente") or None,
         soporte=q.get("soporte") or None,
         estado=estado,
+        anio=anio,
+        amplio=q.get("amplio") is not None,
         page=max(_int("page", 1), 1),
         limit=min(max(_int("limit", DEFAULT_LIMIT), 1), MAX_LIMIT),
     )
@@ -386,16 +395,55 @@ def _agrupacion_next(request: Request) -> str:
     return f"/agrupacion?{urlencode(params)}" if params else "/agrupacion"
 
 
+def _pagination_items(page: int, pages: int, *, window: int = 2) -> list[int | None]:
+    """Números de página a mostrar, con ``None`` como elipsis."""
+    if pages <= 1:
+        return []
+    shown: set[int] = {1, pages, page}
+    for delta in range(1, window + 1):
+        if page - delta >= 1:
+            shown.add(page - delta)
+        if page + delta <= pages:
+            shown.add(page + delta)
+    items: list[int | None] = []
+    previous: int | None = None
+    for number in sorted(shown):
+        if previous is not None and number - previous > 1:
+            items.append(None)
+        items.append(number)
+        previous = number
+    return items
+
+
+def _pagination_context(
+    request: Request, page: int, total: int, limit: int
+) -> dict[str, Any]:
+    pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
+    pagination = _pagination_items(page, pages)
+    return {
+        "page": page,
+        "pages": pages,
+        "pagination": pagination,
+        "has_prev": page > 1,
+        "has_next": page < pages,
+        "prev_query": _page_query(request, page - 1),
+        "next_query": _page_query(request, page + 1),
+        "page_queries": {p: _page_query(request, p) for p in pagination if p is not None},
+    }
+
+
 def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
     started = time.monotonic()
     filtro = _parse_agrupacion_filter(request)
     pool = _pool_status(session)
     logger.info(
-        "Agrupacion: inicio de la peticion (q=%r, fuente=%r, soporte=%r, estado=%r, page=%s, limit=%s, pool=%s)",
+        "Agrupacion: inicio de la peticion (q=%r, fuente=%r, soporte=%r, estado=%r, anio=%r, amplio=%r, page=%s, limit=%s, pool=%s)",
         filtro.texto,
         filtro.fuente,
         filtro.soporte,
         filtro.estado,
+        filtro.anio,
+        filtro.amplio,
         filtro.page,
         filtro.limit,
         pool,
@@ -502,7 +550,6 @@ def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
 
     page = filtro.page
     limit = filtro.limit
-    pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
     context = _base_context(request, "agrupacion", refresh_seconds=None)
     context.update(
         {
@@ -510,17 +557,13 @@ def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
             "summary": summary,
             "total": total,
             "rows": rows,
-            "page": page,
-            "pages": pages,
-            "has_prev": page > 1,
-            "has_next": page < pages,
-            "prev_query": _page_query(request, page - 1),
-            "next_query": _page_query(request, page + 1),
             "next_path": _agrupacion_next(request),
             "candidates": candidates,
             "fuentes": fuentes,
         }
     )
+    context.update(_pagination_context(request, page, total, limit))
+    pages = context["pages"]
     logger.info(
         "Agrupacion: contexto listo en %.1f ms (filas=%s, paginas=%s)",
         elapsed_ms(started),
@@ -533,6 +576,20 @@ def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
             "page": page,
         },
     )
+    return context
+
+
+def _agrupacion_ediciones_context(request: Request, session: Session) -> dict[str, Any]:
+    filtro = _parse_agrupacion_filter(request)
+    total = agrupacion_total(session, filtro)
+    rows = agrupacion_rows(session, filtro)
+    context: dict[str, Any] = {
+        "filter": filtro,
+        "total": total,
+        "rows": rows,
+        "next_path": _agrupacion_next(request),
+    }
+    context.update(_pagination_context(request, filtro.page, total, filtro.limit))
     return context
 
 
@@ -701,6 +758,22 @@ def agrupacion(
         },
     )
     return response
+
+
+@app.get("/agrupacion/ediciones", response_class=HTMLResponse)
+def agrupacion_ediciones(
+    request: Request, session: Session = Depends(get_session)
+) -> HTMLResponse:
+    try:
+        context = _agrupacion_ediciones_context(request, session)
+    except SQLAlchemyError:
+        logger.exception("No se pudo leer la agrupacion manual")
+        return _degraded(request)
+    return templates.TemplateResponse(
+        request=request,
+        name="agrupacion_ediciones.html",
+        context=context,
+    )
 
 
 @app.post("/agrupacion/agrupar")
