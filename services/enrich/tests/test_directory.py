@@ -706,6 +706,30 @@ def test_cliente_opendata_lee_el_fixture() -> None:
     assert parsed[0].latitud == 36.6917266
 
 
+def test_cliente_opendata_sigue_la_redireccion() -> None:
+    data = _andalucia_libraries()
+    target = "https://example.test/download/dataset.json"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/libraries/all":
+            return httpx.Response(302, headers={"Location": target})
+        assert str(request.url) == target
+        return httpx.Response(200, json=data)
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.Client(transport=transport)
+    client = OpenDataDirectoryClient(
+        url="https://example.test/libraries/all", delay=0, client=http_client
+    )
+    try:
+        parsed = list(client.iter_records())
+    finally:
+        client.close()
+        http_client.close()
+
+    assert len([p for p in parsed if p is not None]) == 5
+
+
 def test_refresh_sucursales_create_crea_bibliotecas_y_sucursales() -> None:
     session = _session()
     andalucia = _fuente_andaluza(

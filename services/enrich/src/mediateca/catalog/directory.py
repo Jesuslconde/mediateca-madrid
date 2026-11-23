@@ -296,7 +296,7 @@ class DirectoryClient:
     )
     def _get(self, path: str) -> str:
         self._wait()
-        response = self.client.get(path)
+        response = self.client.get(path, follow_redirects=True)
         self._last_request_at = time.monotonic()
         if response.status_code >= 500:
             raise _TransientDirectoryError(
@@ -529,7 +529,9 @@ class OpenDataDirectoryClient:
     )
     def _get_items(self) -> list[object]:
         self._wait()
-        response = self.client.get(self.url, params={"format": self.format})
+        response = self.client.get(
+            self.url, params={"format": self.format}, follow_redirects=True
+        )
         self._last_request_at = time.monotonic()
         if response.status_code >= 500:
             raise _TransientDirectoryError(
