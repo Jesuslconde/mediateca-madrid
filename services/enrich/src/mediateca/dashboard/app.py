@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,7 +62,7 @@ from mediateca.core.config_store import (
     set_config_value,
 )
 from mediateca.core.db import get_session_factory
-from mediateca.core.logging import get_logger
+from mediateca.core.logging import elapsed_ms, get_logger
 from mediateca.core.scheduling import (
     ScheduleSettings,
     ScheduleValidationError,
@@ -190,6 +191,14 @@ def get_session() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+def _pool_status(session: Session) -> str | None:
+    try:
+        pool = session.get_bind().pool  # type: ignore[attr-defined]
+        return pool.status()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _base_context(
@@ -367,10 +376,119 @@ def _agrupacion_next(request: Request) -> str:
 
 
 def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
+    started = time.monotonic()
     filtro = _parse_agrupacion_filter(request)
+    pool = _pool_status(session)
+    logger.info(
+        "Agrupacion: inicio de la peticion (q=%r, fuente=%r, soporte=%r, estado=%r, page=%s, limit=%s, pool=%s)",
+        filtro.texto,
+        filtro.fuente,
+        filtro.soporte,
+        filtro.estado,
+        filtro.page,
+        filtro.limit,
+        pool,
+        extra={
+            "step": "agrupacion.request.start",
+            "path": request.url.path,
+            "method": request.method,
+            "page": filtro.page,
+            "pool_status": pool,
+        },
+    )
+
+    step = time.monotonic()
+    logger.info(
+        "Agrupacion: calculando resumen...",
+        extra={"step": "agrupacion.context.summary.start"},
+    )
     summary = agrupacion_summary(session, filtro)
+    logger.info(
+        "Agrupacion: resumen listo (total=%s, sin_obra=%s, manual=%s, automatica=%s) en %.1f ms",
+        summary.total,
+        summary.sin_obra,
+        summary.manual,
+        summary.automatica,
+        elapsed_ms(step),
+        extra={
+            "step": "agrupacion.context.summary.done",
+            "duration_ms": elapsed_ms(step),
+            "rows": summary.total,
+        },
+    )
+
+    step = time.monotonic()
+    logger.info(
+        "Agrupacion: calculando total...",
+        extra={"step": "agrupacion.context.total.start"},
+    )
     total = agrupacion_total(session, filtro)
+    logger.info(
+        "Agrupacion: total=%s en %.1f ms",
+        total,
+        elapsed_ms(step),
+        extra={
+            "step": "agrupacion.context.total.done",
+            "duration_ms": elapsed_ms(step),
+            "rows": total,
+        },
+    )
+
+    step = time.monotonic()
+    logger.info(
+        "Agrupacion: cargando filas (pagina=%s, limit=%s)...",
+        filtro.page,
+        filtro.limit,
+        extra={"step": "agrupacion.context.rows.start", "page": filtro.page},
+    )
     rows = agrupacion_rows(session, filtro)
+    logger.info(
+        "Agrupacion: %s filas cargadas en %.1f ms",
+        len(rows),
+        elapsed_ms(step),
+        extra={
+            "step": "agrupacion.context.rows.done",
+            "duration_ms": elapsed_ms(step),
+            "rows": len(rows),
+            "page": filtro.page,
+        },
+    )
+
+    step = time.monotonic()
+    logger.info(
+        "Agrupacion: buscando obras candidatas para %r...",
+        filtro.texto,
+        extra={"step": "agrupacion.context.candidates.start"},
+    )
+    candidates = obra_candidates(session, filtro.texto)
+    logger.info(
+        "Agrupacion: %s candidatas en %.1f ms",
+        len(candidates),
+        elapsed_ms(step),
+        extra={
+            "step": "agrupacion.context.candidates.done",
+            "duration_ms": elapsed_ms(step),
+            "rows": len(candidates),
+        },
+    )
+
+    step = time.monotonic()
+    logger.info(
+        "Agrupacion: cargando fuentes...",
+        extra={"step": "agrupacion.context.fuentes.start"},
+    )
+    fuentes = enabled_fuentes(session)
+    logger.info(
+        "Agrupacion: %s fuentes en %.1f ms",
+        len(fuentes),
+        elapsed_ms(step),
+        extra={
+            "step": "agrupacion.context.fuentes.done",
+            "duration_ms": elapsed_ms(step),
+            "rows": len(fuentes),
+        },
+    )
+
     page = filtro.page
     limit = filtro.limit
     pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
@@ -388,9 +506,21 @@ def _agrupacion_context(request: Request, session: Session) -> dict[str, Any]:
             "prev_query": _page_query(request, page - 1),
             "next_query": _page_query(request, page + 1),
             "next_path": _agrupacion_next(request),
-            "candidates": obra_candidates(session, filtro.texto),
-            "fuentes": enabled_fuentes(session),
+            "candidates": candidates,
+            "fuentes": fuentes,
         }
+    )
+    logger.info(
+        "Agrupacion: contexto listo en %.1f ms (filas=%s, paginas=%s)",
+        elapsed_ms(started),
+        len(rows),
+        pages,
+        extra={
+            "step": "agrupacion.context.done",
+            "duration_ms": elapsed_ms(started),
+            "rows": len(rows),
+            "page": page,
+        },
     )
     return context
 
@@ -516,16 +646,50 @@ def catalogo(
 def agrupacion(
     request: Request, session: Session = Depends(get_session)
 ) -> HTMLResponse:
+    started = time.monotonic()
     try:
         context = _agrupacion_context(request, session)
     except SQLAlchemyError:
-        logger.exception("No se pudo leer la agrupacion manual")
+        logger.exception(
+            "No se pudo leer la agrupacion manual",
+            extra={
+                "step": "agrupacion.error",
+                "duration_ms": elapsed_ms(started),
+            },
+        )
         return _degraded(request)
-    return templates.TemplateResponse(
+
+    logger.info(
+        "Agrupacion: renderizando plantilla con %s filas...",
+        len(context["rows"]),
+        extra={"step": "agrupacion.render.start", "rows": len(context["rows"])},
+    )
+    render_started = time.monotonic()
+    response = templates.TemplateResponse(
         request=request,
         name="agrupacion.html",
         context=context,
     )
+    logger.info(
+        "Agrupacion: plantilla renderizada en %.1f ms",
+        elapsed_ms(render_started),
+        extra={
+            "step": "agrupacion.render.done",
+            "duration_ms": elapsed_ms(render_started),
+            "rows": len(context["rows"]),
+        },
+    )
+    logger.info(
+        "Agrupacion: peticion completada en %.1f ms",
+        elapsed_ms(started),
+        extra={
+            "step": "agrupacion.request.done",
+            "duration_ms": elapsed_ms(started),
+            "status_code": 200,
+            "rows": len(context["rows"]),
+        },
+    )
+    return response
 
 
 @app.post("/agrupacion/agrupar")

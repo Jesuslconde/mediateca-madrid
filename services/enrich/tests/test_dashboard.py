@@ -1906,6 +1906,36 @@ def test_agrupacion_responde_y_muestra_candidatas_sin_select_gigante(
     assert '<div class="candidate-list">' not in sin_texto.text
 
 
+def test_agrupacion_registra_trazas_de_cada_paso(monkeypatch, tmp_path, caplog) -> None:
+    session, _obra, _primera, _segunda = _agrupacion_session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        with caplog.at_level("INFO"):
+            response = client.get("/agrupacion?q=vida")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 200
+    steps = {
+        getattr(record, "step", None)
+        for record in caplog.records
+        if record.name.startswith("mediateca.dashboard")
+    }
+    assert {
+        "agrupacion.request.start",
+        "agrupacion.context.summary.start",
+        "agrupacion.context.summary.done",
+        "agrupacion.context.rows.start",
+        "agrupacion.context.rows.done",
+        "agrupacion.render.start",
+        "agrupacion.render.done",
+        "agrupacion.request.done",
+    } <= steps
+
+
 def test_agrupacion_es_de_solo_lectura(monkeypatch, tmp_path) -> None:
     session, _obra, _primera, _segunda = _agrupacion_session()
     before = session.scalar(select(func.count(Edicion.id)))

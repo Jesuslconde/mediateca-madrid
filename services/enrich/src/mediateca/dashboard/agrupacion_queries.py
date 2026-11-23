@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from mediateca_shared.models import Edicion, Fuente, Obra
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session
+
+from mediateca.core.logging import elapsed_ms, get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -84,30 +89,77 @@ def _select_ediciones(filtro: AgrupacionFilter):
 
 
 def agrupacion_total(session: Session, filtro: AgrupacionFilter) -> int:
+    started = time.monotonic()
+    logger.info(
+        "Agrupacion total: consultando (q=%r, fuente=%r, soporte=%r, estado=%r)",
+        filtro.texto,
+        filtro.fuente,
+        filtro.soporte,
+        filtro.estado,
+        extra={"step": "agrupacion.total.start"},
+    )
     total = session.scalar(
         select(func.count(Edicion.id))
         .outerjoin(Obra, Edicion.obra_id == Obra.id)
         .where(*_predicates(filtro))
     )
-    return int(total or 0)
+    result = int(total or 0)
+    logger.info(
+        "Agrupacion total: %s ediciones en %.1f ms",
+        result,
+        elapsed_ms(started),
+        extra={
+            "step": "agrupacion.total.done",
+            "duration_ms": elapsed_ms(started),
+            "rows": result,
+        },
+    )
+    return result
 
 
 def agrupacion_rows(session: Session, filtro: AgrupacionFilter) -> list[Edicion]:
     limit = min(max(filtro.limit, 1), MAX_LIMIT)
     page = max(filtro.page, 1)
     offset = (page - 1) * limit
+    started = time.monotonic()
+    logger.info(
+        "Agrupacion filas: consultando pagina=%s limit=%s offset=%s (q=%r, fuente=%r, soporte=%r, estado=%r)",
+        page,
+        limit,
+        offset,
+        filtro.texto,
+        filtro.fuente,
+        filtro.soporte,
+        filtro.estado,
+        extra={"step": "agrupacion.rows.start", "page": page},
+    )
     stmt = (
         _select_ediciones(filtro)
         .order_by(Edicion.record_id)
         .limit(limit)
         .offset(offset)
     )
-    return list(session.scalars(stmt))
+    rows = list(session.scalars(stmt))
+    duration = elapsed_ms(started)
+    logger.info(
+        "Agrupacion filas: %s ediciones en %.1f ms%s",
+        len(rows),
+        duration,
+        f" ({rows[0].record_id}..{rows[-1].record_id})" if rows else "",
+        extra={
+            "step": "agrupacion.rows.done",
+            "duration_ms": duration,
+            "rows": len(rows),
+            "page": page,
+        },
+    )
+    return rows
 
 
 def agrupacion_summary(
     session: Session, filtro: AgrupacionFilter
 ) -> AgrupacionSummary:
+    started = time.monotonic()
     base = AgrupacionFilter(
         texto=filtro.texto,
         fuente=filtro.fuente,
@@ -119,17 +171,56 @@ def agrupacion_summary(
     join = select(func.count(Edicion.id)).outerjoin(
         Obra, Edicion.obra_id == Obra.id
     )
+    logger.info(
+        "Agrupacion resumen: consultando totales (q=%r, fuente=%r, soporte=%r)",
+        filtro.texto,
+        filtro.fuente,
+        filtro.soporte,
+        extra={"step": "agrupacion.summary.start"},
+    )
 
-    def count_with(*extra) -> int:
-        return int(session.scalar(join.where(*clauses, *extra)) or 0)
+    def count_with(name: str, *extra) -> int:
+        count_started = time.monotonic()
+        logger.info(
+            "Agrupacion resumen: consulta %s iniciada",
+            name,
+            extra={"step": f"agrupacion.summary.{name}.start"},
+        )
+        value = int(session.scalar(join.where(*clauses, *extra)) or 0)
+        logger.info(
+            "Agrupacion resumen: consulta %s = %s en %.1f ms",
+            name,
+            value,
+            elapsed_ms(count_started),
+            extra={
+                "step": f"agrupacion.summary.{name}.done",
+                "duration_ms": elapsed_ms(count_started),
+                "rows": value,
+            },
+        )
+        return value
 
-    sin_obra = count_with(Edicion.obra_id.is_(None))
-    manual = count_with(Edicion.obra_manual.is_(True))
+    sin_obra = count_with("sin_obra", Edicion.obra_id.is_(None))
+    manual = count_with("manual", Edicion.obra_manual.is_(True))
     automatica = count_with(
-        Edicion.obra_id.is_not(None), Edicion.obra_manual.is_(False)
+        "automatica", Edicion.obra_id.is_not(None), Edicion.obra_manual.is_(False)
+    )
+    total = count_with("total")
+    logger.info(
+        "Agrupacion resumen: total=%s sin_obra=%s manual=%s automatica=%s en %.1f ms",
+        total,
+        sin_obra,
+        manual,
+        automatica,
+        elapsed_ms(started),
+        extra={
+            "step": "agrupacion.summary.done",
+            "duration_ms": elapsed_ms(started),
+            "rows": total,
+        },
     )
     return AgrupacionSummary(
-        total=count_with(),
+        total=total,
         sin_obra=sin_obra,
         manual=manual,
         automatica=automatica,
@@ -141,9 +232,20 @@ def obra_candidates(
 ) -> list[ObraCandidata]:
     term_text = (texto or "").strip()
     if not term_text:
+        logger.info(
+            "Agrupacion candidatas: sin texto, se omite la consulta",
+            extra={"step": "agrupacion.candidates.skip"},
+        )
         return []
     term = f"%{term_text}%"
     limit = min(max(limit, 1), MAX_CANDIDATES)
+    started = time.monotonic()
+    logger.info(
+        "Agrupacion candidatas: buscando obras para %r (limit=%s)",
+        term_text,
+        limit,
+        extra={"step": "agrupacion.candidates.start"},
+    )
     stmt = (
         select(Obra, func.count(Edicion.id).label("ediciones_count"))
         .outerjoin(Edicion, Edicion.obra_id == Obra.id)
@@ -157,7 +259,19 @@ def obra_candidates(
         .order_by(Obra.titulo_uniforme, Obra.anio)
         .limit(limit)
     )
-    return [
+    candidates = [
         ObraCandidata(obra=obra, ediciones_count=int(count))
         for obra, count in session.execute(stmt).all()
     ]
+    logger.info(
+        "Agrupacion candidatas: %s obras para %r en %.1f ms",
+        len(candidates),
+        term_text,
+        elapsed_ms(started),
+        extra={
+            "step": "agrupacion.candidates.done",
+            "duration_ms": elapsed_ms(started),
+            "rows": len(candidates),
+        },
+    )
+    return candidates
