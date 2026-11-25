@@ -21,16 +21,21 @@ from mediateca.catalog.jobs import (
     has_active_job,
     ingest_metrics,
 )
-from mediateca.core.config import settings
+from mediateca.core.config import DEFAULT_TMDB_MAX_MATCH_ATTEMPTS, settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
+    MAX_TMDB_MATCH_ATTEMPTS,
+    MIN_TMDB_MATCH_ATTEMPTS,
     TMDB_API_TOKEN_KEY,
     ConfigValidationError,
+    effective_tmdb_max_match_attempts,
     effective_worker_concurrency,
     get_config_value,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
+    normalize_tmdb_max_match_attempts,
     normalize_worker_concurrency,
+    saved_tmdb_max_match_attempts,
     saved_worker_concurrency,
 )
 
@@ -59,6 +64,12 @@ class TmdbConfig:
     source: str
     masked_token: str | None
     active: bool
+    saved_max_match_attempts: int | None
+    env_max_match_attempts: int
+    effective_max_match_attempts: int
+    max_match_attempts_source: str
+    min_match_attempts: int
+    max_match_attempts: int
 
 
 @dataclass(slots=True)
@@ -125,6 +136,15 @@ def _mask_token(value: str | None) -> str | None:
 def tmdb_config(session: Session) -> TmdbConfig:
     saved = _normalize_tmdb(get_config_value(session, TMDB_API_TOKEN_KEY))
     env = _normalize_tmdb(settings.tmdb_api_token)
+    saved_attempts = saved_tmdb_max_match_attempts(session)
+    try:
+        env_attempts = normalize_tmdb_max_match_attempts(
+            settings.tmdb_max_match_attempts
+        )
+    except ConfigValidationError:
+        env_attempts = None
+    if env_attempts is None:
+        env_attempts = DEFAULT_TMDB_MAX_MATCH_ATTEMPTS
 
     if saved:
         return TmdbConfig(
@@ -134,6 +154,14 @@ def tmdb_config(session: Session) -> TmdbConfig:
             source="dashboard",
             masked_token=_mask_token(saved),
             active=True,
+            saved_max_match_attempts=saved_attempts,
+            env_max_match_attempts=env_attempts,
+            effective_max_match_attempts=effective_tmdb_max_match_attempts(session),
+            max_match_attempts_source=(
+                "dashboard" if saved_attempts is not None else "entorno"
+            ),
+            min_match_attempts=MIN_TMDB_MATCH_ATTEMPTS,
+            max_match_attempts=MAX_TMDB_MATCH_ATTEMPTS,
         )
     if env:
         return TmdbConfig(
@@ -143,6 +171,14 @@ def tmdb_config(session: Session) -> TmdbConfig:
             source="entorno",
             masked_token=_mask_token(env),
             active=True,
+            saved_max_match_attempts=saved_attempts,
+            env_max_match_attempts=env_attempts,
+            effective_max_match_attempts=effective_tmdb_max_match_attempts(session),
+            max_match_attempts_source=(
+                "dashboard" if saved_attempts is not None else "entorno"
+            ),
+            min_match_attempts=MIN_TMDB_MATCH_ATTEMPTS,
+            max_match_attempts=MAX_TMDB_MATCH_ATTEMPTS,
         )
     return TmdbConfig(
         saved=False,
@@ -151,6 +187,14 @@ def tmdb_config(session: Session) -> TmdbConfig:
         source="ninguno",
         masked_token=None,
         active=False,
+        saved_max_match_attempts=saved_attempts,
+        env_max_match_attempts=env_attempts,
+        effective_max_match_attempts=effective_tmdb_max_match_attempts(session),
+        max_match_attempts_source=(
+            "dashboard" if saved_attempts is not None else "entorno"
+        ),
+        min_match_attempts=MIN_TMDB_MATCH_ATTEMPTS,
+        max_match_attempts=MAX_TMDB_MATCH_ATTEMPTS,
     )
 
 

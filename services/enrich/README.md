@@ -152,12 +152,15 @@ El mismo paquete arranca cuatro procesos distintos:
 | `MEDIATECA_TMDB_DELAY` | `0.25` | Retardo entre peticiones |
 | `MEDIATECA_TMDB_TIMEOUT` | `10` | Timeout HTTP |
 | `MEDIATECA_TMDB_MAX_RETRIES` | `3` | Reintentos de errores temporales |
+| `MEDIATECA_TMDB_MAX_MATCH_ATTEMPTS` | `5` | Intentos automaticos de match por ficha, entre 1 y 100 |
 
 ### Precedencia de `app_config`
 
 La tabla local `app_config` guarda pares `key/value/text` y `updated_at`. Para FlareSolverr, TMDB, concurrencia y scheduler, el valor persistido válido prevalece sobre el entorno. Si se borra el valor persistido, se vuelve al entorno.
 
 El token TMDB se muestra enmascarado y no se registra en logs. Guardar el campo vacío lo conserva; la casilla de borrado explícito elimina el valor. Los cambios de concurrencia se aplican al reiniciar el worker.
+
+El límite de intentos de match de TMDB se guarda en `app_config` con la clave `tmdb_max_match_attempts`; el dashboard prevalece sobre `MEDIATECA_TMDB_MAX_MATCH_ATTEMPTS`. Se aplica al iniciar cada trabajo, sin reiniciar el worker.
 
 ## Fuentes e identidad
 
@@ -472,6 +475,7 @@ El job `tmdb`:
 - No lo encola nunca el scheduler.
 - Selecciona ediciones enriquecidas sin `tmdb_enriched_at` o con `tmdb_id` pero sin `tmdb_url`.
 - Con `refresh`, también consulta las ya sincronizadas, priorizando las más antiguas.
+- Omite las fichas que ya alcanzaron `tmdb_max_match_attempts`, también en modo `refresh`.
 - Indexa los identificadores procesados al terminar.
 - Sin token, falla de forma explícita.
 

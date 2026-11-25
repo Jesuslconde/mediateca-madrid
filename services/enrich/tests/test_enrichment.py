@@ -232,6 +232,112 @@ def test_enriquecimiento_tmdb_sin_coincidencia(dvd_fixture) -> None:
     assert stats["tmdb_errors"] == 0
 
 
+def test_tmdb_omite_una_ficha_que_alcanzo_el_limite() -> None:
+    session = _session()
+    edicion = create_stub(session, DVD_TITN)
+    edicion.detail_fetched_at = datetime.now(UTC)
+    edicion.tmdb_status = "unmatched"
+    edicion.tmdb_attempts = 2
+    session.commit()
+    tmdb = _FakeTmdbClient(results=[])
+
+    stats = Harvester(
+        session,
+        client=_FakeEnrichmentClient({}),
+        tmdb_client=tmdb,
+        tmdb_max_match_attempts=2,
+    ).harvest_tmdb_enrichment(limit=10, delay=0)
+
+    assert stats["selected"] == 0
+    assert stats["processed"] == 0
+    assert tmdb.search_calls == []
+    assert edicion.tmdb_attempts == 2
+    assert edicion.tmdb_status == "unmatched"
+
+
+def test_subir_el_limite_permite_volver_a_intentar_tmdb() -> None:
+    session = _session()
+    edicion = create_stub(session, DVD_TITN)
+    edicion.detail_fetched_at = datetime.now(UTC)
+    edicion.tmdb_status = "error"
+    edicion.tmdb_attempts = 2
+    session.commit()
+    tmdb = _FakeTmdbClient(results=[])
+
+    stats = Harvester(
+        session,
+        client=_FakeEnrichmentClient({}),
+        tmdb_client=tmdb,
+        tmdb_max_match_attempts=3,
+    ).harvest_tmdb_enrichment(limit=10, delay=0)
+
+    assert stats["selected"] == 1
+    assert stats["unmatched"] == 1
+    assert tmdb.search_calls
+    assert edicion.tmdb_attempts == 3
+    assert edicion.tmdb_status == "unmatched"
+
+
+def test_refresh_tmdb_tambien_respeta_el_limite() -> None:
+    session = _session()
+    agotada = create_stub(session, "1")
+    agotada.titulo = "Pelicula agotada"
+    agotada.detail_fetched_at = datetime.now(UTC)
+    agotada.tmdb_status = "matched"
+    agotada.tmdb_attempts = 2
+    agotada.tmdb_id = 10
+    agotada.tmdb_enriched_at = datetime(2025, 1, 1, tzinfo=UTC)
+    disponible = create_stub(session, "2")
+    disponible.titulo = "Pelicula disponible"
+    disponible.detail_fetched_at = datetime.now(UTC)
+    disponible.tmdb_status = "matched"
+    disponible.tmdb_attempts = 1
+    disponible.tmdb_id = 20
+    disponible.tmdb_enriched_at = datetime(2025, 1, 1, tzinfo=UTC)
+    session.commit()
+    tmdb = _FakeTmdbClient(results=[])
+
+    stats = Harvester(
+        session,
+        client=_FakeEnrichmentClient({}),
+        tmdb_client=tmdb,
+        tmdb_max_match_attempts=2,
+    ).harvest_tmdb_enrichment(limit=10, delay=0, refresh=True)
+
+    assert stats["selected"] == 1
+    assert stats["unmatched"] == 1
+    assert tmdb.search_calls
+    assert agotada.tmdb_attempts == 2
+    assert agotada.tmdb_status == "matched"
+    assert disponible.tmdb_attempts == 2
+    assert disponible.tmdb_status == "unmatched"
+
+
+def test_enriquecimiento_opac_no_reintenta_tmdb_agotado(dvd_fixture) -> None:
+    session = _session()
+    edicion = create_stub(session, DVD_TITN)
+    edicion.tmdb_status = "error"
+    edicion.tmdb_attempts = 1
+    session.commit()
+    opac = _FakeEnrichmentClient({DVD_TITN: dvd_fixture.read_text(encoding="utf-8")})
+    tmdb = _FakeTmdbClient(results=[_tmdb_result()], detail=_tmdb_detail())
+
+    stats = Harvester(
+        session,
+        client=opac,
+        tmdb_client=tmdb,
+        tmdb_max_match_attempts=1,
+    ).harvest_enrichment(limit=10, delay=0)
+
+    assert stats["processed"] == 1
+    assert stats["tmdb_limit_reached"] == 1
+    assert tmdb.search_calls == []
+    assert tmdb.detail_calls == []
+    assert edicion.detail_fetched_at is not None
+    assert edicion.tmdb_attempts == 1
+    assert edicion.tmdb_status == "error"
+
+
 def test_enriquecimiento_sin_token_omite_tmdb(dvd_fixture) -> None:
     session = _session()
     create_stub(session, DVD_TITN)

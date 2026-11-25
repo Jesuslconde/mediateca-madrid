@@ -86,8 +86,9 @@ Actualiza de forma coordinada:
 - `services/api/src/mediateca/__init__.py`.
 - `services/enrich/src/mediateca/__init__.py`.
 - `apps/web/package.json` y `package-lock.json` mediante `npm version --no-git-tag-version`.
+- Si npm no está instalado, los dos archivos del portal se actualizan directamente sin modificar dependencias.
 
-Si npm no está instalado, avisa y deja los dos archivos del portal para actualizarlos manualmente. El script no crea commits ni tags Git.
+El script no crea commits ni tags Git.
 
 ## `release.sh`
 
@@ -107,6 +108,9 @@ Variables:
 | `BATCH_IMAGE` | `mediateca-batch` |
 | `WEB_IMAGE` | `mediateca-web` |
 | `NO_CACHE` | `0` |
+| `CONTAINER_ENGINE` | `docker` si existe; si no, `podman` |
+
+El motor también se puede fijar explícitamente, por ejemplo `CONTAINER_ENGINE=podman ./scripts/release.sh`.
 
 Para cada imagen publica dos etiquetas:
 

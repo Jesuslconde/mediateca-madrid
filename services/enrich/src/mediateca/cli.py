@@ -43,6 +43,7 @@ from mediateca.catalog.title_backfill import backfill_titles
 from mediateca.core.config import settings
 from mediateca.core.config_store import (
     effective_flaresolverr_url,
+    effective_tmdb_max_match_attempts,
     effective_worker_concurrency,
 )
 from mediateca.core.db import get_engine, get_session_factory, init_db, session_scope
@@ -337,6 +338,7 @@ def enrich_command(
                     fuente=source,
                     client=client,
                     tmdb_client=tmdb_client,
+                    tmdb_max_match_attempts=effective_tmdb_max_match_attempts(session),
                 )
                 stats = harvester.harvest_enrichment(limit=limit, delay=delay)
         finally:
@@ -387,6 +389,7 @@ def tmdb_enrich_command(
                     fuente=source,
                     client=client,
                     tmdb_client=tmdb_client,
+                    tmdb_max_match_attempts=effective_tmdb_max_match_attempts(session),
                 )
                 stats = harvester.harvest_tmdb_enrichment(
                     limit=limit, delay=delay, refresh=refresh

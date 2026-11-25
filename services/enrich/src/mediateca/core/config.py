@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_TMDB_MAX_MATCH_ATTEMPTS = 5
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -33,6 +35,7 @@ class Settings(BaseSettings):
     tmdb_delay: float = 0.25
     tmdb_timeout: float = 10.0
     tmdb_max_retries: int = 3
+    tmdb_max_match_attempts: int = DEFAULT_TMDB_MAX_MATCH_ATTEMPTS
     user_agent: str = (
         "MediatecaMadrid/0.1 (portal alternativo de consulta; "
         "contacto: mediateca@example.org)"

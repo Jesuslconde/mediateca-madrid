@@ -117,5 +117,21 @@
       <p class="muted">Desbloquea la administracion para modificar el token de TMDB.</p>
     {% endif %}
     <p class="muted">El token guardado prevalece sobre MEDIATECA_TMDB_API_TOKEN. Si el campo se deja vacio, se conserva el token actual; para borrarlo, marca la casilla. El token no se muestra completo ni se registra en logs.</p>
+    <p>
+      Limite efectivo de intentos de match por ficha:
+      <strong>{{ tmdb.effective_max_match_attempts }}</strong>
+      | Origen: {{ tmdb.max_match_attempts_source }}
+    </p>
+    {% if is_admin %}
+      <form method="post" action="/config/tmdb-attempts">
+        <input type="hidden" name="next" value="/configuracion">
+        <label for="tmdb-max-match-attempts">Maximo de intentos automaticos por ficha</label>
+        <input id="tmdb-max-match-attempts" type="number" name="max_match_attempts" value="{{ tmdb.saved_max_match_attempts if tmdb.saved_max_match_attempts is not none else tmdb.env_max_match_attempts }}" min="{{ tmdb.min_match_attempts }}" max="{{ tmdb.max_match_attempts }}">
+        <button type="submit">Guardar limite</button>
+      </form>
+    {% else %}
+      <p class="muted">Desbloquea la administracion para modificar el limite de intentos de TMDB.</p>
+    {% endif %}
+    <p class="muted">Una ficha deja de consultarse al alcanzar este limite, tambien en modo refresh. Deja el campo vacio para usar MEDIATECA_TMDB_MAX_MATCH_ATTEMPTS. La asignacion manual de un ID TMDB sigue disponible.</p>
   </section>
 {% endblock %}

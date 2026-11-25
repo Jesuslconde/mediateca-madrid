@@ -26,8 +26,10 @@ from mediateca.core.config import Settings, settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
+    TMDB_MAX_MATCH_ATTEMPTS_KEY,
     WORKER_CONCURRENCY_KEY,
     effective_tmdb_api_token,
+    effective_tmdb_max_match_attempts,
     get_config_value,
     set_config_value,
 )
@@ -1053,6 +1055,23 @@ def test_tmdb_config_respeta_la_precedencia(monkeypatch) -> None:
     assert invalida.source == "entorno"
 
 
+def test_tmdb_config_muestra_el_limite_de_intentos(monkeypatch) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "tmdb_max_match_attempts", 4)
+
+    desde_entorno = tmdb_config(session)
+    assert desde_entorno.effective_max_match_attempts == 4
+    assert desde_entorno.max_match_attempts_source == "entorno"
+    assert desde_entorno.saved_max_match_attempts is None
+
+    set_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY, "7")
+    session.commit()
+    desde_dashboard = tmdb_config(session)
+    assert desde_dashboard.effective_max_match_attempts == 7
+    assert desde_dashboard.max_match_attempts_source == "dashboard"
+    assert desde_dashboard.saved_max_match_attempts == 7
+
+
 def test_dashboard_muestra_configuracion_tmdb(monkeypatch, tmp_path) -> None:
     session = _session()
     monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
@@ -1068,6 +1087,8 @@ def test_dashboard_muestra_configuracion_tmdb(monkeypatch, tmp_path) -> None:
     assert response.status_code == 200
     assert "Configuracion de TMDB" in html
     assert 'action="/config/tmdb"' in html
+    assert 'action="/config/tmdb-attempts"' in html
+    assert "Limite efectivo de intentos de match por ficha" in html
     assert "Origen: entorno" in html
     assert "****3456" in html
     assert "env-token-123456" not in html
@@ -1186,6 +1207,103 @@ def test_token_tmdb_no_aparece_en_logs(monkeypatch, tmp_path, caplog) -> None:
         _clear_overrides()
 
     assert token not in caplog.text
+
+
+def test_post_guarda_el_limite_de_intentos_de_tmdb(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/tmdb-attempts",
+            data={"max_match_attempts": "3"},
+            follow_redirects=False,
+        )
+        dashboard = client.get("/configuracion")
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/configuracion")
+    assert get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY) == "3"
+    assert effective_tmdb_max_match_attempts(session) == 3
+    assert 'name="max_match_attempts" value="3"' in dashboard.text
+
+
+def test_post_borra_el_limite_de_tmdb_y_usa_el_entorno(monkeypatch, tmp_path) -> None:
+    session = _session()
+    set_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY, "7")
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+    monkeypatch.setattr(settings, "tmdb_max_match_attempts", 4)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/tmdb-attempts",
+            data={"max_match_attempts": ""},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY) is None
+    assert effective_tmdb_max_match_attempts(session) == 4
+
+
+def test_post_limite_de_tmdb_invalido_no_modifica(monkeypatch, tmp_path) -> None:
+    session = _session()
+    set_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY, "7")
+    session.commit()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", None)
+
+    client = _client_for(session)
+    try:
+        response = client.post(
+            "/config/tmdb-attempts",
+            data={"max_match_attempts": "0"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/configuracion?error=")
+    assert get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY) == "7"
+    assert "entre 1 y 100" in unquote_plus(response.headers["location"])
+
+
+def test_post_limite_de_tmdb_exige_administracion(monkeypatch, tmp_path) -> None:
+    session = _session()
+    monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
+    monkeypatch.setattr(settings, "dashboard_admin_token", "secreto")
+
+    client = _client_for(session)
+    try:
+        denied = client.post(
+            "/config/tmdb-attempts",
+            data={"max_match_attempts": "3"},
+            follow_redirects=False,
+        )
+        assert denied.status_code == 303
+        assert "Token de administracion" in unquote_plus(denied.headers["location"])
+        assert get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY) is None
+        client.post("/admin/login", data={"token": "secreto"}, follow_redirects=False)
+        allowed = client.post(
+            "/config/tmdb-attempts",
+            data={"max_match_attempts": "3"},
+            follow_redirects=False,
+        )
+    finally:
+        _clear_overrides()
+
+    assert allowed.status_code == 303
+    assert get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY) == "3"
 
 
 def test_post_tmdb_exige_token_de_administracion(monkeypatch, tmp_path) -> None:
@@ -1671,7 +1789,7 @@ def test_post_catalogo_tmdb_asigna_id_manual(monkeypatch, tmp_path) -> None:
     session = _session()
     edicion = create_stub(session, "1")
     edicion.tmdb_status = "unmatched"
-    edicion.tmdb_attempts = 1
+    edicion.tmdb_attempts = 5
     session.commit()
     fake = _FakeTmdbClient(detail=_fake_tmdb_detail(550))
     monkeypatch.setattr(settings, "worker_heartbeat_file", tmp_path / "missing")
@@ -1699,7 +1817,7 @@ def test_post_catalogo_tmdb_asigna_id_manual(monkeypatch, tmp_path) -> None:
     assert fake.requested == [550]
     assert edicion.tmdb_id == 550
     assert edicion.tmdb_status == "matched"
-    assert edicion.tmdb_attempts == 2
+    assert edicion.tmdb_attempts == 6
     assert edicion.tmdb_last_error is None
     assert edicion.tmdb_enriched_at is not None
     assert edicion.paises_origen == ["US"]

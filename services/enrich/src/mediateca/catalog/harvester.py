@@ -599,6 +599,7 @@ class Harvester:
         fuente: Fuente | None = None,
         client: OpacClient | None = None,
         tmdb_client: TmdbClient | None = None,
+        tmdb_max_match_attempts: int | None = None,
     ) -> None:
         self.session = session
         self.fuente = fuente or ensure_default_fuente(session)
@@ -608,11 +609,17 @@ class Harvester:
         )
         self.client = client or OpacClient.from_fuente(self.fuente)
         self.tmdb_client = tmdb_client
+        self.tmdb_max_match_attempts = (
+            settings.tmdb_max_match_attempts
+            if tmdb_max_match_attempts is None
+            else tmdb_max_match_attempts
+        )
         self.processed_titns: list[str] = []
         self.tmdb_matched = 0
         self.tmdb_unmatched = 0
         self.tmdb_errors = 0
         self.tmdb_skipped = 0
+        self.tmdb_limit_reached = 0
 
     def _save(self, parsed):
         edicion = upsert_edicion(self.session, parsed, fuente=self.fuente)
@@ -624,6 +631,7 @@ class Harvester:
         self.tmdb_unmatched = 0
         self.tmdb_errors = 0
         self.tmdb_skipped = 0
+        self.tmdb_limit_reached = 0
 
     def _tmdb_metrics(self) -> dict[str, int]:
         return {
@@ -631,6 +639,7 @@ class Harvester:
             "tmdb_unmatched": self.tmdb_unmatched,
             "tmdb_errors": self.tmdb_errors,
             "tmdb_skipped": self.tmdb_skipped,
+            "tmdb_limit_reached": self.tmdb_limit_reached,
         }
 
     def _enrich_tmdb(self, edicion) -> str:
@@ -638,6 +647,14 @@ class Harvester:
             self.tmdb_skipped += 1
             record_tmdb_outcome(self.session, edicion, "skipped")
             return "skipped"
+        if (edicion.tmdb_attempts or 0) >= self.tmdb_max_match_attempts:
+            self.tmdb_limit_reached += 1
+            logger.info(
+                "TMDB omite %s: se alcanzo el limite de %s intentos",
+                edicion.titn,
+                self.tmdb_max_match_attempts,
+            )
+            return "limit_reached"
         try:
             found = find_movie(
                 self.tmdb_client,
@@ -963,6 +980,7 @@ class Harvester:
                 .where(
                     Edicion.fuente_id == self.fuente.id,
                     Edicion.detail_fetched_at.is_not(None),
+                    Edicion.tmdb_attempts < self.tmdb_max_match_attempts,
                 )
                 .order_by(
                     Edicion.tmdb_enriched_at.asc().nulls_last(),
@@ -976,6 +994,7 @@ class Harvester:
                 .where(
                     Edicion.fuente_id == self.fuente.id,
                     Edicion.detail_fetched_at.is_not(None),
+                    Edicion.tmdb_attempts < self.tmdb_max_match_attempts,
                     or_(
                         Edicion.tmdb_enriched_at.is_(None),
                         and_(
@@ -994,7 +1013,7 @@ class Harvester:
             status = self._enrich_tmdb(edicion)
             if status == "error":
                 failed.append(edicion.titn)
-            else:
+            elif status != "limit_reached":
                 processed_titns.append(edicion.titn)
             self.processed_titns = processed_titns
             time.sleep(delay)
@@ -1005,6 +1024,7 @@ class Harvester:
             "matched": self.tmdb_matched,
             "unmatched": self.tmdb_unmatched,
             "errors": self.tmdb_errors,
+            "limit_reached": self.tmdb_limit_reached,
             "fuente": self.fuente.codigo,
             "failed": failed,
             "processed_titns": processed_titns,

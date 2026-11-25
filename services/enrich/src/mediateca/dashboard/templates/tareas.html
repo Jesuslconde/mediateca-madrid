@@ -168,6 +168,7 @@
               Reactualizar también las ya sincronizadas
             </label>
             <p class="field-help">Vuelve a consultar TMDB para las fichas que ya tenían metadatos. Consume más tiempo y peticiones.</p>
+            <p class="hint">El límite de intentos por ficha configurado en Configuración también se aplica a esta opción.</p>
             <p class="hint">Requiere un token de TMDB configurado en Configuración.</p>
             <div class="button-row">
               <button type="submit" data-job-type="tmdb" {% if active_jobs['tmdb'] or not is_admin %}disabled{% endif %}>Actualizar metadatos TMDB</button>

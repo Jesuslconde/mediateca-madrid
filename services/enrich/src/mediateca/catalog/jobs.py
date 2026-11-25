@@ -21,7 +21,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from mediateca.catalog.fuentes import FuenteDisabled, require_enabled_fuente
 from mediateca.core.config import settings
-from mediateca.core.config_store import effective_flaresolverr_url, effective_tmdb_api_token
+from mediateca.core.config_store import (
+    effective_flaresolverr_url,
+    effective_tmdb_api_token,
+    effective_tmdb_max_match_attempts,
+)
 from mediateca.core.logging import get_logger
 from mediateca.core.scheduling import last_completed_discover, load_schedule_settings
 
@@ -989,7 +993,10 @@ def _enrich_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
             fuente, flaresolverr_url=effective_flaresolverr_url(session)
         ) as client:
             harvester = _make_harvester(
-                session, client=client, tmdb_client=tmdb_client
+                session,
+                client=client,
+                tmdb_client=tmdb_client,
+                tmdb_max_match_attempts=effective_tmdb_max_match_attempts(session),
             )
             harvester.fuente = fuente
             try:
@@ -1019,7 +1026,10 @@ def _tmdb_handler(session: Session, job: HarvestJob) -> dict[str, Any]:
             fuente, flaresolverr_url=effective_flaresolverr_url(session)
         ) as client:
             harvester = _make_harvester(
-                session, client=client, tmdb_client=tmdb_client
+                session,
+                client=client,
+                tmdb_client=tmdb_client,
+                tmdb_max_match_attempts=effective_tmdb_max_match_attempts(session),
             )
             harvester.fuente = fuente
             stats = harvester.harvest_tmdb_enrichment(

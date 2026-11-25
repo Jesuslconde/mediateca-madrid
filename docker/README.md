@@ -90,7 +90,7 @@ docker build -f docker/web.Dockerfile -t mediateca-web:local .
 
 ## Publicación
 
-`scripts/release.sh` construye y publica ambas imágenes con la versión de `VERSION` y `latest`. `scripts/bump-release.sh` incrementa antes la versión.
+`scripts/release.sh` construye y publica ambas imágenes con la versión de `VERSION` y `latest`. Usa Docker si está instalado y Podman como alternativa. `scripts/bump-release.sh` incrementa antes la versión.
 
 ```bash
 make release

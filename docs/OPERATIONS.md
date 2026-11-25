@@ -132,7 +132,9 @@ Un fallo de Meilisearch no revierte una agrupación manual ya confirmada en Post
 
 ## Publicación de imágenes
 
-La versión del release se centraliza en [`VERSION`](../VERSION). `scripts/bump-version.sh` actualiza ese archivo, los tres `pyproject.toml`, los `__version__` de los paquetes Python y `apps/web/package.json`/`package-lock.json`.
+La versión del release se centraliza en [`VERSION`](../VERSION). `scripts/bump-version.sh` actualiza ese archivo, los tres `pyproject.toml`, los `__version__` de los paquetes Python y `apps/web/package.json`/`package-lock.json`. No necesita npm instalado.
+
+`scripts/release.sh` usa Docker si está disponible y, si no, Podman. Se puede seleccionar explícitamente con `CONTAINER_ENGINE=podman` o `CONTAINER_ENGINE=docker`.
 
 Publicación completa:
 

@@ -10,7 +10,7 @@ from mediateca_shared.constants import (
 from sqlalchemy import delete, inspect, select
 from sqlalchemy.orm import Session
 
-from mediateca.core.config import settings
+from mediateca.core.config import DEFAULT_TMDB_MAX_MATCH_ATTEMPTS, settings
 from mediateca.core.logging import get_logger
 from mediateca.core.models import AppConfig
 
@@ -18,10 +18,13 @@ logger = get_logger(__name__)
 
 FLARESOLVERR_URL_KEY = "flaresolverr_url"
 TMDB_API_TOKEN_KEY = "tmdb_api_token"
+TMDB_MAX_MATCH_ATTEMPTS_KEY = "tmdb_max_match_attempts"
 WORKER_CONCURRENCY_KEY = "worker_concurrency"
 MAX_URL_LENGTH = 2000
 MIN_TOKEN_LENGTH = 10
 MAX_TOKEN_LENGTH = 512
+MIN_TMDB_MATCH_ATTEMPTS = 1
+MAX_TMDB_MATCH_ATTEMPTS = 100
 TOKEN_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 
@@ -85,6 +88,27 @@ def normalize_tmdb_api_token(value: str | None) -> str | None:
     if not TOKEN_RE.fullmatch(candidate):
         raise ConfigValidationError("El token de TMDB contiene caracteres no validos")
     return candidate
+
+
+def normalize_tmdb_max_match_attempts(value: str | int | None) -> int | None:
+    """Valida el limite de intentos automaticos de match por edicion."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = int(text)
+    except (TypeError, ValueError) as exc:
+        raise ConfigValidationError(
+            "El limite de intentos de TMDB debe ser un numero entero"
+        ) from exc
+    if not MIN_TMDB_MATCH_ATTEMPTS <= parsed <= MAX_TMDB_MATCH_ATTEMPTS:
+        raise ConfigValidationError(
+            "El limite de intentos de TMDB debe estar entre "
+            f"{MIN_TMDB_MATCH_ATTEMPTS} y {MAX_TMDB_MATCH_ATTEMPTS}"
+        )
+    return parsed
 
 
 def _config_table_exists(session: Session) -> bool:
@@ -156,6 +180,16 @@ def _normalize_saved_tmdb_token(value: str) -> str | None:
         return None
 
 
+def _normalize_saved_tmdb_max_match_attempts(value: str) -> int | None:
+    try:
+        return normalize_tmdb_max_match_attempts(value)
+    except ConfigValidationError:
+        logger.warning(
+            "El limite de intentos de TMDB persistido no es valido; se ignora"
+        )
+        return None
+
+
 def _normalize_saved_worker_concurrency(value: str) -> int | None:
     try:
         return normalize_worker_concurrency(value)
@@ -200,6 +234,29 @@ def effective_tmdb_api_token(session: Session) -> str | None:
     except ConfigValidationError:
         logger.warning("El token de TMDB de entorno no es valido; se ignora")
         return None
+
+
+def saved_tmdb_max_match_attempts(session: Session) -> int | None:
+    saved = get_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY)
+    if saved is None:
+        return None
+    return _normalize_saved_tmdb_max_match_attempts(saved)
+
+
+def effective_tmdb_max_match_attempts(session: Session) -> int:
+    saved = saved_tmdb_max_match_attempts(session)
+    if saved is not None:
+        return saved
+
+    try:
+        configured = normalize_tmdb_max_match_attempts(settings.tmdb_max_match_attempts)
+    except ConfigValidationError:
+        logger.warning(
+            "El limite de intentos de TMDB del entorno no es valido; se usa %s",
+            DEFAULT_TMDB_MAX_MATCH_ATTEMPTS,
+        )
+        configured = None
+    return configured if configured is not None else DEFAULT_TMDB_MAX_MATCH_ATTEMPTS
 
 
 def effective_flaresolverr_url(session: Session) -> str | None:
