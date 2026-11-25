@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function ShareLink({ path }: { path: string }) {
-  const [origin, setOrigin] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
-
-  const url = `${origin}${path}`;
+    if (inputRef.current) {
+      inputRef.current.value = `${window.location.origin}${path}`;
+    }
+  }, [path]);
 
   async function copy() {
+    const url = `${window.location.origin}${path}`;
     setError(false);
     try {
       await navigator.clipboard.writeText(url);
@@ -35,8 +36,9 @@ export function ShareLink({ path }: { path: string }) {
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
+          ref={inputRef}
           readOnly
-          value={url}
+          defaultValue={path}
           onFocus={(event) => event.currentTarget.select()}
           aria-label="Enlace compartible de la lista"
           className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-ink outline-none focus:border-amber-400"

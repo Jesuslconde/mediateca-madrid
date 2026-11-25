@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useSyncExternalStore, type ChangeEvent } from "react";
 
 import type { Ejemplar } from "@/lib/api";
 import postalCodesData from "@/lib/codigos-postales-madrid.json";
@@ -23,6 +23,27 @@ const POSTAL_CODES = (postalCodesData.codigos as PostalCode[])
 const POSTAL_CODE_BY_CODE = new Map(
   POSTAL_CODES.map((postalCode) => [postalCode.codigo, postalCode]),
 );
+
+const postalCodeListeners = new Set<() => void>();
+
+function subscribePostalCode(listener: () => void) {
+  postalCodeListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    postalCodeListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function getPostalCodeSnapshot() {
+  return window.localStorage.getItem(STORAGE_KEY) ?? "";
+}
+
+function notifyPostalCodeChange() {
+  for (const listener of postalCodeListeners) {
+    listener();
+  }
+}
 
 type LibraryGroup = {
   key: string;
@@ -108,17 +129,20 @@ export function LibrariesTable({
   ejemplares: Ejemplar[];
   opacUrl?: string | null;
 }) {
-  const [selectedCp, setSelectedCp] = useState("");
+  const storedCp = useSyncExternalStore(
+    subscribePostalCode,
+    getPostalCodeSnapshot,
+    () => "",
+  );
+  const selectedCp = POSTAL_CODE_BY_CODE.has(storedCp) ? storedCp : "";
   const groups = useMemo(() => groupByLibrary(ejemplares), [ejemplares]);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && POSTAL_CODE_BY_CODE.has(stored)) {
-      setSelectedCp(stored);
-    } else if (stored) {
+    if (storedCp && !POSTAL_CODE_BY_CODE.has(storedCp)) {
       window.localStorage.removeItem(STORAGE_KEY);
+      notifyPostalCodeChange();
     }
-  }, []);
+  }, [storedCp]);
 
   const reference = selectedCp
     ? POSTAL_CODE_BY_CODE.get(selectedCp) ?? null
@@ -147,17 +171,17 @@ export function LibrariesTable({
 
   function handlePostalCodeChange(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value;
-    setSelectedCp(value);
     if (value) {
       window.localStorage.setItem(STORAGE_KEY, value);
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
+    notifyPostalCodeChange();
   }
 
   function clearPostalCode() {
-    setSelectedCp("");
     window.localStorage.removeItem(STORAGE_KEY);
+    notifyPostalCodeChange();
   }
 
   if (!ejemplares.length) {

@@ -24,7 +24,7 @@ No accede directamente a PostgreSQL ni a Meilisearch. El catálogo lo produce `s
 
 | Elemento | Versión declarada | Uso |
 |---|---:|---|
-| Next.js | `^15.5.0` | App Router y servidor standalone |
+| Next.js | `^16.4.6` | App Router y servidor standalone |
 | React | `^19.1.0` | Server y Client Components |
 | TypeScript | `^5.7.0` | Tipado estricto |
 | Tailwind CSS | `^3.4.17` | Estilos responsive |
@@ -663,7 +663,7 @@ npm run generate:api
 | `build` | `next build` |
 | `start` | `next start` |
 | `generate:api` | `openapi-typescript ../../contracts/openapi.json -o lib/api-types.ts` |
-| `lint` | `next lint` |
+| `lint` | `eslint .` |
 
 No hay scripts `test`, `typecheck` o `format`, ni pruebas frontend. El build de Next comprueba tipos por defecto.
 

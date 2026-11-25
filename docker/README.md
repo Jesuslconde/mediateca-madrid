@@ -103,7 +103,7 @@ El registro predeterminado es `192.168.1.169:5000`. Para más detalle, consulta 
 ## Consideraciones
 
 - La versión de Python del paquete permite 3.11–3.14, pero las imágenes fijan Python 3.12.
-- El portal se compila con Node 22 y se ejecuta como servidor standalone; no usa `next start`.
+- El portal se compila con Node 22 y Next.js 16, y se ejecuta como servidor standalone; no usa `next start`.
 - La imagen web contiene Python y Node porque aloja API y portal, aunque Compose los ejecuta en procesos separados.
 - Una actualización debe publicar las dos imágenes con la misma versión para evitar incompatibilidades de modelo o esquema.
 - `raw_data` se conserva en Compose y Portainer, pero el código actual no guarda HTML crudo.
