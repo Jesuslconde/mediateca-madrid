@@ -88,5 +88,7 @@ def search(
         ) from exc
 
     result.setdefault("total_ediciones", result.get("total", 0))
-    aggregate_hits_by_obra(session, result.get("hits", []))
+    result["hits"] = aggregate_hits_by_obra(
+        session, result.get("hits", []), biblioteca=biblioteca
+    )
     return SearchResponse(**result)

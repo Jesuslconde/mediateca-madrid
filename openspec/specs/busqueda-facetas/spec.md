@@ -225,6 +225,11 @@ La búsqueda MUST devolver como máximo un resultado por `obra_key`. Las edicion
 - **THEN** la paginación cuenta obras, no ediciones
 - **AND** no se repite una obra en varias páginas
 
+#### Scenario: Filtro de biblioteca con agrupación
+- **WHEN** el usuario filtra por una biblioteca o sucursal y una obra tiene ediciones en varias fuentes
+- **THEN** la obra solo se muestra si al menos una edición tiene un ejemplar en la ubicación seleccionada
+- **AND** los contadores de ediciones, ejemplares, bibliotecas y soportes solo incluyen los ejemplares que coinciden con el filtro
+
 ### Requirement: Totales y facetas con agrupación
 
 La respuesta de búsqueda MUST distinguir el total de obras del total de ediciones. Las facetas SHALL seguir contando ediciones y SHALL NOT incluir disponibilidad de préstamo.

@@ -780,6 +780,133 @@ def test_search_agrega_las_ediciones_de_una_obra() -> None:
     assert hit["ejemplares"] == 4
 
 
+def _session_with_obra_multifuente():
+    session = _sqlite_session()
+    madrid = _fuente(session)
+    andalucia = Fuente(
+        codigo="andalucia", nombre="Andalucia", base_url="https://opac.example"
+    )
+    session.add(andalucia)
+    session.commit()
+
+    obra = Obra(titulo_uniforme="La vida padre", anio=2022)
+    solo_andalucia = Obra(titulo_uniforme="Solo Andalucia", anio=2021)
+    session.add_all([obra, solo_andalucia])
+    session.flush()
+
+    b_mad = Biblioteca(
+        fuente_id=madrid.id, codigo="CAR", nombre="B.P.M. Cardenal Cisneros"
+    )
+    b_sev = Biblioteca(
+        fuente_id=andalucia.id, codigo="SEV", nombre="Biblioteca de Sevilla"
+    )
+    b_mal = Biblioteca(
+        fuente_id=andalucia.id, codigo="MAL", nombre="Biblioteca de Malaga"
+    )
+    session.add_all([b_mad, b_sev, b_mal])
+    session.flush()
+
+    ed_mad = Edicion(
+        fuente_id=madrid.id,
+        record_id="madrid:1",
+        titn="1",
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre",
+        anio=2022,
+        obra=obra,
+        soportes=["DVD"],
+    )
+    ed_sev = Edicion(
+        fuente_id=andalucia.id,
+        record_id="andalucia:1",
+        titn="1",
+        titulo="La vida padre",
+        titulo_uniforme="La vida padre",
+        anio=2022,
+        obra=obra,
+        soportes=["Blu-ray"],
+    )
+    ed_mal = Edicion(
+        fuente_id=andalucia.id,
+        record_id="andalucia:2",
+        titn="2",
+        titulo="Solo Andalucia",
+        titulo_uniforme="Solo Andalucia",
+        anio=2021,
+        obra=solo_andalucia,
+        soportes=["DVD"],
+    )
+    session.add_all([ed_mad, ed_sev, ed_mal])
+    session.flush()
+
+    session.add_all(
+        [
+            Ejemplar(
+                fuente_id=madrid.id, edicion=ed_mad, biblioteca=b_mad, external_key="k1"
+            ),
+            Ejemplar(
+                fuente_id=madrid.id, edicion=ed_mad, biblioteca=b_mad, external_key="k2"
+            ),
+            Ejemplar(
+                fuente_id=andalucia.id, edicion=ed_sev, biblioteca=b_sev, external_key="k3"
+            ),
+            Ejemplar(
+                fuente_id=andalucia.id, edicion=ed_mal, biblioteca=b_mal, external_key="k4"
+            ),
+        ]
+    )
+    session.commit()
+    return session, obra, solo_andalucia
+
+
+def test_agregacion_respeta_el_filtro_de_biblioteca() -> None:
+    from mediateca.api.aggregation import aggregate_hits_by_obra
+
+    session, obra, _ = _session_with_obra_multifuente()
+    hits = [
+        {
+            "id": "madrid_1",
+            "record_id": "madrid:1",
+            "titulo": "La vida padre",
+            "obra_id": obra.id,
+            "soportes": [],
+            "bibliotecas": [],
+            "ejemplares": 0,
+        }
+    ]
+
+    kept = aggregate_hits_by_obra(session, hits, biblioteca="b:madrid:CAR")
+
+    assert len(kept) == 1
+    hit = kept[0]
+    assert hit["ediciones_count"] == 1
+    assert hit["ejemplares"] == 2
+    assert hit["bibliotecas"] == ["B.P.M. Cardenal Cisneros"]
+    session.close()
+
+
+def test_agregacion_excluye_obra_sin_ejemplares_en_la_biblioteca() -> None:
+    from mediateca.api.aggregation import aggregate_hits_by_obra
+
+    session, _, solo_andalucia = _session_with_obra_multifuente()
+    hits = [
+        {
+            "id": "andalucia_2",
+            "record_id": "andalucia:2",
+            "titulo": "Solo Andalucia",
+            "obra_id": solo_andalucia.id,
+            "soportes": [],
+            "bibliotecas": [],
+            "ejemplares": 0,
+        }
+    ]
+
+    kept = aggregate_hits_by_obra(session, hits, biblioteca="b:madrid:CAR")
+
+    assert kept == []
+    session.close()
+
+
 def test_record_incluye_las_ediciones_de_la_obra() -> None:
     session, obra = _session_with_obra(2)
     app.dependency_overrides[get_db] = lambda: session

@@ -296,7 +296,7 @@ Si Meilisearch no devuelve total, se prueba `estimatedTotalHits`, después `tota
 - Título de obra si falta.
 - Primer valor no vacío de póster, año, duración, sinopsis o título uniforme.
 
-La agregación incluye todas las ediciones de la obra, no solo las que cumplen individualmente el filtro. Si no hay obra o no se encuentran ediciones, `ediciones_count` queda en `1`.
+La agregación incluye todas las ediciones de la obra, no solo las que cumplen individualmente el filtro. Si hay un filtro de biblioteca o sucursal activo, en cambio, solo se cuentan los ejemplares que coinciden con ese filtro y se descartan las obras sin ningún ejemplar en la ubicación seleccionada. Si no hay obra o no se encuentran ediciones, `ediciones_count` queda en `1`.
 
 No existe fallback de búsqueda a PostgreSQL. Un fallo de Meilisearch produce 503; un índice vacío o desactualizado se devuelve tal cual.
 
