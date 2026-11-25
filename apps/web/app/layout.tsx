@@ -24,7 +24,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="es">
       <body className="flex min-h-screen flex-col">
         <header className="border-b border-white/10 bg-ink text-white">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
             <Link href="/" className="flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-sm font-black">
                 M
@@ -64,10 +64,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
+        <main className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
 
         <footer className="border-t border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <div className="space-y-1">
               <p>
                 Portal alternativo no oficial. Datos obtenidos del catálogo público de las
