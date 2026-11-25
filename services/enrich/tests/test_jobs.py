@@ -289,7 +289,13 @@ def test_worker_ejecuta_el_handler_discover(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             pass
 
         def harvest_discovery(self, *, job):  # noqa: ANN001
@@ -332,8 +338,14 @@ def test_worker_ejecuta_el_handler_enrich(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
-            pass
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
+            visto["max_match_attempts"] = tmdb_max_match_attempts
 
         def harvest_enrichment(self, *, job):  # noqa: ANN001
             visto["job_id"] = job.id
@@ -352,6 +364,7 @@ def test_worker_ejecuta_el_handler_enrich(monkeypatch) -> None:
     assert processed.stats["processed"] == 3
     assert processed.stats["stop_reason"] == "no_pending"
     assert visto["job_id"] == job.id
+    assert visto["max_match_attempts"] == 5
     assert backoff == 0.0
 
 
@@ -507,8 +520,14 @@ def test_worker_ejecuta_el_handler_tmdb(monkeypatch) -> None:
             visto["closed"] = True
 
     class FakeHarvester:
-        def __init__(self, session, client=None, tmdb_client=None) -> None:
-            pass
+        def __init__(
+            self,
+            session,
+            client=None,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
+            visto["max_match_attempts"] = tmdb_max_match_attempts
 
         def harvest_tmdb_enrichment(self, *, limit, delay, refresh):  # noqa: ANN001
             visto["limit"] = limit
@@ -526,7 +545,12 @@ def test_worker_ejecuta_el_handler_tmdb(monkeypatch) -> None:
     assert processed is not None
     assert processed.id == job.id
     assert processed.status == "completed"
-    assert visto == {"limit": 250, "refresh": True, "closed": True}
+    assert visto == {
+        "limit": 250,
+        "refresh": True,
+        "closed": True,
+        "max_match_attempts": 5,
+    }
     assert backoff == 0.0
 
 
@@ -609,7 +633,13 @@ def test_worker_indexa_el_lote_al_terminar(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             pass
 
         def harvest_enrichment(self, *, job):  # noqa: ANN001
@@ -656,7 +686,13 @@ def test_titn_pendientes_de_indexar_se_reintentan(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             pass
 
         def harvest_enrichment(self, *, job):  # noqa: ANN001
@@ -721,7 +757,13 @@ def test_worker_usa_la_url_de_flaresolverr_persistida(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             pass
 
         def harvest_discovery(self, *, job):  # noqa: ANN001
@@ -813,7 +855,13 @@ def test_descubrimiento_con_nuevos_encola_enriquecimiento(monkeypatch) -> None:
             pass
 
     class FakeHarvester:
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             self.session = session
 
         def harvest_discovery(self, *, job):  # noqa: ANN001
@@ -858,7 +906,13 @@ def test_indexa_los_titn_procesados_si_el_lote_falla(monkeypatch) -> None:
     class FakeHarvester:
         processed_titns = ["1", "2"]
 
-        def __init__(self, session, client, tmdb_client=None) -> None:
+        def __init__(
+            self,
+            session,
+            client,
+            tmdb_client=None,
+            tmdb_max_match_attempts=None,
+        ) -> None:
             pass
 
         def harvest_enrichment(self, *, job):  # noqa: ANN001

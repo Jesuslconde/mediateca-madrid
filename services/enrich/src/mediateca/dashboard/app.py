@@ -57,12 +57,14 @@ from mediateca.core.config import settings
 from mediateca.core.config_store import (
     FLARESOLVERR_URL_KEY,
     TMDB_API_TOKEN_KEY,
+    TMDB_MAX_MATCH_ATTEMPTS_KEY,
     WORKER_CONCURRENCY_KEY,
     ConfigValidationError,
     effective_tmdb_api_token,
     effective_worker_concurrency,
     normalize_flaresolverr_url,
     normalize_tmdb_api_token,
+    normalize_tmdb_max_match_attempts,
     normalize_worker_concurrency,
     set_config_value,
 )
@@ -1398,6 +1400,40 @@ async def save_tmdb_config(
         return _redirect_with(
             next_path,
             error="No se pudo guardar la configuracion de TMDB",
+        )
+
+    return _redirect_with(next_path, message=message)
+
+
+@app.post("/config/tmdb-attempts")
+async def save_tmdb_attempts_config(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> RedirectResponse:
+    values = await _form_values(request)
+    next_path = _safe_next((values.get("next") or [""])[0], "/configuracion")
+    if not _has_write_access(request):
+        return _admin_error(next_path)
+    raw = (values.get("max_match_attempts") or [""])[0]
+
+    try:
+        normalized = normalize_tmdb_max_match_attempts(raw)
+        if normalized is None:
+            set_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY, None)
+            message = "Limite de intentos de TMDB eliminado; se usara el del entorno"
+        else:
+            set_config_value(session, TMDB_MAX_MATCH_ATTEMPTS_KEY, str(normalized))
+            message = f"Limite de intentos de TMDB guardado: {normalized}"
+        session.commit()
+    except ConfigValidationError as exc:
+        session.rollback()
+        return _redirect_with(next_path, error=str(exc))
+    except SQLAlchemyError:
+        session.rollback()
+        logger.exception("No se pudo guardar el limite de intentos de TMDB")
+        return _redirect_with(
+            next_path,
+            error="No se pudo guardar el limite de intentos de TMDB",
         )
 
     return _redirect_with(next_path, message=message)

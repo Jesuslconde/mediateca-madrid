@@ -15,10 +15,10 @@ curl localhost:8080/health
 
 ## Migracion de fuentes
 
-Este corte sube `SCHEMA_VERSION` a `7` y cambia la identidad de las ediciones a `record_id` (`<fuente>:<titn>`). Antes de desplegar:
+Este corte histórico subió `SCHEMA_VERSION` a `7` y cambió la identidad de las ediciones a `record_id` (`<fuente>:<titn>`). El esquema actual está en `8`. Antes de desplegar:
 
 1. Copia de seguridad de PostgreSQL y del indice de Meilisearch.
-2. Desplegar la imagen nueva y ejecutar `init`; aplica la migracion y reconstruye el indice con `--reset` al detectar el salto de version.
+2. Desplegar la imagen nueva y ejecutar `init`; en Compose aplica la migracion y reconstruye el indice con `--reset` al detectar el salto de version. En Portainer, `init` ejecuta comandos separados y no aplica ese reset automatico: debe lanzarse `index --reset` de forma explicita cuando corresponda.
 3. Aplicar `migrate_andalucia.sql` (incluida en `init`) y verificar que `fuentes` contiene `andalucia` habilitada; no se reindexa Madrid por este alta.
 4. Verificar busqueda, `/api/records/madrid:2101557`, `/api/records/2101557`, `/api/locations` y una lista historica.
 5. Ejecutar una primera recoleccion controlada de Andalucía y consultar `/api/search?fuente=andalucia`.

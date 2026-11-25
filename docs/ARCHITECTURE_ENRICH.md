@@ -123,14 +123,14 @@ las ya sincronizadas, ordenadas por `tmdb_enriched_at` mas antiguo y luego por
 
 ## Actualizacion manual de direcciones de bibliotecas
 
-La cola admite un trabajo de tipo `branches` que recorre el Directorio de
-Bibliotecas de la Comunidad de Madrid y actualiza direccion, codigo postal y
-coordenadas de las sucursales. Se lanza unicamente a mano desde `Tareas`
-(`/tareas`), con `mediateca enqueue-branches` o `make branches-enqueue`; el
-scheduler nunca lo encola. La tarea precarga los codigos de `Biblioteca`
-existentes, omite las fichas de bibliotecas desconocidas y crea o actualiza las
-sucursales de las bibliotecas conocidas; nunca crea bibliotecas nuevas. El
-comando directo `refresh-branches` conserva el comportamiento completo anterior.
+La cola admite un trabajo de tipo `branches` que actualiza direccion, codigo
+postal y coordenadas desde el directorio configurado en la fuente: HTML de la
+Comunidad de Madrid o datos abiertos de la Junta de Andalucia. Se lanza unicamente
+a mano desde `Tareas` (`/tareas`), con `mediateca enqueue-branches` o
+`make branches-enqueue`; el scheduler nunca lo encola. La politica `match`
+(Madrid) solo procesa bibliotecas conocidas; la politica `create` (Andalucia)
+puede crear bibliotecas y sucursales ausentes. El comando directo
+`refresh-branches` ejecuta el mismo trabajo de forma sincrona.
 
 ## Concurrencia del worker
 
@@ -144,10 +144,12 @@ PostgreSQL el reclamo se serializa con `pg_advisory_xact_lock`, de modo que dos
 hilos o contenedores no pueden reclamar a la vez trabajos incompatibles. El lock
 solo cubre el reclamo; la ejecucion sigue siendo paralela.
 
-No se permite el mismo tipo dos veces ni las parejas con dependencia:
-`discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` y `tmdb`/`index`.
-`branches` puede convivir con cualquier trabajo. Un trabajo incompatible se queda
-en `pending` y se ejecuta cuando termina el que lo bloquea.
+Para una misma fuente no se permite el mismo tipo dos veces ni las parejas con
+dependencia: `discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index` y
+`tmdb`/`index`. `branches` puede convivir con cualquier trabajo. Fuentes
+distintas pueden ejecutar el mismo tipo en paralelo. Un trabajo de indexacion sin
+fuente es exclusivo y bloquea al resto. Un trabajo incompatible se queda en
+`pending` y se ejecuta cuando termina el que lo bloquea.
 
 ## Cursor, reintentos y errores
 
@@ -170,10 +172,10 @@ crudo ni crea archivos en `MEDIATECA_RAW_DIR`. La tabla `snapshots`, el modelo
 
 ## Indexacion incremental
 
-Cada lote de descubrimiento o enriquecimiento indexa solo los `TITN` procesados
-mediante `index_titns`, sin reconstruir el indice completo. Los `TITN` se consultan
-y envian a Meilisearch en lotes de 200; los documentos no mencionados permanecen
-intactos.
+Cada lote de descubrimiento o enriquecimiento indexa solo los `record_id`
+procesados mediante `index_titns`, sin reconstruir el indice completo. Los
+identificadores se consultan y envian a Meilisearch en lotes de 200; los documentos
+no mencionados permanecen intactos.
 
 Cada documento incluye `detail_complete` e `is_stub`. Una edicion descubierta pero
 sin `detail_fetched_at` se indexa como stub con `detail_complete=false`; al
@@ -182,25 +184,25 @@ campos son filtrables. La API publica del portal aplica siempre
 `detail_complete = true`, de modo que la web solo muestra fichas enriquecidas.
 
 `paises_origen` se incluye en cada documento como lista (vacia si no hay TMDB),
-es filtrable y se devuelve como faceta. Los TITN procesados por un lote se
-indexan de forma incremental; tras un cambio de esquema o al anadir el campo a un
-indice existente se ejecuta `mediateca index --reset` para reconstruirlo.
+es filtrable y se devuelve como faceta. Los identificadores procesados por un
+lote se indexan de forma incremental; tras un cambio de esquema o al anadir el
+campo a un indice existente se ejecuta `mediateca index --reset` para reconstruirlo.
 
 Cada documento conserva `bibliotecas` con los nombres de las redes y anade
-`ubicaciones` (codigos `b:<biblioteca>` y `s:<sucursal>`) y `ubicaciones_texto`
-(nombres visibles). Ambos campos nuevos son filtrables: el portal usa el codigo
-estable para el selector agrupado y acepta el nombre como respaldo. Tras
+`ubicaciones` (codigos `b:<fuente>:<biblioteca>` y `s:<fuente>:<sucursal>`) y
+`ubicaciones_texto` (nombres visibles). Ambos campos son filtrables: el portal usa
+el codigo estable para el selector agrupado y acepta el nombre como respaldo. Tras
 desplegar este cambio hay que ejecutar `make index` para poblar los campos en los
 documentos existentes.
 
-Si un lote falla antes de terminar, el worker indexa igualmente los `TITN` que ya
-habia procesado. Ademas, el scheduler encola una reindexacion de reconciliacion
+Si un lote falla antes de terminar, el worker indexa igualmente los `record_id` que
+ya habia procesado. Ademas, el scheduler encola una reindexacion de reconciliacion
 cada `index_interval_hours` (168 por defecto) para reparar cualquier divergencia
 entre PostgreSQL y Meilisearch.
 
-Si Meilisearch falla al terminar un lote, los `TITN` pendientes se guardan en
-`harvest_jobs.stats.pending_index_titns`. El reintento del trabajo los indexa antes
-de continuar con el siguiente lote. La reindexacion completa con
+Si Meilisearch falla al terminar un lote, los identificadores pendientes se guardan
+en `harvest_jobs.stats.pending_index_titns`. El reintento del trabajo los indexa
+antes de continuar con el siguiente lote. La reindexacion completa con
 `index_editions(reset=True)` queda reservada al comando manual
 `mediateca index --reset`, para cambios de esquema o reparaciones.
 

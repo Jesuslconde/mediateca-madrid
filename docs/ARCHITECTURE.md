@@ -1,92 +1,207 @@
 # Arquitectura
 
-## Monorepo
+Mediateca Madrid es un monorepo con cuatro módulos de software y una capa de despliegue. PostgreSQL es la fuente de verdad del catálogo; Meilisearch es un índice reconstruible; el portal consume exclusivamente la API.
+
+## Módulos
+
+| Módulo | Responsabilidad | Documentación |
+|---|---|---|
+| `packages/shared` | Modelos SQLAlchemy, esquemas Pydantic, identidad y `SCHEMA_VERSION` | [`README`](../packages/shared/README.md) |
+| `services/enrich` | Descubrimiento, enriquecimiento, migraciones, cola, índice y dashboard | [`README`](../services/enrich/README.md) |
+| `services/api` | Búsqueda, fichas, estadísticas y listas de favoritos | [`README`](../services/api/README.md) |
+| `apps/web` | Portal Next.js y Server Actions | [`README`](../apps/web/README.md) |
 
 ```text
-packages/shared
-  modelos SQLAlchemy + esquemas Pydantic + openapi.json + SCHEMA_VERSION
-            │
-            ├──────────────────────────────┐
-            ▼                              ▼
-services/enrich                  services/api + apps/web
-  crawler/parser                   FastAPI solo lectura
-  repositorio de escritura         Next.js
-  worker/scheduler                 tipos generados
-  dashboard
-  migraciones
-            │                              │
-            ▼                              ▼
-   PostgreSQL compartido  ◄──── API solo lectura
-   Meilisearch compartido ◄──── API solo lectura
+                         ┌──────────────────────┐
+                         │   Catálogos OPAC     │
+                         └──────────┬───────────┘
+                                    │ HTTP
+                         ┌──────────▼───────────┐
+                         │ services/enrich      │
+                         │ discover / enrich    │
+                         │ worker / scheduler   │
+                         └──────┬────────┬──────┘
+                                │        │
+                     PostgreSQL │        │ Meilisearch
+                                │        │
+                         ┌──────▼────────▼──────┐
+                         │ services/api         │
+                         │ búsqueda + fichas    │
+                         │ listas               │
+                         └──────────┬──────────┘
+                                    │ HTTP API_URL
+                         ┌──────────▼───────────┐
+                         │ apps/web             │
+                         │ Server Components    │
+                         │ Server Actions       │
+                         └──────────────────────┘
 ```
 
-## Flujo de datos
-
-1. **Descubrimiento**: enrich consulta el OPAC y crea stubs con cursor y marcas de progreso.
-2. **Enriquecimiento**: enrich descarga cada ficha, normaliza metadatos y ejemplares y actualiza PostgreSQL.
-3. **Directorio**: `mediateca refresh-branches` lee el Directorio de Bibliotecas de la Comunidad de Madrid y completa direccion, codigo postal y coordenadas de las sucursales. La misma actualizacion puede encolarse como trabajo manual `branches` desde `mediateca enqueue-branches` o el dashboard. La politica se declara por fuente: `match` (Madrid) solo procesa bibliotecas ya conocidas y nunca crea bibliotecas nuevas, mientras que `create` (Andalucia) lee el directorio abierto de la Junta en `datos.juntadeandalucia.es` y crea o actualiza las bibliotecas y sucursales que falten.
-4. **Indexacion**: enrich actualiza Meilisearch al terminar cada lote.
-5. **Lectura**: la API consulta PostgreSQL para fichas y bibliotecas, y Meilisearch para busqueda y facetas.
-6. **Portal**: Next.js consume la API; no accede directamente a la base ni al indice. La ordenacion por cercania se calcula en el cliente a partir del codigo postal elegido.
-
-El worker ejecuta hasta cinco trabajos compatibles en paralelo. La concurrencia se configura por entorno o desde el dashboard y se aplica al reiniciar. Nunca coincide el mismo tipo ni las parejas con dependencia (`discover`/`enrich`, `enrich`/`tmdb`, `enrich`/`index`, `tmdb`/`index`); `branches` puede convivir con todos. El reclamo se serializa en PostgreSQL para respetar estas reglas entre hilos y contenedores.
-
-## Propiedad de escritura
+## Propiedad de escrituras
 
 | Componente | PostgreSQL | Meilisearch |
 |---|---|---|
-| `services/enrich` | Escritura, migraciones y `schema_meta` | Escritura del indice |
-| `services/api` | Lectura del catalogo; escritura solo en `listas` y `lista_items` | Solo lectura |
+| `services/enrich` | Migraciones y escritura del catálogo, cola y configuración | Creación, settings y escritura |
+| `services/api` | Lectura del catálogo; escritura solo en `listas` y `lista_items` | Solo lectura |
 | `apps/web` | Sin acceso directo | Sin acceso directo |
-| `packages/shared` | Modelos y contratos | Contrato de documentos |
+| `packages/shared` | Define modelos y esquemas | Define el subconjunto público mediante el indexador de ingesta |
+
+La expresión “API de solo lectura” se aplica al catálogo y al índice. Las listas de favoritos son una excepción explícita y acotada.
+
+## Flujo de datos
+
+1. **Descubrimiento**: `enrich` enumera resultados AbsysNet y crea stubs con metadatos básicos.
+2. **Enriquecimiento**: descarga fichas completas, normaliza MARC, soportes, personas, materias, enlaces y ejemplares.
+3. **TMDB**: opcionalmente añade países de origen, ID, portada y enlace sin sobrescribir el país del OPAC.
+4. **Directorio**: actualiza bibliotecas y sucursales con el directorio de cada fuente.
+5. **Indexación**: construye documentos Meilisearch desde PostgreSQL, de forma incremental o completa.
+6. **Búsqueda**: la API consulta Meilisearch, agrupa por obra y completa agregados desde PostgreSQL.
+7. **Portal**: Next.js renderiza los resultados y gestiona favoritos mediante la API.
+
+La web pública impone `detail_complete=true`; los stubs no aparecen como fichas completas.
+
+## Identidad y fuentes
+
+La identidad de una edición es:
+
+```text
+record_id = <fuente>:<titn>
+```
+
+La unicidad de TITN es por fuente. Bibliotecas y sucursales son únicas por `(fuente_id, codigo)`; los ejemplares por `(fuente_id, external_key)`.
+
+`Fuente` almacena URL, ruta, patrón de sesión, campo y valor de formato, retardo, estado y `options`. Las opciones controlan descubrimiento avanzado/novedades, detalle durante descubrimiento, TLS, cobertura y directorio.
+
+Madrid y Andalucía están habilitadas tras los seeds. Las diez fuentes autonómicas y las cinco fuentes CCBIP se siembran deshabilitadas. Deshabilitar una fuente no borra sus datos ni altera las demás.
+
+## Modelo persistente
+
+El núcleo es:
+
+```text
+Fuente ──< Edición >── Obra
+            │
+            ├──< Ejemplar >── Biblioteca ──< Sucursal
+            ├──< EdicionPersona >── Persona
+            ├──< EdicionMateria >── Materia
+            └──< Enlace
+```
+
+También existen:
+
+- `harvest_jobs` y `harvest_runs` para ingesta.
+- `app_config` para configuración persistida, definida en `services/enrich`.
+- `schema_meta` para la versión del esquema.
+- `listas` y `lista_items` para favoritos.
+
+`SCHEMA_VERSION` está actualmente en `8`. La API lo comprueba al arrancar y aborta si no coincide. Las migraciones SQL idempotentes viven en `services/enrich/scripts`; no se usa Alembic.
+
+### Ubicaciones
+
+`Ejemplar` guarda `sucursal_codigo`, pero no tiene FK directa a `Sucursal`. La relación ORM es de solo lectura y se resuelve por fuente y código. La API devuelve ubicación de sucursal si existe; si no, usa biblioteca; si no hay datos, devuelve `null`.
+
+El portal usa coordenadas de la API y, como respaldo, centroides de códigos postales madrileños versionados en `apps/web/lib/codigos-postales-madrid.json`. La distancia se calcula en cliente con Haversine.
+
+## Cola y concurrencia
+
+`harvest_jobs` admite cinco tipos: `discover`, `enrich`, `index`, `tmdb` y `branches`.
+
+El worker:
+
+- Usa entre 1 y 5 hilos.
+- Reclama con `FOR UPDATE SKIP LOCKED`.
+- Serializa el reclamo con `pg_advisory_xact_lock`.
+- Respeta conflictos por fuente.
+- Marca heartbeat por trabajo y de worker.
+- Recupera trabajos `running` estancados.
+- Reencola errores y no consume intentos cuando hay CAPTCHA.
+
+Para una misma fuente no pueden coincidir el mismo tipo ni las parejas `discover/enrich`, `enrich/tmdb`, `enrich/index` y `tmdb/index`. `branches` es compatible con todos. Un indexado global sin fuente es exclusivo.
+
+El scheduler no ejecuta OPAC: solo encola descubrimiento, enriquecimiento y reconciliación según `app_config`.
+
+## Indexación
+
+`MeiliIndexer` pertenece a `services/enrich`. La API solo lee el índice.
+
+El documento Meilisearch incluye:
+
+- Identidad y fuente.
+- Obra y `obra_key`.
+- Bibliografía, personas, materias y soportes.
+- Bibliotecas y ubicaciones.
+- Países de origen, portada y enlace TMDB.
+- `detail_complete`, `is_stub` y `updated_at`.
+
+Clave primaria: `id`, derivada de `record_id`. La agrupación usa `obra:<id>` o `edicion:<record_id>`.
+
+La indexación incremental usa lotes de 200 y conserva pendientes en `harvest_jobs.stats.pending_index_titns` si falla. `index` sin reset no elimina documentos huérfanos; `index --reset` vacía y reconstruye.
+
+## Lectura y búsqueda
+
+`CatalogSearch` ejecuta dos consultas Meilisearch:
+
+1. Resultados paginados con `distinct="obra_key"`.
+2. Totales y facetas sin agrupar.
+
+Después, la API consulta PostgreSQL para agregar ediciones de cada obra: soportes, bibliotecas, ejemplares y metadatos de respaldo.
+
+No hay búsqueda de fallback en PostgreSQL. Si Meilisearch falla, `/api/search` devuelve 503.
 
 ## Listas de favoritos
 
-`services/api` es la unica pieza que escribe fuera del catalogo: crea y modifica las tablas `listas` y `lista_items`. Es una excepcion acotada, no cambia la propiedad del catalogo ni del indice. La migracion `services/enrich/scripts/migrate_listas.sql` crea ambas tablas y la limpieza de listas caducadas se ejecuta desde el servicio `init` con `python -m mediateca clean-lists`.
+Las listas son el único dato escrito por la API:
 
-## Modelo de datos compartido
+- Token opaco generado con `secrets.token_urlsafe(24)`.
+- Solo se guarda su SHA-256.
+- Máximo 200 elementos.
+- Caducidad de 180 días desde la última mutación efectiva.
+- Elementos con snapshot de título si desaparece la edición.
+- Sin cuentas ni datos personales.
 
-El modelo obra -> edicion -> ejemplar, las marcas de progreso, los paises de origen de TMDB, la cola `harvest_jobs` y `schema_meta` viven en `packages/shared/src/mediateca_shared`. La API y la ingesta instalan el paquete local; no hay wheels ni copias versionadas.
+El portal recuerda la lista activa en una cookie `HttpOnly`. Compartir `/lista/{token}` equivale a compartir permiso de lectura y edición. La limpieza de listas caducadas la ejecuta `services/enrich`.
 
-## Sucursales y ubicaciones
+## Contratos
 
-La tabla `sucursales` guarda una ficha por sucursal con `codigo` unico, biblioteca, nombre, municipio, direccion, codigo postal y coordenadas opcionales. `Ejemplar` se relaciona con su sucursal por `sucursal_codigo` mediante una relacion de solo lectura, sin clave foranea ni relleno retroactivo. `Biblioteca.codigo_postal` y el resto de campos de ubicacion sirven de respaldo cuando un ejemplar no tiene sucursal.
+La API genera [`contracts/openapi.json`](../contracts/openapi.json). El portal genera `apps/web/lib/api-types.ts` con `openapi-typescript`.
 
-`SCHEMA_VERSION` es `8`. La migracion `migrate_fuentes.sql` crea la tabla `fuentes`, asocia el catalogo historico a Madrid y sustituye las unicidades. La migracion `migrate_agrupacion_manual.sql` anade `ediciones.obra_manual`, `ediciones.obra_manual_at`, `obras.manual` y `obras.updated_at`; es idempotente y se aplica desde `make migrate`. La migracion `migrate_andalucia.sql` anade la segunda fuente AbsysNet sin modificar Madrid y `migrate_andalucia_directory.sql` declara su directorio abierto. por `(fuente_id, titn)`, `(fuente_id, codigo)` y `(fuente_id, external_key)`. La migracion `services/enrich/scripts/migrate_sucursales_geo.sql` crea la tabla, anade la columna y actualiza `schema_meta`; es idempotente y se aplica desde `make migrate`. En bases nuevas, `Base.metadata.create_all` crea el esquema. La migracion `services/enrich/scripts/migrate_listas.sql` anade las tablas de listas de favoritos.
+```bash
+make openapi
+make web-types
+make contracts
+```
 
-La API expone `EjemplarOut.ubicacion` con codigo postal, municipio, latitud y longitud. El portal usa esos datos y, si faltan coordenadas de sucursal, el centroide del codigo postal del JSON `apps/web/lib/codigos-postales-madrid.json`. Ese JSON se genera con `scripts/generate_codigos_postales.py` a partir de centroides abiertos y del municipio del INE; no se sirve desde PostgreSQL ni desde Meilisearch.
+El portal no importa modelos compartidos ni accede a almacenamientos.
 
-## Imagenes
+## Ejecución y despliegue
+
+Dos imágenes:
 
 | Imagen | Servicios |
 |---|---|
 | `mediateca-batch` | `init`, `worker`, `dashboard`, `scheduler` |
 | `mediateca-web` | `api`, `web` |
 
-La imagen `mediateca-web` contiene Python y Node. La API y el portal se ejecutan como contenedores separados para mantener el aislamiento de procesos.
+Compose ejecuta `python -m mediateca init`, que crea esquema, aplica migraciones, limpia listas y reconstruye el índice si baja la versión del esquema.
 
-## Despliegue
+Portainer ejecuta `init-db`, `migrate`, `clean-lists` e `index` por separado. No aplica el reset condicional; los cambios que exijan reconstrucción completa requieren una acción explícita.
 
-- `docker-compose.yml` levanta el stack completo en local.
-- `deploy/portainer-stack.yml` usa las imagenes publicadas en el registry.
-- El orden es `db/meilisearch -> init -> batch/web`.
-- La API comprueba `schema_meta.schema_version` al arrancar y falla si no coincide con `SCHEMA_VERSION`.
-- La migracion de fuentes y la agrupacion manual exigen reindexado completo; `init` lo hace con `--reset` al detectar el salto de version. Tras agrupar o desvincular ediciones desde el dashboard se reindexan solo las ediciones afectadas con `index_titns`; si falla, `make index` reconstruye el indice.
-
-## Busqueda de solo lectura
-
-La API usa un adaptador `CatalogSearch` sobre Meilisearch. No escribe documentos, no crea el indice y no reconstruye facetas por su cuenta.
-
-El indice publica `paises_origen` como atributo filtrable y faceta. `GET /api/search` acepta el parametro repetible `paises_origen` y lo combina con la consulta y el resto de filtros; `GET /api/records/{record_id}` devuelve `paises_origen` junto al `pais` bibliografico del OPAC.
-
-## Contratos
-
-`services/api` genera `contracts/openapi.json`. El portal genera sus tipos TypeScript desde ese contrato con `make contracts`.
+PostgreSQL y Meilisearch usan volúmenes independientes. El worker y el dashboard comparten el volumen de heartbeat.
 
 ## Decisiones
 
-- **Un monorepo**: una sola fuente de modelos y un unico ciclo de release.
-- **Dos imagenes**: reduce builds y despliegues sin mezclar los procesos de ingesta con los de lectura.
-- **PostgreSQL como fuente de verdad**: el indice es reconstruible por enrich.
-- **Sin Alembic**: migraciones SQL idempotentes en enrich y `schema_meta` para compatibilidad.
-- **Sin base propia para la app**: API y portal leen del mismo PostgreSQL y Meilisearch.
+- **Monorepo**: una sola fuente de modelos y un ciclo de release.
+- **Dos imágenes**: separan procesos de ingesta y lectura sin duplicar el modelo compartido.
+- **PostgreSQL como verdad**: el índice se reconstruye.
+- **Migraciones SQL idempotentes**: sin Alembic, con `schema_meta` para compatibilidad.
+- **API como frontera**: el portal no conoce las bases de datos.
+- **Cola persistente**: scheduler, dashboard y CLI comparten `harvest_jobs`.
+- **Sin snapshots**: la ingesta actual solo persiste datos normalizados.
+
+## Documentación
+
+- [`docs/README.md`](README.md)
+- [`OPERATIONS.md`](OPERATIONS.md)
+- [`ARCHITECTURE_ENRICH.md`](ARCHITECTURE_ENRICH.md)
+- [`CUTOVER.md`](CUTOVER.md)
+- [`MIGRATION_INVENTORY.md`](MIGRATION_INVENTORY.md)

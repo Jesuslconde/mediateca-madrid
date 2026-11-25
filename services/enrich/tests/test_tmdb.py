@@ -34,6 +34,7 @@ def test_settings_tmdb_por_defecto(monkeypatch) -> None:
         "MEDIATECA_TMDB_DELAY",
         "MEDIATECA_TMDB_TIMEOUT",
         "MEDIATECA_TMDB_MAX_RETRIES",
+        "MEDIATECA_TMDB_MAX_MATCH_ATTEMPTS",
     ):
         monkeypatch.delenv(name, raising=False)
     config = Settings(_env_file=None)
@@ -42,6 +43,13 @@ def test_settings_tmdb_por_defecto(monkeypatch) -> None:
     assert config.tmdb_delay == 0.25
     assert config.tmdb_timeout == 10.0
     assert config.tmdb_max_retries == 3
+    assert config.tmdb_max_match_attempts == 5
+
+
+def test_settings_tmdb_max_match_attempts_desde_entorno(monkeypatch) -> None:
+    monkeypatch.setenv("MEDIATECA_TMDB_MAX_MATCH_ATTEMPTS", "7")
+
+    assert Settings(_env_file=None).tmdb_max_match_attempts == 7
 
 
 def test_api_key_v3_se_envia_como_parametro() -> None:

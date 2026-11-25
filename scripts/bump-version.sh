@@ -79,7 +79,25 @@ PY
 if command -v npm >/dev/null 2>&1; then
   (cd apps/web && npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version >/dev/null)
 else
-  echo "npm no disponible; actualiza apps/web/package.json y package-lock.json a mano" >&2
+  python3 - "$NEW_VERSION" <<'PY'
+from pathlib import Path
+import sys
+
+version = sys.argv[1]
+for path, replacements in (
+    (Path("apps/web/package.json"), 1),
+    (Path("apps/web/package-lock.json"), 2),
+):
+    text = path.read_text()
+    old_version = text.split('"version": "', 1)[1].split('"', 1)[0]
+    text = text.replace(
+        f'"version": "{old_version}"',
+        f'"version": "{version}"',
+        replacements,
+    )
+    path.write_text(text)
+PY
+  echo "npm no disponible; version del portal actualizada sin npm"
 fi
 
 echo "Version unificada actualizada a ${NEW_VERSION}"
