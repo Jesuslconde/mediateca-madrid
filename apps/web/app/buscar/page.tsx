@@ -197,8 +197,8 @@ async function SearchBody({
         </div>
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="lg:sticky lg:top-6 lg:self-start">
+      <div className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
             <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">
               Filtros

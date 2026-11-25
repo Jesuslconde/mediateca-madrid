@@ -1,7 +1,7 @@
 export function SearchSkeleton() {
   return (
     <div
-      className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]"
+      className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)]"
       role="status"
       aria-live="polite"
       aria-busy="true"
