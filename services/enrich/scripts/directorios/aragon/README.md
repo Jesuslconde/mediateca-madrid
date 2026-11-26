@@ -1,8 +1,10 @@
 # Directorio de la Red de Bibliotecas de Aragón
 
-Carga manual del directorio de la fuente `aragon` (Red de Bibliotecas de
-Aragón). No forma parte de las migraciones automáticas: se ejecuta una vez sobre
-el entorno de datos y se puede repetir sin duplicar filas.
+Carga del directorio de la fuente `aragon` (Red de Bibliotecas de Aragón).
+Forma parte de las migraciones automáticas: se aplica al iniciar la aplicación
+con `python -m mediateca init` o `python -m mediateca migrate`, tanto en una
+instalación desde cero como en una actualización. Es idempotente, así que se
+puede reejecutar sin duplicar filas.
 
 ## Origen
 
@@ -30,18 +32,24 @@ postal, no una geocodificación de la dirección.
   `codigo_sucursal`, `nombre`, `nombre_biblioteca`, `direccion`, `municipio`,
   `codigo_postal`, `latitud` y `longitud`.
 - `normalizado.metadata.json`: URL, fecha, recuentos y campos de origen.
-- `carga.sql`: inserción y actualización idempotente de `bibliotecas` y
-  `sucursales` por `(fuente, codigo)`.
+- `services/enrich/scripts/migrate_sucursales_directorio_aragon.sql`:
+  migración idempotente que inserta y actualiza `bibliotecas` y `sucursales` por
+  `(fuente, codigo)`.
 
 La copia de los ficheros fuente descargados y el CSV generado se guardan en
 `data/ingesta-directorio/aragon/` (directorio local ignorado por Git).
 
 ## Carga
 
+La migración se aplica automáticamente al iniciar la aplicación:
+
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f services/enrich/scripts/directorios/aragon/carga.sql
+python -m mediateca init
+# o solo las migraciones
+python -m mediateca migrate
 ```
+
+En Docker, el servicio `init` ejecuta `python -m mediateca init` al desplegar.
 
 El script no borra filas ausentes del directorio, no modifica otras fuentes y no
 crea ediciones ni ejemplares. Al terminar devuelve el resumen de filas creadas y

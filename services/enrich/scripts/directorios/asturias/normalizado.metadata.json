@@ -1,0 +1,30 @@
+{
+  "fuente": "asturias",
+  "directorio": {
+    "url": "https://absys.asturias.es/opacbp/imag/ba_directorio.pdf",
+    "portal": "https://absys.asturias.es",
+    "formato": "PDF",
+    "publicado": "2025-01-22",
+    "descargado": "2026-11-26"
+  },
+  "campos_origen": [
+    "concejo",
+    "codigo",
+    "denominacion",
+    "direccion",
+    "telefono",
+    "correo",
+    "horario"
+  ],
+  "normalizado": "services/enrich/scripts/directorios/asturias/normalizado.csv",
+  "filas_normalizadas": 164,
+  "bibliotecas": 127,
+  "sucursales": 164,
+  "con_codigo_postal": 164,
+  "con_coordenadas": 164,
+  "coordenadas": "centroide del codigo postal (kodens-dev/Spain-Postal-Codes, MIT; municipios del INE via regi-es/ds-codigos-postales-ine-es, CC BY 4.0)",
+  "incidencias": [
+    "El PDF repite el codigo GMFM para dos bibliotecas especializadas de Gijon: se conservan como GMFM y GMFM-FERROCARRIL.",
+    "El codigo 501 lo usan Ponga y el Archivo Historico de Asturias: se conservan como 501 y 501-OVIEDO."
+  ]
+}

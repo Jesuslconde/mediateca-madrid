@@ -1,4 +1,8 @@
--- Carga manual del directorio de la Red de Bibliotecas de Aragon.
+-- Migracion de datos del directorio de la Red de Bibliotecas de Aragon.
+--
+-- Se aplica automaticamente desde `python -m mediateca migrate` y desde
+-- `python -m mediateca init`, tanto en instalaciones desde cero como en
+-- actualizaciones. Es idempotente.
 --
 -- Fuente:
 --   Bibliotecas: https://opendata.aragon.es/GA_OD_Core/download?resource_id=282&formato=json
@@ -12,15 +16,9 @@
 -- filtro por proximidad. Cuando el codigo postal no tiene centroide se usa la
 -- media de los centroides del municipio.
 --
--- Operacion manual e idempotente: inserta o actualiza bibliotecas y sucursales
--- por (fuente, codigo), sin borrar filas ausentes ni tocar otras fuentes, y sin
+-- Operacion idempotente: inserta o actualiza bibliotecas y sucursales por
+-- (fuente, codigo), sin borrar filas ausentes ni tocar otras fuentes, y sin
 -- crear ediciones ni ejemplares. Se puede ejecutar varias veces.
---
--- Uso:
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f carga.sql
---
-BEGIN;
-
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM fuentes WHERE codigo = 'aragon') THEN
@@ -292,5 +290,3 @@ SELECT
 FROM tmp_resumen_aragon AS r
 WHERE r.tabla = 'sucursales'
 ORDER BY tabla;
-
-COMMIT;

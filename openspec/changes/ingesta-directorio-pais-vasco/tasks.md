@@ -11,12 +11,12 @@
 ## 3. Preparación
 
 - [ ] 3.1 Normalizar los datos a un formato de carga (CSV/JSON/SQL) con columnas: `fuente`, `codigo_biblioteca`, `codigo_sucursal`, `nombre`, `direccion`, `municipio`, `codigo_postal`, `latitud`, `longitud`.
-- [ ] 3.2 Generar un script SQL idempotente (o equivalente) que inserte/actualice `bibliotecas` y `sucursales` por nombre (al no haber código) sin tocar otras fuentes.
+- [ ] 3.2 Generar una migración SQL idempotente (`services/enrich/scripts/migrate_sucursales_directorio_pais-vasco.sql`) que inserte/actualice `bibliotecas` y `sucursales` por nombre (al no haber código) y se aplique al iniciar la aplicación, sin tocar otras fuentes.
 
 ## 4. Carga y verificación
 
-- [ ] 4.1 Ejecutar la carga en el entorno de datos y registrar el resumen.
-- [ ] 4.2 Verificar idempotencia (reejecutar sin duplicados) y que no se crean ediciones ni ejemplares.
+- [ ] 4.1 Aplicar la migración al iniciar la aplicación y registrar el resumen, comprobando una instalación desde cero y una actualización.
+- [ ] 4.2 Verificar idempotencia (reejecutar la inicialización sin duplicados) y que no se crean ediciones ni ejemplares.
 
 ## Workflow follow-up
 
