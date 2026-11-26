@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
+import { GlobalPostalCode } from "@/components/GlobalPostalCode";
 import { getActiveList } from "@/lib/active-list";
 
 import packageJson from "../package.json";
@@ -36,7 +38,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span className="block text-xs text-white/60">Bibliotecas de Madrid</span>
               </span>
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav className="flex flex-wrap items-center gap-1 text-sm">
+              <Suspense fallback={null}>
+                <GlobalPostalCode />
+              </Suspense>
               <Link href="/buscar" className="rounded-lg px-3 py-2 hover:bg-white/10">
                 Buscar
               </Link>

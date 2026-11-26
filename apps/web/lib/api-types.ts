@@ -354,6 +354,14 @@ export interface components {
             municipio?: string | null;
             /** Ejemplares */
             ejemplares: number;
+            /** CodigoPostal */
+            codigo_postal?: string | null;
+            /** Latitud */
+            latitud?: number | null;
+            /** Longitud */
+            longitud?: number | null;
+            /** DistanciaKm */
+            distancia_km?: number | null;
         };
         /** ObraEdicionOut */
         ObraEdicionOut: {
@@ -707,6 +715,21 @@ export interface operations {
                 page?: number;
                 limit?: number;
                 sort?: string;
+                /**
+                 * Cp
+                 * @description Codigo postal de referencia
+                 */
+                cp?: string | null;
+                /**
+                 * Radio Km
+                 * @description Radio de proximidad en kilometros
+                 */
+                radio_km?: number | null;
+                /**
+                 * Excluir
+                 * @description Ubicaciones a excluir, repetible
+                 */
+                excluir?: string[] | null;
             };
             header?: never;
             path?: never;
@@ -787,7 +810,18 @@ export interface operations {
     };
     list_locations_api_locations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * Cp
+                 * @description Codigo postal de referencia
+                 */
+                cp?: string | null;
+                /**
+                 * Radio Km
+                 * @description Radio de proximidad en kilometros
+                 */
+                radio_km?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

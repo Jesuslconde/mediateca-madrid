@@ -181,6 +181,10 @@ class LocationOut(BaseModel):
     biblioteca_nombre: str
     municipio: str | None = None
     ejemplares: int
+    codigo_postal: str | None = None
+    latitud: float | None = None
+    longitud: float | None = None
+    distancia_km: float | None = None
 
 
 class StatsResponse(BaseModel):

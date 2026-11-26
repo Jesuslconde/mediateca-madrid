@@ -1,49 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore, type ChangeEvent } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { Ejemplar } from "@/lib/api";
-import postalCodesData from "@/lib/codigos-postales-madrid.json";
 import { formatDistance, haversineKm, type Point } from "@/lib/geo";
+import {
+  POSTAL_CODE_BY_CODE,
+  POSTAL_CODES_LICENSE,
+  POSTAL_CODES_SOURCE,
+  postalCodeLabel,
+} from "@/lib/postal-codes";
+import { clearPostalCode, usePostalCode } from "@/lib/use-postal-code";
 
+import { GlobalPostalCode } from "./GlobalPostalCode";
 import { SupportBadge } from "./SupportBadge";
-
-const STORAGE_KEY = "mediateca:codigo-postal";
-
-type PostalCode = {
-  codigo: string;
-  municipio: string | null;
-  latitud: number;
-  longitud: number;
-};
-
-const POSTAL_CODES = (postalCodesData.codigos as PostalCode[])
-  .slice()
-  .sort((a, b) => a.codigo.localeCompare(b.codigo, "es"));
-const POSTAL_CODE_BY_CODE = new Map(
-  POSTAL_CODES.map((postalCode) => [postalCode.codigo, postalCode]),
-);
-
-const postalCodeListeners = new Set<() => void>();
-
-function subscribePostalCode(listener: () => void) {
-  postalCodeListeners.add(listener);
-  window.addEventListener("storage", listener);
-  return () => {
-    postalCodeListeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
-
-function getPostalCodeSnapshot() {
-  return window.localStorage.getItem(STORAGE_KEY) ?? "";
-}
-
-function notifyPostalCodeChange() {
-  for (const listener of postalCodeListeners) {
-    listener();
-  }
-}
 
 type LibraryGroup = {
   key: string;
@@ -116,12 +86,6 @@ function groupByLibrary(ejemplares: Ejemplar[]): LibraryGroup[] {
   });
 }
 
-function postalCodeLabel(postalCode: PostalCode): string {
-  return postalCode.municipio
-    ? `${postalCode.codigo} — ${postalCode.municipio}`
-    : postalCode.codigo;
-}
-
 export function LibrariesTable({
   ejemplares,
   opacUrl,
@@ -129,18 +93,13 @@ export function LibrariesTable({
   ejemplares: Ejemplar[];
   opacUrl?: string | null;
 }) {
-  const storedCp = useSyncExternalStore(
-    subscribePostalCode,
-    getPostalCodeSnapshot,
-    () => "",
-  );
+  const storedCp = usePostalCode();
   const selectedCp = POSTAL_CODE_BY_CODE.has(storedCp) ? storedCp : "";
   const groups = useMemo(() => groupByLibrary(ejemplares), [ejemplares]);
 
   useEffect(() => {
     if (storedCp && !POSTAL_CODE_BY_CODE.has(storedCp)) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      notifyPostalCodeChange();
+      clearPostalCode();
     }
   }, [storedCp]);
 
@@ -167,22 +126,6 @@ export function LibrariesTable({
 
   const hasLocations = sortedGroups.some((group) => group.point !== null);
   const noLocations = Boolean(reference) && !hasLocations;
-  const unknownPostalCode = Boolean(selectedCp) && !reference;
-
-  function handlePostalCodeChange(event: ChangeEvent<HTMLSelectElement>) {
-    const value = event.target.value;
-    if (value) {
-      window.localStorage.setItem(STORAGE_KEY, value);
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-    notifyPostalCodeChange();
-  }
-
-  function clearPostalCode() {
-    window.localStorage.removeItem(STORAGE_KEY);
-    notifyPostalCodeChange();
-  }
 
   if (!ejemplares.length) {
     return (
@@ -212,47 +155,26 @@ export function LibrariesTable({
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-0 flex-1">
             <label
-              htmlFor="codigo-postal-cercania"
+              htmlFor="global-cp"
               className="text-xs font-semibold uppercase tracking-wider text-slate-400"
             >
               Ordenar por cercanía
             </label>
-            <select
-              id="codigo-postal-cercania"
-              value={selectedCp}
-              onChange={handlePostalCodeChange}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">Orden alfabético</option>
-              {POSTAL_CODES.map((postalCode) => (
-                <option key={postalCode.codigo} value={postalCode.codigo}>
-                  {postalCodeLabel(postalCode)}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <GlobalPostalCode variant="card" />
+            </div>
           </div>
-          {selectedCp ? (
-            <button
-              type="button"
-              onClick={clearPostalCode}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Quitar
-            </button>
-          ) : null}
         </div>
         <p className="mt-2 text-xs text-slate-500" aria-live="polite">
           {noLocations
             ? "No hay datos de ubicación disponibles para estas bibliotecas; se muestra el orden alfabético."
             : reference
               ? `Ordenado por cercanía a ${postalCodeLabel(reference)}. Distancias aproximadas.`
-              : unknownPostalCode
-                ? "Código postal no reconocido; se muestra el orden alfabético."
-                : "Orden alfabético. Elige un código postal para ordenar por cercanía."}
+              : "Orden alfabético. Elige un código postal para ordenar por cercanía."}
         </p>
         <p className="mt-2 text-xs text-slate-400">
-          Centroides de códigos postales: {postalCodesData.fuente}. Licencia:{" "}
-          {postalCodesData.licencia}.
+          Centroides de códigos postales: {POSTAL_CODES_SOURCE}. Licencia:{" "}
+          {POSTAL_CODES_LICENSE}.
         </p>
       </div>
 

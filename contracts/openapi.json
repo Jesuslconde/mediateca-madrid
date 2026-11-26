@@ -220,6 +220,64 @@
               "default": "relevancia",
               "title": "Sort"
             }
+          },
+          {
+            "name": "cp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cp"
+            },
+            "description": "Codigo postal de referencia",
+            "title": "Cp"
+          },
+          {
+            "name": "radio_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Radio Km"
+            },
+            "description": "Radio de proximidad en kilometros",
+            "title": "Radio Km"
+          },
+          {
+            "name": "excluir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Excluir"
+            },
+            "description": "Ubicaciones a excluir, repetible",
+            "title": "Excluir"
           }
         ],
         "responses": {
@@ -335,7 +393,46 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "cp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cp"
+            },
+            "description": "Codigo postal de referencia",
+            "title": "Cp"
+          },
+          {
+            "name": "radio_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Radio Km"
+            },
+            "description": "Radio de proximidad en kilometros",
+            "title": "Radio Km"
+          }
+        ]
       }
     },
     "/api/stats": {
@@ -1099,6 +1196,50 @@
           "ejemplares": {
             "type": "integer",
             "title": "Ejemplares"
+          },
+          "codigo_postal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "CodigoPostal"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "distancia_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "DistanciaKm"
           }
         },
         "type": "object",

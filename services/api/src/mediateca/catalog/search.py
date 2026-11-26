@@ -36,6 +36,7 @@ def build_filters(
     paises_origen: list[str] | None = None,
     biblioteca: str | None = None,
     fuente: str | None = None,
+    ubicaciones: list[str] | None = None,
 ) -> str | None:
     filters: list[str] = []
 
@@ -67,6 +68,10 @@ def build_filters(
         else:
             quoted = _quote(biblioteca)
             filters.append(f"(bibliotecas = {quoted} OR ubicaciones_texto = {quoted})")
+    if ubicaciones:
+        filters.append(
+            f'ubicaciones IN [{", ".join(_quote(item) for item in ubicaciones)}]'
+        )
     if anio_desde is not None:
         filters.append(f"anio >= {int(anio_desde)}")
     if anio_hasta is not None:
@@ -95,6 +100,7 @@ class CatalogSearch:
         paises_origen: list[str] | None = None,
         biblioteca: str | None = None,
         fuente: str | None = None,
+        ubicaciones: list[str] | None = None,
         sort: list[str] | None = None,
         page: int = 1,
         limit: int = 20,
@@ -109,6 +115,7 @@ class CatalogSearch:
             paises_origen=paises_origen,
             biblioteca=biblioteca,
             fuente=fuente,
+            ubicaciones=ubicaciones,
         )
         active_filters = [ENRICHED_FILTER]
         if filters:

@@ -83,7 +83,7 @@ apps/web/
 │   ├── list-cookie-config.ts              # política Secure
 │   ├── active-list.ts                     # resolución de lista activa
 │   ├── geo.ts                             # Haversine y distancias
-│   ├── codigos-postales-madrid.json       # centroides y municipios
+│   ├── codigos-postales.json              # centroides y municipios de España
 │   ├── labels.ts                          # idiomas, países y fuentes
 │   ├── sort.ts                            # órdenes admitidos
 │   └── url.ts                             # parámetros y URLs
@@ -437,10 +437,10 @@ La API normaliza códigos antiguos sin fuente a Madrid.
 Para cada grupo:
 
 1. Usar latitud/longitud de la API si existen.
-2. Si faltan, buscar el centroide del código postal en `lib/codigos-postales-madrid.json`.
+2. Si faltan, buscar el centroide del código postal en `lib/codigos-postales.json`.
 3. Si no hay punto utilizable, dejar el grupo sin distancia.
 
-El JSON contiene 304 códigos de la provincia de Madrid con código, municipio, latitud, longitud, fuente y licencia.
+El JSON contiene 10.876 códigos postales de España con código, municipio, latitud, longitud, fuente y licencia. La copia canónica vive en `packages/shared/src/mediateca_shared/codigos_postales.json` y el generador escribe también la copia del portal.
 
 Se regenera con:
 
@@ -448,7 +448,7 @@ Se regenera con:
 python3 scripts/generate_codigos_postales.py
 ```
 
-El generador descarga centroides de `kodens-dev/Spain-Postal-Codes` (MIT) y municipios del INE mediante `regi-es/ds-codigos-postales-ine-es` (CC BY 4.0). Filtra códigos `28`, normaliza a cinco dígitos, deduplica y ordena.
+El generador descarga centroides de `kodens-dev/Spain-Postal-Codes` (MIT) y municipios del INE mediante `regi-es/ds-codigos-postales-ine-es` (CC BY 4.0). Cubre toda España, normaliza a cinco dígitos, deduplica y ordena.
 
 ### Distancia
 
@@ -468,7 +468,7 @@ Con código postal seleccionado, los grupos con punto se ordenan por distancia y
 - No se solicita geolocalización del navegador.
 - El código postal no se envía a la API ni se incluye en la URL.
 
-El fallback por centroide solo cubre Madrid. Otras fuentes sin coordenadas y con códigos no madrileños no tienen respaldo local.
+El fallback por centroide cubre toda España. Una sucursal sin coordenadas y con un código postal no reconocido queda sin ubicación.
 
 ## Listas de favoritos
 

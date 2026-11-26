@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from mediateca.api.aggregation import aggregate_hits_by_obra
 from mediateca.api.deps import get_db, get_indexer
 from mediateca.api.schemas import SearchResponse
+from mediateca.catalog.proximidad import nearby_location_codes, reference_point
 from mediateca.catalog.search import CatalogSearch
 
 router = APIRouter(tags=["busqueda"])
@@ -40,6 +41,13 @@ def search(
     ),
     biblioteca: str | None = Query(default=None),
     fuente: str | None = Query(default=None),
+    cp: str | None = Query(default=None, description="Codigo postal de referencia"),
+    radio_km: float | None = Query(
+        default=None, gt=0, description="Radio de proximidad en kilometros"
+    ),
+    excluir: list[str] | None = Query(
+        default=None, description="Ubicaciones a excluir, repetible"
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     sort: str = Query(default="relevancia"),
@@ -65,6 +73,30 @@ def search(
             detail="anio_desde no puede ser mayor que anio_hasta",
         )
 
+    if radio_km is not None:
+        if not cp:
+            raise HTTPException(status_code=422, detail="radio_km requiere cp")
+        if reference_point(cp) is None:
+            raise HTTPException(status_code=422, detail="Codigo postal no resoluble")
+
+    ubicaciones: list[str] | None = None
+    if cp and radio_km is not None:
+        ubicaciones = nearby_location_codes(
+            session, cp=cp, radio_km=radio_km, excluir=excluir
+        )
+        if not ubicaciones:
+            return SearchResponse(
+                query=q or "",
+                page=page,
+                limit=limit,
+                total=0,
+                total_ediciones=0,
+                total_pages=1,
+                took_ms=0,
+                facets={},
+                hits=[],
+            )
+
     try:
         result = indexer.search(
             q,
@@ -77,6 +109,7 @@ def search(
             paises_origen=paises_origen,
             biblioteca=biblioteca,
             fuente=fuente,
+            ubicaciones=ubicaciones,
             sort=SORT_MAP[sort],
             page=page,
             limit=limit,
@@ -89,6 +122,9 @@ def search(
 
     result.setdefault("total_ediciones", result.get("total", 0))
     result["hits"] = aggregate_hits_by_obra(
-        session, result.get("hits", []), biblioteca=biblioteca
+        session,
+        result.get("hits", []),
+        biblioteca=biblioteca,
+        ubicaciones=ubicaciones,
     )
     return SearchResponse(**result)

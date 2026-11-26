@@ -2,11 +2,13 @@ import Form from "next/form";
 import Link from "next/link";
 
 import { LibrarySelect } from "@/components/LibrarySelect";
+import { NearbyLibraryPicker } from "@/components/NearbyLibraryPicker";
 import type { Location } from "@/lib/api";
 import { countryLabel, languageLabel } from "@/lib/labels";
 import { buildSearchQuery, first, toArray, type RawSearchParams } from "@/lib/url";
 
 const DEFAULT_SUPPORTS = ["DVD", "Blu-ray", "4K UHD"];
+const RADIUS_PRESETS = [1, 2, 5, 10, 20, 50];
 
 function sortedEntries(
   values: Record<string, number> | undefined,
@@ -23,10 +25,16 @@ export function FacetFilters({
   params,
   facets,
   locations,
+  cp,
+  radioKm,
+  excluir,
 }: {
   params: RawSearchParams;
   facets: Record<string, Record<string, number>>;
   locations: Location[];
+  cp?: string;
+  radioKm?: number;
+  excluir: string[];
 }) {
   const selectedSupports = toArray(params.soporte);
   const selectedGenero = first(params.genero);
@@ -63,6 +71,37 @@ export function FacetFilters({
       {selectedSort !== "relevancia" ? (
         <input type="hidden" name="sort" value={selectedSort} />
       ) : null}
+      {cp ? <input type="hidden" name="cp" value={cp} /> : null}
+
+      {cp ? (
+        <section>
+          <label
+            htmlFor="radio_km"
+            className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500"
+          >
+            Radio de búsqueda
+          </label>
+          <select
+            id="radio_km"
+            name="radio_km"
+            defaultValue={radioKm ? String(radioKm) : ""}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+          >
+            <option value="">Sin límite</option>
+            {RADIUS_PRESETS.map((km) => (
+              <option key={km} value={km}>
+                {km} km
+              </option>
+            ))}
+          </select>
+        </section>
+      ) : null}
+
+      <NearbyLibraryPicker
+        locations={locations}
+        excluded={excluir}
+        enabled={Boolean(cp && radioKm)}
+      />
 
       <section>
         <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">

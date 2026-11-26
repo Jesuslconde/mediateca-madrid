@@ -87,6 +87,33 @@ def _matching_ediciones(
     return result
 
 
+def _matching_ejemplares_set(edicion: Edicion, allowed: set[str]) -> list[Ejemplar]:
+    """Ejemplares de la edicion cuya ubicacion esta en el conjunto permitido."""
+    fuente = edicion.fuente.codigo if edicion.fuente is not None else "madrid"
+    result: list[Ejemplar] = []
+    for ejemplar in edicion.ejemplares:
+        if ejemplar.sucursal_codigo and f"s:{fuente}:{ejemplar.sucursal_codigo}" in allowed:
+            result.append(ejemplar)
+        elif (
+            ejemplar.biblioteca is not None
+            and f"b:{fuente}:{ejemplar.biblioteca.codigo}" in allowed
+        ):
+            result.append(ejemplar)
+    return result
+
+
+def _matching_ediciones_set(
+    ediciones: list[Edicion], allowed: set[str]
+) -> list[tuple[Edicion, list[Ejemplar]]]:
+    """Ediciones con al menos un ejemplar en el conjunto de ubicaciones permitidas."""
+    result: list[tuple[Edicion, list[Ejemplar]]] = []
+    for edicion in ediciones:
+        ejemplares = _matching_ejemplares_set(edicion, allowed)
+        if ejemplares:
+            result.append((edicion, ejemplares))
+    return result
+
+
 def _soportes_filtrados(matching: list[tuple[Edicion, list[Ejemplar]]]) -> list[str]:
     values: set[str] = set()
     for edicion, ejemplares in matching:
@@ -111,12 +138,15 @@ def aggregate_hits_by_obra(
     hits: list[dict[str, Any]],
     *,
     biblioteca: str | None = None,
+    ubicaciones: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Agrega soportes, bibliotecas y ejemplares de las ediciones de la obra.
 
     Cuando hay un filtro de biblioteca o sucursal activo, solo se cuentan los
     ejemplares que coinciden con el filtro y se descartan las obras que no tienen
-    al menos un ejemplar en la ubicacion seleccionada.
+    al menos un ejemplar en la ubicacion seleccionada. Con un conjunto de
+    ubicaciones permitidas (proximidad), se cuentan solo los ejemplares situados
+    en ese conjunto.
     """
     obra_ids = sorted(
         {
@@ -157,8 +187,13 @@ def aggregate_hits_by_obra(
             kept.append(hit)
             continue
 
-        if biblioteca:
+        matching: list[tuple[Edicion, list[Ejemplar]]] | None = None
+        if ubicaciones is not None:
+            matching = _matching_ediciones_set(ediciones, set(ubicaciones))
+        elif biblioteca:
             matching = _matching_ediciones(ediciones, biblioteca)
+
+        if matching is not None:
             if not matching:
                 # Sin ejemplares en la ubicacion seleccionada: no se muestra.
                 continue

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Genera el JSON de codigos postales de la provincia de Madrid.
+"""Genera el JSON de codigos postales de Espana.
 
 Fuentes:
 - Centroides: kodens-dev/Spain-Postal-Codes (MIT).
 - Municipios: regi-es/ds-codigos-postales-ine-es / INE (CC BY 4.0).
+
+Escribe el dato canonico en packages/shared y una copia generada para el portal.
 """
 
 from __future__ import annotations
@@ -22,7 +24,13 @@ MUNICIPALITIES_URL = (
     "https://raw.githubusercontent.com/regi-es/ds-codigos-postales-ine-es/"
     "master/data/codigos_postales_municipios.csv"
 )
-OUTPUT = Path(__file__).resolve().parents[1] / "apps" / "web" / "lib" / "codigos-postales-madrid.json"
+
+ROOT = Path(__file__).resolve().parents[1]
+SHARED_OUTPUT = (
+    ROOT / "packages" / "shared" / "src" / "mediateca_shared" / "codigos_postales.json"
+)
+WEB_OUTPUT = ROOT / "apps" / "web" / "lib" / "codigos-postales.json"
+
 FUENTE = (
     "Centroides: kodens-dev/Spain-Postal-Codes (MIT); "
     "municipios: INE via regi-es/ds-codigos-postales-ine-es (CC BY 4.0)"
@@ -31,7 +39,7 @@ LICENCIA = "MIT / CC BY 4.0"
 
 
 def _download(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=60) as response:  # noqa: S310
+    with urllib.request.urlopen(url, timeout=60) as response:
         return response.read().decode("utf-8")
 
 
@@ -41,7 +49,7 @@ def _load_municipalities() -> dict[str, str]:
     for row in rows:
         codigo = (row.get("codigo_postal") or "").strip()
         municipio = (row.get("municipio_nombre") or "").strip()
-        if not codigo.startswith("28") or not municipio:
+        if not codigo or not municipio:
             continue
         result.setdefault(codigo.zfill(5), municipio)
     return result
@@ -54,11 +62,11 @@ def build() -> dict:
     seen: set[str] = set()
     for row in rows:
         codigo = (row.get("postal_code") or "").strip()
-        if not codigo.startswith("28") or codigo in seen:
+        if not codigo or codigo in seen:
             continue
         latitud = row.get("centroid_lat")
         longitud = row.get("centroid_lng")
-        if not codigo or latitud is None or longitud is None:
+        if latitud is None or longitud is None:
             continue
         seen.add(codigo)
         codigos.append(
@@ -76,11 +84,12 @@ def build() -> dict:
 
 def main() -> None:
     data = build()
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    print(f"Escritos {len(data['codigos'])} codigos postales en {OUTPUT}")
+    for output in (SHARED_OUTPUT, WEB_OUTPUT):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"Escritos {len(data['codigos'])} codigos postales en {output}")
 
 
 if __name__ == "__main__":

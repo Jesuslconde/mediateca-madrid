@@ -29,7 +29,7 @@ make contracts
 
 ## `generate_codigos_postales.py`
 
-Genera `apps/web/lib/codigos-postales-madrid.json`, utilizado por el portal como respaldo cuando una sucursal tiene código postal pero no coordenadas.
+Genera `apps/web/lib/codigos-postales.json` (copia del portal) y `packages/shared/src/mediateca_shared/codigos_postales.json` (dato canónico), utilizados como respaldo cuando una sucursal tiene código postal pero no coordenadas y como referencia del selector global.
 
 Fuentes:
 
@@ -40,10 +40,10 @@ Ejecución:
 
 ```bash
 python3 scripts/generate_codigos_postales.py
-python3 -c "import json; d=json.load(open('apps/web/lib/codigos-postales-madrid.json')); print(len(d['codigos']))"
+python3 -c "import json; d=json.load(open('packages/shared/src/mediateca_shared/codigos_postales.json')); print(len(d['codigos']))"
 ```
 
-El script descarga ambos CSV con un timeout de 60 segundos, filtra códigos que comienzan por `28`, normaliza el código a cinco dígitos, elimina duplicados, convierte las coordenadas a `float` y ordena por código.
+El script descarga ambos CSV con un timeout de 60 segundos, cubre toda España, normaliza el código a cinco dígitos, elimina duplicados, convierte las coordenadas a `float` y ordena por código.
 
 Estructura de salida:
 

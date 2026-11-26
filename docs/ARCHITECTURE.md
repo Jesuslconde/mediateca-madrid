@@ -100,7 +100,7 @@ También existen:
 
 `Ejemplar` guarda `sucursal_codigo`, pero no tiene FK directa a `Sucursal`. La relación ORM es de solo lectura y se resuelve por fuente y código. La API devuelve ubicación de sucursal si existe; si no, usa biblioteca; si no hay datos, devuelve `null`.
 
-El portal usa coordenadas de la API y, como respaldo, centroides de códigos postales madrileños versionados en `apps/web/lib/codigos-postales-madrid.json`. La distancia se calcula en cliente con Haversine.
+El portal usa coordenadas de la API y, como respaldo, centroides de códigos postales de toda España versionados en `packages/shared/src/mediateca_shared/codigos_postales.json` (y copiados en `apps/web/lib/codigos-postales.json`). La distancia se calcula en cliente con Haversine para la ficha y en el servidor para la búsqueda por radio.
 
 ## Cola y concurrencia
 

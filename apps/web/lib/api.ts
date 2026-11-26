@@ -27,6 +27,9 @@ export type SearchParamsInput = {
   paises_origen?: string[];
   biblioteca?: string;
   fuente?: string;
+  cp?: string;
+  radio_km?: number;
+  excluir?: string[];
   page?: number;
   limit?: number;
   sort?: string;
@@ -77,8 +80,11 @@ export function getLibraries(): Promise<Library[]> {
   return apiFetch<Library[]>("/api/libraries");
 }
 
-export function getLocations(): Promise<Location[]> {
-  return apiFetch<Location[]>("/api/locations");
+export function getLocations(params?: {
+  cp?: string;
+  radio_km?: number;
+}): Promise<Location[]> {
+  return apiFetch<Location[]>("/api/locations", params);
 }
 
 export function getStats(): Promise<Stats> {

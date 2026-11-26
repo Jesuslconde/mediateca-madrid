@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from collections import Counter
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from mediateca_shared.geo import haversine_km
 from mediateca_shared.models import Biblioteca, Edicion, Ejemplar, Fuente, Sucursal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from mediateca.api.deps import get_db
 from mediateca.api.schemas import LibraryOut, LocationOut, StatsResponse
+from mediateca.catalog.proximidad import location_point, reference_point
 
 router = APIRouter(tags=["bibliotecas"])
 
@@ -41,13 +43,22 @@ def list_libraries(session: Session = Depends(get_db)) -> list[LibraryOut]:
 
 
 @router.get("/locations", response_model=list[LocationOut])
-def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
+def list_locations(
+    cp: str | None = Query(default=None, description="Codigo postal de referencia"),
+    radio_km: float | None = Query(
+        default=None, gt=0, description="Radio de proximidad en kilometros"
+    ),
+    session: Session = Depends(get_db),
+) -> list[LocationOut]:
     libraries_stmt = (
         select(
             Fuente.codigo.label("fuente"),
             Biblioteca.codigo,
             Biblioteca.nombre,
             Biblioteca.municipio,
+            Biblioteca.codigo_postal,
+            Biblioteca.latitud,
+            Biblioteca.longitud,
             func.count(Ejemplar.id).label("ejemplares"),
         )
         .join(Fuente, Fuente.id == Biblioteca.fuente_id)
@@ -63,6 +74,9 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
             func.max(Ejemplar.sucursal_nombre).label("sucursal_nombre"),
             func.max(Sucursal.municipio).label("sucursal_municipio"),
             func.max(Biblioteca.municipio).label("biblioteca_municipio"),
+            func.max(Sucursal.codigo_postal).label("sucursal_codigo_postal"),
+            func.max(Sucursal.latitud).label("sucursal_latitud"),
+            func.max(Sucursal.longitud).label("sucursal_longitud"),
             func.count(Ejemplar.id).label("ejemplares"),
         )
         .join(Biblioteca, Biblioteca.id == Ejemplar.biblioteca_id)
@@ -92,6 +106,9 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
             biblioteca_nombre=row.nombre,
             municipio=row.municipio,
             ejemplares=int(row.ejemplares),
+            codigo_postal=row.codigo_postal,
+            latitud=row.latitud,
+            longitud=row.longitud,
         )
         for row in session.execute(libraries_stmt)
     ]
@@ -105,16 +122,40 @@ def list_locations(session: Session = Depends(get_db)) -> list[LocationOut]:
             biblioteca_nombre=row.biblioteca_nombre,
             municipio=row.sucursal_municipio or row.biblioteca_municipio,
             ejemplares=int(row.ejemplares),
+            codigo_postal=row.sucursal_codigo_postal,
+            latitud=row.sucursal_latitud,
+            longitud=row.sucursal_longitud,
         )
         for row in session.execute(branches_stmt)
     )
-    locations.sort(
-        key=lambda location: (
-            location.biblioteca_nombre.casefold(),
-            0 if location.tipo == "biblioteca" else 1,
-            location.nombre.casefold(),
+
+    ref = reference_point(cp) if (cp and radio_km is not None) else None
+    if ref is not None:
+        for location in locations:
+            point = location_point(
+                location.latitud, location.longitud, location.codigo_postal
+            )
+            if point is None:
+                location.distancia_km = None
+            else:
+                location.distancia_km = haversine_km(
+                    ref[0], ref[1], point[0], point[1]
+                )
+        locations = [
+            location
+            for location in locations
+            if location.distancia_km is not None
+            and location.distancia_km <= radio_km
+        ]
+        locations.sort(key=lambda location: location.distancia_km or float("inf"))
+    else:
+        locations.sort(
+            key=lambda location: (
+                location.biblioteca_nombre.casefold(),
+                0 if location.tipo == "biblioteca" else 1,
+                location.nombre.casefold(),
+            )
         )
-    )
     return locations
 
 
