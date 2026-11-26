@@ -1,0 +1,49 @@
+{
+  "fuente": "cantabria",
+  "directorio": {
+    "url": "https://directoriobibliotecas.mcu.es/dimbe.cmd?apartado=descarga&accion=descargar&completa=si&formato=json",
+    "portal": "https://directoriobibliotecas.mcu.es/dimbe.cmd",
+    "formato": "JSON",
+    "descargado": "2026-11-26",
+    "registros_cantabria": 104,
+    "campos": [
+      "NIDEN",
+      "Nombre",
+      "Dirección",
+      "Distrito_Postal",
+      "Municipio",
+      "Entidad_Menor",
+      "Latitud",
+      "Longitud",
+      "Tipología",
+      "Tipo_Biblioteca",
+      "Acceso_catálogo"
+    ],
+    "registros_descarga": 7498
+  },
+  "catalogo": {
+    "url": "https://slpc.cantabria.es/cgi-bin/abnetopac2",
+    "recurso": "selector subcat del OPAC",
+    "descargado": "2026-11-26",
+    "bibliotecas": 56,
+    "sucursales": 67,
+    "grupos": {
+      "BBP": "Bibliotecas Públicas",
+      "BBE": "Bibliotecas Especializadas"
+    }
+  },
+  "normalizado": "services/enrich/scripts/directorios/cantabria/normalizado.csv",
+  "filas_normalizadas": 67,
+  "bibliotecas": 56,
+  "sucursales": 67,
+  "con_direccion": 67,
+  "con_codigo_postal": 67,
+  "con_coordenadas": 67,
+  "coordenadas": "DIMBE; OpenStreetMap para los cuatro centros sin ficha DIMBE",
+  "incidencias": [
+    "DIMBE no incluye ficha de Alfoz de Lloredo, Lierganes, Riotuerto ni Santiurde de Toranzo; se completan con el ayuntamiento o el centro cultural y OpenStreetMap.",
+    "La direccion de Alfoz de Lloredo corresponde al Centro Sociocultural Alfoz y sus coordenadas son las del nucleo de Novales.",
+    "El OPAC publica 56 bibliotecas (44 BBP y 12 BBE) y 66 sucursales; la Biblioteca de Menendez Pelayo no tiene sucursal propia y se carga como una unica unidad.",
+    "Las coordenadas de DIMBE son de edificio o de nucleo y pueden ser aproximadas; no se geocodifican direcciones."
+  ]
+}

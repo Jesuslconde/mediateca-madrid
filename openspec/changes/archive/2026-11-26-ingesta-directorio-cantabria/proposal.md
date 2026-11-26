@@ -10,7 +10,7 @@ Las sucursales de la fuente `cantabria` (Sistema de Lectura Pública de Cantabri
 - Generar una migración idempotente para `bibliotecas` y `sucursales` de la fuente `cantabria`.
 - Sin cambios de código en la aplicación ni en los contratos.
 
-Punto de partida conocido: Directorio de Bibliotecas Españolas (DIMBE) del Ministerio de Cultura (`directoriobibliotecas.mcu.es/dimbe.cmd`), con dirección y código postal pero sin código `SUBC` (emparejamiento por nombre).
+Punto de partida conocido: Directorio de Bibliotecas Españolas (DIMBE) del Ministerio de Cultura (`directoriobibliotecas.mcu.es/dimbe.cmd`), con dirección, código postal y coordenadas. El selector `subcat` del OPAC del SLPC publica además los códigos `SUBC` del árbol de bibliotecas y sucursales; se usa ese código para la identidad y DIMBE para la ubicación.
 
 ## Capabilities
 

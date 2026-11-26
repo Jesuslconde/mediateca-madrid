@@ -1,0 +1,68 @@
+fuente,codigo_biblioteca,codigo_sucursal,nombre,nombre_biblioteca,direccion,municipio,codigo_postal,latitud,longitud
+cantabria,BBE/002,BBE/002/002001,Biblioteca Casona de Tudanca,Tudanca. Casona de Tudanca,"c/ Tudanca, s/n Casona de Tudanca",Tudanca,39555,43.152148,-4.373536
+cantabria,BBE/003,BBE/003/003001,Biblioteca del Archivo Histórico Provincial,Santander. Archivo Histórico Provincial de Cantabria,"c/ Ruiz de Alda, 19",Santander,39009,43.4551187,-3.8150236
+cantabria,BBE/004,BBE/004/004001,Biblioteca MUPAC,Santander. Museo de Prehistoria y Arqueología de Cantabria,"c/ Ruiz de Alda, 19",Santander,39009,43.45432,-3.814528
+cantabria,BBE/005,BBE/005/005001,Biblioteca MMC,Santander. Museo Marítimo del Cantábrico,"Avda. Severiano Ballesteros, s/n",Santander,39004,43.463075,-3.784619
+cantabria,BBE/006,BBE/006/006001,Biblioteca METCAN (Muriedas),Camargo. Museo Etnográfico de Cantabria,"c/ Héroes del Dos de Mayo, 7 Muriedas - Camargo",Camargo,39600,43.41973,-3.847688
+cantabria,BBE/008,BBE/008,Santander. Biblioteca de Menéndez Pelayo,Santander. Biblioteca de Menéndez Pelayo,"c/ Rubio, 6",Santander,39001,43.4622259,-3.8125082
+cantabria,BBE/009,BBE/009/009001,Biblioteca del Conservatorio Jesús de Monasterio,Santander. Conservatorio de Música Jesús de Monasterio,"Paseo General Dávila, 89",Santander,39006,43.465075,-3.81793
+cantabria,BBE/061,BBE/061/061001,Centro de Documentación y Recursos para la Educación Ambiental de Cantabria,Torrelavega. Centro de Investigación del Medio Ambiente,"Paseo de Rochefort Sur-Mer, s/n",Torrelavega,39300,43.355432,-4.05577
+cantabria,BBE/062,BBE/062/062001,Biblioteca del Colegio Oficial de Arquitectos de Cantabria,Santander. Colegio Oficial de Arquitectos de Cantabria,"c/ San José, 11 Bajo",Santander,39003,43.46345,-3.805813
+cantabria,BBE/063,BBE/063/063001,Centro de Investigación y Formación Agrarias (CIFA),Centro de Investigación y Formación Agrarias (CIFA),"c/ Héroes 2 de Mayo, 27",Camargo,39600,43.420576,-3.852952
+cantabria,BBP/001,BBP/001/001001,BCC / BPE en Santander,Biblioteca Central de Cantabria,"c/ Juan de Santander, 19",Santander,39009,43.4542898,-3.8144277
+cantabria,BBP/001,BBP/001/001002,Biblioteca de la Casa de Cultura de Torrelavega,Biblioteca Central de Cantabria,"c/ Marqués de Santillana, 6 Bajo",Torrelavega,39300,43.347106,-4.050756
+cantabria,BBP/007,BBP/007/007001,Bibliobús,Bibliobús Cantabria,"c/ Juan de Santander, 19",Santander,39009,43.454364,-3.814096
+cantabria,BBP/010,BBP/010/010001,BM Doctor Velasco (Laredo),Laredo. Biblioteca Municipal Doctor Velasco,"c/ López Seña, 10 2ª planta - Casa de Cultura Dr. Velasco",Laredo,39770,43.411222,-3.414074
+cantabria,BBP/011,BBP/011/011001,BM Conde San Diego (Cabezón de la Sal),Cabezón de la Sal. Biblioteca Municipal Conde San Diego,"c/ La Iglesia, 17",Cabezón de la Sal,39500,43.3073,-4.23611
+cantabria,BBP/012,BBP/012/012001,BP Sánchez Díaz (Reinosa),Reinosa. Biblioteca Pública Sánchez Díaz,"Avda. Puente de Carlos III, 23 Edificio de la Casona de Reinosa",Reinosa,39200,42.9987606,-4.13848
+cantabria,BBP/013,BBP/013/013001,BM Miguel Artigas (Astillero),Astillero. Biblioteca Municipal Miguel Artigas,"c/ Fernández Hontoria, 1",El Astillero,39610,43.4036,-3.81952
+cantabria,BBP/014,BBP/014/014001,BM de Camaleño,Camaleño. Biblioteca Municipal de Camaleño,"c/ la Riestre, s/n Camaleño",Camaleño,39587,43.1500074,-4.6938978
+cantabria,BBP/015,BBP/015/015001,BM de Santander,Santander. RBM de Santander,"c/ Gravina, 6",Santander,39001,43.462873,-3.812716
+cantabria,BBP/015,BBP/015/015002,BM Doctor Madrazo (Santander),Santander. RBM de Santander,"c/ Casimiro Sáinz, s/n Centro Cultural Dr. Madrazo",Santander,39004,43.4639,-3.79664
+cantabria,BBP/015,BBP/015/015003,BM Fernando Ateca (Santander),Santander. RBM de Santander,"c/ Grupo Ateca, Monte, s/n Centro Cultural Ateca",Santander,39012,43.4679892,-3.8270857
+cantabria,BBP/015,BBP/015/015004,BM Mª Luisa Pelayo (Santander),Santander. RBM de Santander,"Plz. de los Derechos Humanos, 1 Centro Cívico Callealtero",Santander,39008,43.458569,-3.817813
+cantabria,BBP/015,BBP/015/015005,BM Salvador Jado (Santander),Santander. RBM de Santander,"Paseo del General Dávila, 39 Centro Cultural Jado",Santander,39006,43.4678,-3.80083
+cantabria,BBP/015,BBP/015/015006,BM Nueva Montaña (Santander),Santander. RBM de Santander,"c/ Luciano Malumbres, s/n Centro Cívico Nueva Montaña",Santander,39011,43.4375104,-3.842097
+cantabria,BBP/015,BBP/015/015007,BM Cazoña (Santander),Santander. RBM de Santander,"c/ Gerardo Diego, 4 Centro Cívico de Cazoña",Santander,39011,43.4579,-3.84221
+cantabria,BBP/015,BBP/015/015008,BM Cueto (Santander),Santander. RBM de Santander,"c/ Inés Diego del Noval, 23 Centro Cívico Juan de Santander (Cueto)",Santander,39012,43.484092521502156,-3.798755564417687
+cantabria,BBP/016,BBP/016/016001,BM de Santa Cruz de Bezana,Santa Cruz de Bezana. Bibliotecas Municipales de Santa Cruz de Bezana,"Travesía de San Fernando, s/n Bajo",Santa Cruz de Bezana,39100,43.439752,-3.899309
+cantabria,BBP/016,BBP/016/016002,BM de Soto de la Marina,Santa Cruz de Bezana. Bibliotecas Municipales de Santa Cruz de Bezana,"Urb. La Canal, s/n Local Social",Santa Cruz de Bezana,39110,43.469511,-3.889846
+cantabria,BBP/017,BBP/017/017001,BM Jesús de Monasterio (Potes),Potes. Biblioteca Municipal Jesús de Monasterio,"c/ Independencia, 22",Potes,39570,43.1546,-4.62412
+cantabria,BBP/018,BBP/018/018001,BM de Los Corrales de Buelna,Los Corrales de Buelna. Biblioteca Municipal de Los Corrales de Buelna,"Plz. de la Constitución, 2 Edificio Cultural La Plaza",Los Corrales de Buelna,39400,43.2602846619253,-4.068267075815696
+cantabria,BBP/019,BBP/019/019001,BM Baldomero Fernández Moreno (Gama),Bárcena de Cicero. Biblioteca Municipal Baldomero Fernández Moreno,"c/ Baldomero Fernández, 4",Bárcena de Cicero,39790,43.42411,-3.52219
+cantabria,BBP/020,BBP/020/020001,BM Hurtado de Mendoza (Castro Urdiales),Castro Urdiales. Biblioteca Municipal Hurtado de Mendoza,"c/ Los Jardines, 3 4ª planta Centro Cultural Eladio Laredo - Edificio Royal",Castro-Urdiales,39700,43.3801517,-3.2172708
+cantabria,BBP/021,BBP/021/021001,BM de Comillas,Comillas. Biblioteca Municipal de Comillas,"c/ Antonio López, 3 Segunda planta del Centro Cultural El Espolón",Comillas,39520,43.3867,-4.2893
+cantabria,BBP/022,BBP/022/022001,BM Paloma Sáinz de la Maza (Mazcuerras),Mazcuerras. Biblioteca Municipal Paloma Sáinz de la Maza,"c/ Villanueva de la Peña, 187 Centro Cultural",Mazcuerras,39509,43.316818,-4.191059
+cantabria,BBP/023,BBP/023/023001,BP Gabino Teira (Torrelavega),Torrelavega. Biblioteca Popular Gabino Teira,"c/ Conde Torreanaz, s/n",Torrelavega,39300,43.3516015,-4.0481842
+cantabria,BBP/024,BBP/024/024001,BM José María de Pereda (Polanco),Polanco. Biblioteca Municipal José María de Pereda,"Barrio la Iglesia, 33",Polanco,39313,43.385,-4.01619
+cantabria,BBP/025,BBP/025/025001,BM de Cartes,Cartes. Biblioteca Municipal de Cartes,"c/ Camino Real, 121",Cartes,39311,43.3238,-4.0693
+cantabria,BBP/026,BBP/026/026001,BM Jerónimo Arozamena (Sarón),Santa María de Cayón. Bibliotecas Municipales del Valle de Cayón,"Urb. San Lázaro, 4",Santa María de Cayón,39620,43.3238251,-3.854078
+cantabria,BBP/027,BBP/027/027001,BM de Val de San Vicente,Val de San Vicente. Biblioteca Municipal de Val de San Vicente,"c/ San Felipe Neri, 5 Casa de Cultura Villa Mercedes",Val de San Vicente,39560,43.372925,-4.519199
+cantabria,BBP/028,BBP/028/028001,BM Elena Soriano (Suances),Suances. Biblioteca Municipal Elena Soriano,"c/ Ángel Ruiz, 1",Suances,39340,43.4265807,-4.041966
+cantabria,BBP/029,BBP/029/029001,BM de Ruiloba,Ruiloba. Biblioteca Municipal de Ruiloba,"c/ Santa María la Real, 10 Barrio La Iglesia",Ruiloba,39527,43.378,-4.24795
+cantabria,BBP/030,BBP/030/030001,BM de Valdeolea (Mataporquera),Valdeolea. Biblioteca Pública Municipal de Valdeolea,"c/ Las Eras, s/n",Valdeolea,39410,42.8757358,-4.1626623
+cantabria,BBP/031,BBP/031/031001,BM de Reocín (Puente San Miguel),Reocín. Biblioteca Municipal de Reocín,"Barrio La Robleda, 100",Reocín,39530,43.360515,-4.085753
+cantabria,BBP/032,BBP/032/032001,BM de Meruelo,Meruelo. Biblioteca Municipal de Meruelo,"Barrio Santa Ana, s/n",Meruelo,39192,43.456562,-3.569088
+cantabria,BBP/033,BBP/033/033001,BM de Argoños,Argoños. Biblioteca Municipal de Argoños,"c/ Derechos Humanos, 3 bajo",Argoños,39197,43.4571858,-3.4884217
+cantabria,BBP/034,BBP/034/034001,BM de San Vicente de la Barquera,San Vicente de la Barquera. Biblioteca Municipal de San Vicente de la Barquera,c/ Arenal La Casona del Cantón Planta tercera,San Vicente de la Barquera,39540,43.382781,-4.39937
+cantabria,BBP/035,BBP/035/035001,BM Casimiro del Collado (Liendo),Liendo. Biblioteca Municipal Casimiro del Collado,"Barrio de Hazas, 72",Liendo,39776,43.392109,-3.37888
+cantabria,BBP/036,BBP/036/036001,BM de Santoña,Santoña. Biblioteca Municipal de Santoña,"Paseo de Camilo José Cela, 1 2ª planta",Santoña,39740,43.442339,-3.454922
+cantabria,BBP/037,BBP/037/037001,BP Francisco Sota (Renedo de Piélagos),Piélagos. Bibliotecas Municipales de Piélagos,"Barrio Llosacampo, 31 Edificio Llosacampo. Anexo a las oficinas de Gestagua.",Piélagos,39470,43.3542714,-3.9577235
+cantabria,BBP/037,BBP/037/037002,BP Condes de la Mortera (Mortera),Piélagos. Bibliotecas Municipales de Piélagos,"Barrio La Puntanía, 10",Piélagos,39120,43.44409146775709,-3.9249895864306836
+cantabria,BBP/037,BBP/037/037003,BP Francisco Llata (Liencres),Piélagos. Bibliotecas Municipales de Piélagos,"Barrio La Iglesia, 14 Antiguas escuelas de Liencres.",Piélagos,39120,43.4606448,-3.9266146723
+cantabria,BBP/038,BBP/038/038001,BP Ramón Pelayo (Solares),Medio Cudeyo. Biblioteca Pública Ramón Pelayo,"Paseo La ventilla, s/n Solares",Medio Cudeyo,39710,43.383724,-3.731721
+cantabria,BBP/039,BBP/039/039001,BM de Colindres,Colindres. Biblioteca Municipal de Colindres,"Alameda del Ayuntamiento, 2 Casa de Cultura - 1ª planta",Colindres,39750,43.3995,-3.44783
+cantabria,BBP/040,BBP/040/040001,BM Juan Zorrilla San Martín (Ramales),Ramales de la Victoria. Biblioteca Municipal Juan Zorrilla San Martín,"c/ Barón de Adzaneta, 8",Ramales de la Victoria,39800,43.2562534,-3.4646443
+cantabria,BBP/041,BBP/041/041001,BM de Ruente,Ruente. Biblioteca Municipal de Ruente,Poblado del Monasterio Palacio de Mier,Ruente,39513,43.2598,-4.264627
+cantabria,BBP/042,BBP/042/042001,BM de Alfoz de Lloredo (Novales),Alfoz de Lloredo. Biblioteca Municipal de Alfoz,"Calle José Gutiérrez, 168, Centro Sociocultural Alfoz",Alfoz de Lloredo,39526,43.3785621,-4.1814331
+cantabria,BBP/043,BBP/043/043001,BM de Valdáliga (Treceño),Valdáliga. Biblioteca Municipal de Valdáliga,"Barrio La Plaza, 4",Valdáliga,39592,43.316815,-4.3013929
+cantabria,BBP/044,BBP/044/044001,BM de Ampuero,Ampuero. Biblioteca Municipal de Ampuero,"c/ La cruz, 1",Ampuero,39840,43.342462,-3.417306
+cantabria,BBP/045,BBP/045/045001,BM de Noja,Noja. Biblioteca Municipal de Noja,"Avda. de Ris, 79 Centro de Ocio Playa Dorada",Noja,39180,43.4888914,-3.529086
+cantabria,BBP/046,BBP/046/046001,BM de Villaescusa,Villaescusa. Biblioteca Pública Municipal de Villaescusa,"Barrio La Aldea, 70 La Concha de Villaescusa.",Villaescusa,39690,43.3699811,-3.8526971
+cantabria,BBP/047,BBP/047/047001,BM de Liérganes,Liérganes. Biblioteca Municipal,"Paseo de Velasco, s/n",Liérganes,39722,43.3450454,-3.7460492
+cantabria,BBP/048,BBP/048/048001,BM de Riotuerto. La Cavada,Riotuerto. Biblioteca Municipal,"Centro Cultural Alisas, Calle Colegio Público Leopoldo y Josefa del Valle, 9",Riotuerto,39720,43.3475304,-3.7022864
+cantabria,BBP/049,BBP/049/049001,BM Saiz Viadero (Penilla),Santiurde de Toranzo. Biblioteca Pública Municipal Saiz Viadero,"Barrio Las Escuelas, 1",Santiurde de Toranzo,39691,43.2849441,-3.9477129
+cantabria,BBP/050,BBP/050/050001,BM de Camargo (Maliaño),Camargo. Biblioteca Municipal de Camargo,"c/ Julio de Pablo, 1 Parque de Cros",Camargo,39600,43.420635,-3.841476
+cantabria,BBP/051,BBP/051/051001,BM María Sanz de Sautuola (Santillana del Mar),Santillana del Mar. Biblioteca Pública Municipal María Sanz de Sautuola,"Plz. Abad Francisco Navarro, s/n Edificio del Museo y Fundación Jesús Otero - 1ª planta",Santillana del Mar,39330,43.391675,-4.1062
+cantabria,BBP/054,BBP/054/054001,BM de Miengo,Miengo. Biblioteca Pública Municipal de Miengo,"Plz. Marqués de Valdecilla, s/n",Miengo,39310,43.4271455,-3.9925933
+cantabria,BBP/055,BBP/055/055001,BM de Limpias,Limpias. Biblioteca Pública Municipal de Limpias,"c/ San Miguel, 2",Limpias,39820,43.3613,-3.4234
